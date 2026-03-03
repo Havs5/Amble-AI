@@ -73,6 +73,7 @@ export function UsageReport() {
   const [modelStats, setModelStats] = useState<ModelStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month' | 'all'>('month');
   const [isCleaning, setIsCleaning] = useState(false);
   const [isCleaningAll, setIsCleaningAll] = useState(false);
@@ -133,6 +134,7 @@ export function UsageReport() {
   const fetchUsage = async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
     else setIsLoading(true);
+    setFetchError(null);
     
     try {
       const usageRef = collection(db, 'usage_logs');
@@ -242,8 +244,12 @@ export function UsageReport() {
       setLogs(fetchedLogs);
       setUserStats(enhancedUserStats.sort((a, b) => b.totalCost - a.totalCost));
       setModelStats(Array.from(modelMap.values()).sort((a, b) => b.totalCost - a.totalCost));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching usage logs:", error);
+      const msg = error?.code === 'permission-denied' 
+        ? 'Permission denied. Firestore rules may need updating for the usage_logs collection.'
+        : error?.message || 'Failed to load usage data. Please try again.';
+      setFetchError(msg);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -452,6 +458,18 @@ export function UsageReport() {
     <div className="space-y-6 animate-in fade-in duration-500">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
+      {/* Error Banner */}
+      {fetchError && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-700 dark:text-red-400">Error loading usage data</p>
+            <p className="text-xs text-red-600 dark:text-red-500 mt-1">{fetchError}</p>
+          </div>
+          <button onClick={() => fetchUsage(true)} className="text-xs text-red-600 dark:text-red-400 hover:underline font-medium shrink-0">Retry</button>
+        </div>
+      )}
+      
       {/* Filters Bar */}
       <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
         <div className="flex items-center gap-2 flex-wrap">
@@ -594,6 +612,26 @@ export function UsageReport() {
         </div>
       </div>
 
+      {/* Charts Row */}
+      {logs.length === 0 && !fetchError ? (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-12 text-center">
+          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Activity size={28} className="text-slate-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">No usage data yet</h3>
+          <p className="text-sm text-slate-500 max-w-md mx-auto mb-4">
+            Usage data will appear here as users interact with AI models. Start a chat conversation to begin tracking costs and usage.
+          </p>
+          <button
+            onClick={() => fetchUsage(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <RefreshCw size={14} />
+            Refresh Data
+          </button>
+        </div>
+      ) : (
+      <>
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Cost Trend Chart */}
@@ -904,6 +942,8 @@ export function UsageReport() {
           </ResponsiveContainer>
         </div>
       </div>
+      </>
+      )}
       {/* Reset Confirmation Modal */}
       {showResetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

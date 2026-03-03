@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Shield, Zap, Activity, Edit2, Trash2, UserPlus, XCircle, ArrowLeft, BarChart2, Plus, Bot, FileText, AlertTriangle, DollarSign, Calendar, TrendingUp, Hash, Cpu, Loader2, Mic } from 'lucide-react';
+import { X, Search, Shield, Zap, Activity, Edit2, Trash2, UserPlus, XCircle, ArrowLeft, BarChart2, Plus, Bot, FileText, AlertTriangle, DollarSign, Calendar, TrendingUp, Hash, Cpu, Loader2, Mic, RefreshCw, Users } from 'lucide-react';
 import { useAuth, AIConfig } from '../auth/AuthContextRefactored';
 import { UsageManager, DetailedUsageStats, ModelUsageBreakdown } from '../../lib/usageManager';
 import { UsageReport } from '../admin/UsageReport';
@@ -12,7 +12,7 @@ interface UserManagementModalProps {
 }
 
 export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementModalProps) {
-  const { users, addUser, user: currentUser, updateUserPermissions, updateUserCapabilities, updateUserConfig, deleteUser } = useAuth();
+  const { users, addUser, user: currentUser, updateUserPermissions, updateUserCapabilities, updateUserConfig, deleteUser, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'users' | 'usage'>('users');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
@@ -152,7 +152,6 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
         setToast(null);
         setSelectedUser(null);
         setIsSavingUser(false);
-        window.location.reload();
       }, 1500);
     } catch (e) {
       setIsSavingUser(false);
@@ -364,6 +363,27 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
             {/* User List */}
             <div className="flex-1 overflow-y-auto">
+              {authLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <Loader2 className="animate-spin mb-3" size={28} />
+                  <p className="text-sm font-medium">Loading users...</p>
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <Users size={32} className="mb-3 opacity-50" />
+                  {users.length === 0 ? (
+                    <>
+                      <p className="text-sm font-medium">No users found</p>
+                      <p className="text-xs mt-1">Add a user to get started</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium">No matching users</p>
+                      <p className="text-xs mt-1">Try adjusting your search or filter</p>
+                    </>
+                  )}
+                </div>
+              ) : (
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 sticky top-0 backdrop-blur-sm">
                   <tr>
@@ -397,6 +417,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   ))}
                 </tbody>
               </table>
+              )}
             </div>
           </div>
 

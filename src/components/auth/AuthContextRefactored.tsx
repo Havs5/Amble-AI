@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 function AuthProviderInner({ children }: { children: React.ReactNode }) {
   // Use the new Firebase Auth hook
   const auth = useFirebaseAuth();
-  const admin = useAuthAdmin();
+  const admin = useAuthAdmin(auth.user);
 
   // Derive Google connected status
   const isGoogleConnected = auth.user?.authProvider === 'google';
@@ -215,10 +215,9 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     await admin.updateUserCapabilities(userId, capabilities);
   };
 
-  // Config update (needs implementation in AuthService)
+  // Config update - now properly implemented
   const updateUserConfig = async (userId: string, type: 'amble' | 'cx', config: AIConfig): Promise<void> => {
-    // TODO: Implement in AuthService
-    console.warn('[AuthContext] updateUserConfig not yet implemented in new auth system');
+    await admin.updateUserConfig(userId, type, config);
   };
 
   // Legacy-compatible delete

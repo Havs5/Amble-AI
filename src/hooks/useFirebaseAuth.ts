@@ -350,20 +350,34 @@ export interface UseAuthAdminResult {
   
   updateUserPermissions: (userId: string, permissions: AppUser['permissions']) => Promise<void>;
   updateUserCapabilities: (userId: string, capabilities: AppUser['capabilities']) => Promise<void>;
+  updateUserConfig: (userId: string, type: 'amble' | 'cx', config: any) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
   refreshUsers: () => Promise<void>;
 }
 
-export function useAuthAdmin(): UseAuthAdminResult {
+export function useAuthAdmin(currentUser?: AppUser | null): UseAuthAdminResult {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<AuthError | null>(null);
   
   const authServiceRef = useRef<AuthService | null>(null);
+  const hasFetchedRef = useRef(false);
 
-  // Initialize and fetch users
+  // Initialize auth service immediately
   useEffect(() => {
-    const init = async () => {
+    if (!isFirebaseInitialized() || !auth || !db) return;
+    authServiceRef.current = getAuthService(auth, db);
+  }, []);
+
+  // Fetch users only when authenticated (currentUser changes from null to a user)
+  useEffect(() => {
+    if (!currentUser) {
+      // Not authenticated yet — keep loading state
+      if (!hasFetchedRef.current) setIsLoading(true);
+      return;
+    }
+
+    const fetchAllUsers = async () => {
       if (!isFirebaseInitialized() || !auth || !db) {
         setIsLoading(false);
         return;
@@ -372,18 +386,22 @@ export function useAuthAdmin(): UseAuthAdminResult {
       const service = getAuthService(auth, db);
       authServiceRef.current = service;
 
+      setIsLoading(true);
+      setError(null);
       try {
         const allUsers = await service.getAllUsers();
         setUsers(allUsers);
+        hasFetchedRef.current = true;
       } catch (err: any) {
-        setError(err);
+        console.error('[useAuthAdmin] Failed to fetch users:', err);
+        setError({ code: err.code || 'FETCH_FAILED', message: err.message || 'Failed to load users' });
       } finally {
         setIsLoading(false);
       }
     };
 
-    init();
-  }, []);
+    fetchAllUsers();
+  }, [currentUser?.id]);
 
   const refreshUsers = useCallback(async () => {
     if (!authServiceRef.current) return;
@@ -460,6 +478,19 @@ export function useAuthAdmin(): UseAuthAdminResult {
     await refreshUsers();
   }, [refreshUsers]);
 
+  const updateUserConfig = useCallback(async (
+    userId: string,
+    type: 'amble' | 'cx',
+    config: any
+  ): Promise<void> => {
+    if (!authServiceRef.current) {
+      throw { code: 'NOT_INITIALIZED', message: 'Auth service not initialized' };
+    }
+
+    await authServiceRef.current.updateUserConfig(userId, type, config);
+    await refreshUsers();
+  }, [refreshUsers]);
+
   const deleteUser = useCallback(async (userId: string): Promise<void> => {
     if (!authServiceRef.current) {
       throw { code: 'NOT_INITIALIZED', message: 'Auth service not initialized' };
@@ -477,6 +508,7 @@ export function useAuthAdmin(): UseAuthAdminResult {
     preRegisterUser,
     updateUserPermissions,
     updateUserCapabilities,
+    updateUserConfig,
     deleteUser,
     refreshUsers,
   };

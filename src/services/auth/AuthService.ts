@@ -559,6 +559,30 @@ export class AuthService {
   }
 
   /**
+   * Update user AI configuration (admin function)
+   */
+  async updateUserConfig(userId: string, type: 'amble' | 'cx', config: AIConfig): Promise<void> {
+    try {
+      const userRef = doc(this.db, 'users', userId);
+      const field = type === 'amble' ? 'ambleConfig' : 'cxConfig';
+      await updateDoc(userRef, { [field]: config, updatedAt: Timestamp.now() });
+
+      // Update session if it's the current user
+      if (this.currentSession?.user.id === userId) {
+        if (type === 'amble') {
+          this.currentSession.user.ambleConfig = config;
+        } else {
+          this.currentSession.user.cxConfig = config;
+        }
+        this.saveSessionToStorage();
+        this.notifyListeners(this.currentSession.user);
+      }
+    } catch (error: any) {
+      throw this.normalizeError(error);
+    }
+  }
+
+  /**
    * Delete a user (admin function)
    */
   async deleteUser(userId: string): Promise<void> {

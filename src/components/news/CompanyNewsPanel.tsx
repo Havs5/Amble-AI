@@ -1,13 +1,12 @@
 /**
- * CompanyNewsPanel — Right-side panel for Dashboard showing company news
+ * CompanyNewsPanel — Main dashboard content showing company news
  *
  * Layout:
- *  1) Critical banner (if any CRITICAL post is active)
- *  2) Admin tools drawer (admin only, collapsible)
- *  3) Filters
- *  4) Pinned posts section (up to 3)
- *  5) Latest feed (infinite scroll via Firestore onSnapshot)
- *  6) "Last updated X minutes ago" footer
+ *  1) Header with title + admin tools
+ *  2) Critical banner (if any CRITICAL post is active)
+ *  3) Filters bar
+ *  4) Pinned posts section (up to 3, grid layout)
+ *  5) Latest feed (responsive grid, "Load more" pagination)
  *
  * Uses useCompanyNews hook for real-time Firestore data.
  */
@@ -20,7 +19,6 @@ import {
   AlertTriangle,
   Pin,
   Rss,
-  RefreshCw,
   Clock,
   Loader2,
   ExternalLink,
@@ -64,7 +62,7 @@ export function CompanyNewsPanel({ userId, userRole, userName, userDepartmentId 
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
 
   // Feed display limit for "load more"
-  const [feedLimit, setFeedLimit] = useState(10);
+  const [feedLimit, setFeedLimit] = useState(12);
 
   const handleOpenEditor = useCallback((post?: NewsPost) => {
     setEditingPost(post ?? null);
@@ -92,13 +90,15 @@ export function CompanyNewsPanel({ userId, userRole, userName, userDepartmentId 
   const visibleFeed = news.feedPosts.slice(0, feedLimit);
   const hasMore = news.feedPosts.length > feedLimit;
 
+  const totalPosts = news.pinnedPosts.length + news.feedPosts.length + (news.criticalPost ? 1 : 0);
+
   // ── Loading state ─────────────────────────────────────────────────────────
   if (news.loading) {
     return (
-      <div className="h-full flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center py-20">
         <div className="text-center">
-          <Loader2 size={24} className="animate-spin text-indigo-500 mx-auto mb-2" />
-          <p className="text-xs text-slate-400 font-medium">Loading news...</p>
+          <Loader2 size={28} className="animate-spin text-indigo-500 mx-auto mb-3" />
+          <p className="text-sm text-slate-400 font-medium">Loading news...</p>
         </div>
       </div>
     );
@@ -107,19 +107,19 @@ export function CompanyNewsPanel({ userId, userRole, userName, userDepartmentId 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-white">
-          <Newspaper size={16} className="text-indigo-500" />
+      <div className="flex items-center justify-between px-5 sm:px-6 pt-5 pb-3">
+        <h2 className="flex items-center gap-2.5 text-base font-semibold text-slate-800 dark:text-white">
+          <Newspaper size={18} className="text-indigo-500" />
           Company News
         </h2>
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-          <Clock size={10} />
+        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+          <Clock size={12} />
           Updated {lastUpdatedLabel(news.lastUpdated)}
         </div>
       </div>
 
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto px-5 sm:px-6 pb-6 space-y-5 scrollbar-thin">
         {/* Admin Tools */}
         {news.isAdmin && (
           <AdminNewsDrawer
@@ -138,27 +138,27 @@ export function CompanyNewsPanel({ userId, userRole, userName, userDepartmentId 
 
         {/* Critical banner */}
         {news.criticalPost && (
-          <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 p-3 animate-pulse-subtle">
-            <div className="flex items-start gap-2">
-              <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
+          <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 p-4 animate-pulse-subtle">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-red-700 dark:text-red-300 uppercase tracking-wide mb-0.5">
+                <p className="text-xs font-bold text-red-700 dark:text-red-300 uppercase tracking-wide mb-1">
                   Critical Alert
                 </p>
                 <p className="text-sm font-semibold text-red-900 dark:text-red-100 leading-snug">
                   {news.criticalPost.title}
                 </p>
-                <p className="text-xs text-red-600/80 dark:text-red-300/70 mt-1 line-clamp-2">
-                  {news.criticalPost.summary || news.criticalPost.body.slice(0, 120)}
+                <p className="text-sm text-red-600/80 dark:text-red-300/70 mt-1.5 line-clamp-3">
+                  {news.criticalPost.summary || news.criticalPost.body.slice(0, 200)}
                 </p>
                 {news.criticalPost.link && (
                   <a
                     href={news.criticalPost.link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-medium text-red-600 hover:text-red-800 dark:text-red-400"
+                    className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-red-600 hover:text-red-800 dark:text-red-400"
                   >
-                    Learn more <ExternalLink size={10} />
+                    Learn more <ExternalLink size={11} />
                   </a>
                 )}
               </div>
@@ -176,10 +176,10 @@ export function CompanyNewsPanel({ userId, userRole, userName, userDepartmentId 
         {/* Pinned posts */}
         {news.pinnedPosts.length > 0 && (
           <div>
-            <h3 className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400 mb-2">
-              <Pin size={10} /> Pinned
+            <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400 mb-3">
+              <Pin size={12} /> Pinned
             </h3>
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {news.pinnedPosts.map((p) => (
                 <PostCard
                   key={p.id}
@@ -197,12 +197,14 @@ export function CompanyNewsPanel({ userId, userRole, userName, userDepartmentId 
 
         {/* Feed */}
         <div>
-          <h3 className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
-            <Rss size={10} /> Latest
-          </h3>
+          {totalPosts > 0 && (
+            <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+              <Rss size={12} /> Latest
+            </h3>
+          )}
 
           {visibleFeed.length > 0 ? (
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {visibleFeed.map((p) => (
                 <div key={p.id}>
                   <PostCard
@@ -214,39 +216,50 @@ export function CompanyNewsPanel({ userId, userRole, userName, userDepartmentId 
                   />
                   {/* Expandable body */}
                   {expandedPostId === p.id && (
-                    <div className="mt-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed border border-slate-200 dark:border-slate-700/40">
+                    <div className="mt-1.5 px-4 py-3 rounded-lg bg-slate-50 dark:bg-slate-800/40 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed border border-slate-200 dark:border-slate-700/40">
                       {p.body}
                     </div>
                   )}
                   <button
                     onClick={() => setExpandedPostId(expandedPostId === p.id ? null : p.id)}
-                    className="text-[10px] text-indigo-500 hover:text-indigo-600 font-medium mt-0.5 ml-1"
+                    className="text-xs text-indigo-500 hover:text-indigo-600 font-medium mt-1 ml-1"
                   >
                     {expandedPostId === p.id ? 'Show less' : 'Read more'}
                   </button>
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="text-center py-8">
-              <Sparkles size={20} className="text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-              <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">No news posts yet</p>
+          ) : totalPosts === 0 ? (
+            /* Empty state — no news at all */
+            <div className="text-center py-16">
+              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700/60 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Newspaper size={28} className="text-slate-300 dark:text-slate-500" />
+              </div>
+              <h3 className="text-base font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                No news yet
+              </h3>
+              <p className="text-sm text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
+                {news.isAdmin
+                  ? 'Create your first company news post to keep everyone informed.'
+                  : 'Company news and announcements will appear here.'}
+              </p>
               {news.isAdmin && (
                 <button
                   onClick={() => handleOpenEditor()}
-                  className="mt-2 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+                  className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-colors"
                 >
+                  <Sparkles size={16} />
                   Create the first post
                 </button>
               )}
             </div>
-          )}
+          ) : null}
 
           {/* Load more */}
           {hasMore && (
             <button
-              onClick={() => setFeedLimit((l) => l + 10)}
-              className="w-full mt-2 py-2 text-xs font-medium text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 rounded-lg transition-colors"
+              onClick={() => setFeedLimit((l) => l + 12)}
+              className="w-full mt-4 py-2.5 text-sm font-medium text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 rounded-xl transition-colors border border-indigo-100 dark:border-indigo-900/30"
             >
               Load more ({news.feedPosts.length - feedLimit} remaining)
             </button>
@@ -255,7 +268,7 @@ export function CompanyNewsPanel({ userId, userRole, userName, userDepartmentId 
 
         {/* Error */}
         {news.error && (
-          <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+          <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 px-4 py-3 text-sm text-red-600 dark:text-red-400">
             {news.error}
           </div>
         )}

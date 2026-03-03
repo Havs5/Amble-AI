@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Eye,
@@ -23,10 +23,14 @@ import {
   ChevronUp,
   Link as LinkIcon,
   ImageIcon,
+  Upload,
+  Loader2,
 } from 'lucide-react';
 import type { NewsPost, NewsPriority, NewsStatus, NewsVisibility } from '@/types/news';
 import { NEWS_DEPARTMENTS, NEWS_TAGS, createBlankPost } from '@/types/news';
 import { PostCard } from './PostCard';
+import { storage } from '@/lib/firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -74,6 +78,61 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
   const [showPreview, setShowPreview] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Image file upload handler ───────────────────────────────────────────
+  async function handleImageUpload(file: File) {
+    if (!storage) {
+      setErrors((prev) => [...prev, 'Firebase Storage is not configured']);
+      return;
+    }
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      setErrors((prev) => [...prev, 'Image must be under 5MB']);
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setErrors((prev) => [...prev, 'File must be an image']);
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    setImageError(false);
+
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const storageRef = ref(storage, `news_images/${filename}`);
+      const uploadTask = uploadBytesResumable(storageRef, file, {
+        contentType: file.type,
+        customMetadata: { uploadedBy: authorId },
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            setUploadProgress(pct);
+          },
+          (err) => reject(err),
+          () => resolve(),
+        );
+      });
+
+      const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+      setCoverImage(downloadUrl);
+    } catch (err: any) {
+      console.error('Image upload failed:', err);
+      setErrors((prev) => [...prev, `Upload failed: ${err.message || 'Unknown error'}`]);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  }
 
   // ── Validation ──────────────────────────────────────────────────────────
   const currentErrors = useMemo(() => validatePost({ title, body }), [title, body]);
@@ -211,7 +270,9 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
           {showPreview && (
             <div className="rounded-lg border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/50 dark:bg-indigo-900/10 p-3">
               <p className="text-[10px] text-indigo-400 font-semibold uppercase tracking-wider mb-2">Preview</p>
-              <PostCard post={previewPost} />
+              <div className="max-w-[320px] mx-auto">
+                <PostCard post={previewPost} variant="featured" />
+              </div>
             </div>
           )}
 
@@ -259,17 +320,55 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
           {/* Cover Image */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              <ImageIcon size={12} className="inline mr-1" /> Cover Image URL <span className="font-normal text-slate-400">(optional)</span>
+              <ImageIcon size={12} className="inline mr-1" /> Cover Image <span className="font-normal text-slate-400">(optional)</span>
             </label>
+
+            {/* Upload button + URL input row */}
+            <div className="flex gap-2 mb-1.5">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                {isUploading ? (
+                  <><Loader2 size={13} className="animate-spin" /> {uploadProgress}%</>
+                ) : (
+                  <><Upload size={13} /> Upload File</>
+                )}
+              </button>
+              <input
+                type="url"
+                value={coverImage}
+                onChange={(e) => { setCoverImage(e.target.value); setImageError(false); }}
+                placeholder="or paste image URL..."
+                className="flex-1 min-w-0 px-3 py-2 text-sm bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 text-slate-800 dark:text-slate-100"
+              />
+            </div>
             <input
-              type="url"
-              value={coverImage}
-              onChange={(e) => { setCoverImage(e.target.value); setImageError(false); }}
-              placeholder="https://images.unsplash.com/..."
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 text-slate-800 dark:text-slate-100"
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageUpload(file);
+                e.target.value = '';
+              }}
             />
-            {coverImage && !imageError && (
-              <div className="mt-2 relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700/50">
+
+            {/* Upload progress bar */}
+            {isUploading && (
+              <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
+                <div
+                  className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            )}
+
+            {coverImage && !imageError && !isUploading && (
+              <div className="mt-1 relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700/50">
                 <img
                   src={coverImage}
                   alt="Cover preview"

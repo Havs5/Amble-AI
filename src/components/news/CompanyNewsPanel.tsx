@@ -225,7 +225,7 @@ export function CompanyNewsPanel({
       <div className="flex-1 flex min-h-0">
         {/* ─── News Feed (center / left) ─────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto scrollbar-thin min-w-0">
-          <div className="px-5 sm:px-6 pb-8 space-y-6">
+          <div className="px-5 sm:px-6 pb-16 space-y-6">
 
           {/* Filters (collapsible) */}
           {showFilters && (

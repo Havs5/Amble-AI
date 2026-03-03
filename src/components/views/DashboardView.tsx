@@ -46,7 +46,7 @@ export function DashboardView({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Hero greeting — fixed at top */}
-      <div className="shrink-0 max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-4" style={{ animation: 'entrance-stagger 0.5s ease-out both' }}>
+      <div className="shrink-0 max-w-[1800px] w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-4" style={{ animation: 'entrance-stagger 0.5s ease-out both' }}>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Online</span>
@@ -62,7 +62,7 @@ export function DashboardView({
         {/* Company News — fills remaining height, internal scroll */}
         {user ? (
           <div
-            className="flex-1 min-h-0 max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 pb-4"
+            className="flex-1 min-h-0 max-w-[1800px] w-full mx-auto px-4 sm:px-6 lg:px-8 pb-4"
             style={{ animation: 'entrance-stagger 0.6s ease-out both' }}
           >
             <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-2xl overflow-hidden shadow-sm flex flex-col h-full">
@@ -76,7 +76,7 @@ export function DashboardView({
           </div>
         ) : (
           <div
-            className="shrink-0 max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 pb-4"
+            className="shrink-0 max-w-[1800px] w-full mx-auto px-4 sm:px-6 lg:px-8 pb-4"
             style={{ animation: 'entrance-stagger 0.6s ease-out both' }}
           >
             <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-12 text-center">

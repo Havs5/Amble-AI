@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Shield, Zap, Activity, Edit2, Trash2, UserPlus, XCircle, ArrowLeft, BarChart2, Plus, Bot, FileText, AlertTriangle, DollarSign, Calendar, TrendingUp, Hash, Cpu, Loader2, Mic, RefreshCw, Users } from 'lucide-react';
+import { X, Search, Shield, Zap, Activity, Edit2, Trash2, UserPlus, XCircle, ArrowLeft, BarChart2, Plus, Bot, FileText, AlertTriangle, DollarSign, Calendar, TrendingUp, Hash, Cpu, Loader2, Mic, RefreshCw, Users, KeyRound, Copy, Check, Mail } from 'lucide-react';
 import { useAuth, AIConfig } from '../auth/AuthContextRefactored';
 import { UsageManager, DetailedUsageStats, ModelUsageBreakdown } from '../../lib/usageManager';
 import { UsageReport } from '../admin/UsageReport';
@@ -55,6 +55,12 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   const [newPolicy, setNewPolicy] = useState('');
   const [policyError, setPolicyError] = useState('');
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+
+  // Reset Password State
+  const [showResetPasswordConfirm, setShowResetPasswordConfirm] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ password: string; emailSent: boolean } | null>(null);
+  const [copiedPassword, setCopiedPassword] = useState(false);
 
 
 
@@ -221,6 +227,51 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
       setShowDeleteConfirmation(false);
     } catch (error: any) {
       setToast({ message: 'Failed to delete user', type: 'error' });
+    }
+  };
+
+  const handleResetPassword = async (sendEmail: boolean) => {
+    if (!selectedUser || !currentUser) return;
+    setIsResettingPassword(true);
+    setResetPasswordResult(null);
+    setCopiedPassword(false);
+    try {
+      const res = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          callerUid: currentUser.uid,
+          sendEmail,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to reset password');
+      setResetPasswordResult({ password: data.newPassword, emailSent: data.emailSent });
+      setToast({ message: data.message, type: 'success' });
+    } catch (err: any) {
+      setToast({ message: err.message || 'Failed to reset password', type: 'error' });
+      setShowResetPasswordConfirm(false);
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
+  const copyPasswordToClipboard = async (password: string) => {
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopiedPassword(true);
+      setTimeout(() => setCopiedPassword(false), 2000);
+    } catch {
+      // Fallback
+      const el = document.createElement('textarea');
+      el.value = password;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopiedPassword(true);
+      setTimeout(() => setCopiedPassword(false), 2000);
     }
   };
 
@@ -1290,17 +1341,36 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                     <Shield size={20} />
                     Danger Zone
                   </h4>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium text-slate-900 dark:text-white text-sm">Delete User</div>
-                      <div className="text-xs text-slate-500">Permanently remove this user and all their data.</div>
+                  <div className="space-y-4">
+                    {/* Reset Password */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-slate-900 dark:text-white text-sm flex items-center gap-1.5">
+                          <KeyRound size={14} className="text-amber-500" />
+                          Reset Password
+                        </div>
+                        <div className="text-xs text-slate-500">Generate a random password and optionally email it to the user.</div>
+                      </div>
+                      <button 
+                        onClick={() => { setShowResetPasswordConfirm(true); setResetPasswordResult(null); setCopiedPassword(false); }}
+                        className="px-3 py-2 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-amber-600 rounded-lg text-sm font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                      >
+                        Reset Password
+                      </button>
                     </div>
-                    <button 
-                      onClick={handleDeleteUser}
-                      className="px-3 py-2 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-800 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                    >
-                      Delete Account
-                    </button>
+                    {/* Delete User */}
+                    <div className="flex items-center justify-between pt-4 border-t border-red-100 dark:border-red-900/30">
+                      <div>
+                        <div className="font-medium text-slate-900 dark:text-white text-sm">Delete User</div>
+                        <div className="text-xs text-slate-500">Permanently remove this user and all their data.</div>
+                      </div>
+                      <button 
+                        onClick={handleDeleteUser}
+                        className="px-3 py-2 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-800 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        Delete Account
+                      </button>
+                    </div>
                   </div>
                 </div>
                 )}
@@ -1348,6 +1418,99 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                 Delete Account
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Confirmation / Result Modal */}
+      {showResetPasswordConfirm && (
+        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 animate-in zoom-in-95 duration-200 mx-4">
+            {!resetPasswordResult ? (
+              /* Confirmation step */
+              <>
+                <div className="flex flex-col items-center text-center mb-6">
+                  <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mb-4">
+                    <KeyRound size={32} className="text-amber-600 dark:text-amber-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Reset Password</h3>
+                  <p className="text-slate-500 dark:text-slate-400">
+                    Generate a new random password for <span className="font-semibold text-slate-900 dark:text-white">"{selectedUser?.name}"</span>?
+                  </p>
+                  <p className="text-xs text-slate-400 mt-2">Their current password will be immediately replaced.</p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => handleResetPassword(true)}
+                    disabled={isResettingPassword}
+                    className="w-full py-2.5 px-4 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isResettingPassword ? (
+                      <><Loader2 className="animate-spin" size={16} /> Resetting...</>
+                    ) : (
+                      <><Mail size={16} /> Reset &amp; Send Email</>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleResetPassword(false)}
+                    disabled={isResettingPassword}
+                    className="w-full py-2.5 px-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isResettingPassword ? (
+                      <><Loader2 className="animate-spin" size={16} /> Resetting...</>
+                    ) : (
+                      <><KeyRound size={16} /> Reset Only (No Email)</>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setShowResetPasswordConfirm(false)}
+                    disabled={isResettingPassword}
+                    className="w-full py-2 px-4 text-slate-400 text-sm hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* Result step — show generated password */
+              <>
+                <div className="flex flex-col items-center text-center mb-6">
+                  <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
+                    <Check size={32} className="text-green-600 dark:text-green-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Password Reset</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    New password for <span className="font-semibold text-slate-900 dark:text-white">{selectedUser?.name}</span>
+                    {resetPasswordResult.emailSent && (
+                      <span className="block text-green-600 dark:text-green-400 mt-1 text-xs">Email sent to {selectedUser?.email}</span>
+                    )}
+                  </p>
+                </div>
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                    <code className="flex-1 text-center text-lg font-mono font-semibold tracking-wider text-slate-900 dark:text-white select-all">
+                      {resetPasswordResult.password}
+                    </code>
+                    <button
+                      onClick={() => copyPasswordToClipboard(resetPasswordResult.password)}
+                      className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500"
+                      title="Copy password"
+                    >
+                      {copiedPassword ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
+                    </button>
+                  </div>
+                  {!resetPasswordResult.emailSent && (
+                    <p className="text-xs text-amber-500 mt-2 text-center">Email not sent — share this password manually.</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setShowResetPasswordConfirm(false); setResetPasswordResult(null); }}
+                  className="w-full py-2.5 px-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Done
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

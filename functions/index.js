@@ -59,6 +59,7 @@ const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 const TAVILY_API_KEY = defineSecret('TAVILY_API_KEY');
 const GOOGLE_SEARCH_API_KEY = defineSecret('GOOGLE_SEARCH_API_KEY');
 const GOOGLE_SEARCH_CX = defineSecret('GOOGLE_SEARCH_CX');
+const SMTP_APP_PASSWORD = defineSecret('SMTP_APP_PASSWORD');
 
 // ============================================================================
 // Next.js App
@@ -88,6 +89,7 @@ function setSecretsToEnv() {
   if (TAVILY_API_KEY.value()) process.env.TAVILY_API_KEY = TAVILY_API_KEY.value();
   if (GOOGLE_SEARCH_API_KEY.value()) process.env.GOOGLE_SEARCH_API_KEY = GOOGLE_SEARCH_API_KEY.value();
   if (GOOGLE_SEARCH_CX.value()) process.env.GOOGLE_SEARCH_CX = GOOGLE_SEARCH_CX.value();
+  if (SMTP_APP_PASSWORD.value()) process.env.SMTP_APP_PASSWORD = SMTP_APP_PASSWORD.value();
   
   console.log('[Secrets] Keys loaded:', {
     OPENAI: !!process.env.OPENAI_API_KEY,
@@ -143,7 +145,7 @@ exports.ssrambleai = onRequest(
     region: 'us-central1',
     memory: '2GiB',
     timeoutSeconds: 540,
-    secrets: [OPENAI_API_KEY, GEMINI_API_KEY, TAVILY_API_KEY, GOOGLE_SEARCH_API_KEY, GOOGLE_SEARCH_CX]
+    secrets: [OPENAI_API_KEY, GEMINI_API_KEY, TAVILY_API_KEY, GOOGLE_SEARCH_API_KEY, GOOGLE_SEARCH_CX, SMTP_APP_PASSWORD]
   },
   async (req, res) => {
     let adminDb;
@@ -207,6 +209,11 @@ exports.ssrambleai = onRequest(
       // Special: Admin - Restore Users
       if (method === 'POST' && (path === '/api/admin/restore-users' || path === '/admin/restore-users')) {
         return handleRestoreUsers(req, res, context);
+      }
+
+      // Special: Admin - Reset User Password
+      if (method === 'POST' && (path === '/api/admin/reset-password' || path === '/admin/reset-password')) {
+        return handleAdminResetPassword(req, res, context);
       }
 
       // Special: Video content proxy (dynamic path)
@@ -508,5 +515,109 @@ async function handleVideoContentProxy(req, res, videoId) {
   } catch (e) {
     console.error('Error in video content proxy:', e);
     return jsonError(res, getHttpStatusFromError(e) || 500, getErrorMessage(e));
+  }
+}
+
+// ============================================================================
+// Admin: Reset User Password & Send Email
+// ============================================================================
+
+async function handleAdminResetPassword(req, res, { adminDb, writeJson }) {
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+    const { userId, callerUid, sendEmail } = body;
+
+    if (!userId || !callerUid) {
+      return writeJson(res, 400, { error: 'Missing userId or callerUid' });
+    }
+
+    // Verify caller is admin
+    const callerMapping = await adminDb.collection('users_by_uid').doc(callerUid).get();
+    if (!callerMapping.exists) {
+      return writeJson(res, 403, { error: 'Caller not found' });
+    }
+    const callerDoc = await adminDb.collection('users').doc(callerMapping.data().userId).get();
+    if (!callerDoc.exists || !['admin', 'superadmin'].includes(callerDoc.data().role)) {
+      return writeJson(res, 403, { error: 'Insufficient permissions' });
+    }
+
+    // Get target user document
+    const userDoc = await adminDb.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return writeJson(res, 404, { error: 'User not found' });
+    }
+    const userData = userDoc.data();
+    const firebaseUid = userData.uid;
+    const userEmail = userData.email;
+    const userName = userData.name || 'User';
+
+    if (!firebaseUid) {
+      return writeJson(res, 400, { error: 'User has no Firebase Auth UID' });
+    }
+
+    // Generate random password: 12 chars, mix of upper/lower/numbers/symbols
+    const crypto = require('crypto');
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+    let newPassword = '';
+    const randomBytes = crypto.randomBytes(12);
+    for (let i = 0; i < 12; i++) {
+      newPassword += chars[randomBytes[i] % chars.length];
+    }
+
+    // Update Firebase Auth password
+    await admin.auth().updateUser(firebaseUid, { password: newPassword });
+    console.log(`[Admin] Password reset for ${userEmail} (uid: ${firebaseUid})`);
+
+    // Send email notification if requested and SMTP credentials are available
+    let emailSent = false;
+    if (sendEmail && process.env.SMTP_APP_PASSWORD) {
+      try {
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: 'hectorv@joinamble.com',
+            pass: process.env.SMTP_APP_PASSWORD,
+          },
+        });
+
+        await transporter.sendMail({
+          from: '"Amble AI" <hectorv@joinamble.com>',
+          to: userEmail,
+          subject: 'Your Amble AI Password Has Been Reset',
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 540px; margin: 0 auto; padding: 32px 24px; background: #f8fafc; border-radius: 12px;">
+              <div style="text-align: center; margin-bottom: 24px;">
+                <div style="display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 12px; line-height: 48px; color: white; font-weight: bold; font-size: 20px;">A</div>
+              </div>
+              <h2 style="color: #1e293b; text-align: center; margin-bottom: 8px; font-size: 22px;">Password Reset</h2>
+              <p style="color: #64748b; text-align: center; margin-bottom: 24px; font-size: 14px;">Hi ${userName}, your Amble AI account password has been reset by an administrator.</p>
+              <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+                <p style="color: #475569; font-size: 13px; margin: 0 0 4px 0;">Your new temporary password:</p>
+                <p style="color: #1e293b; font-size: 18px; font-weight: 600; font-family: monospace; letter-spacing: 1px; margin: 0; background: #f1f5f9; padding: 12px; border-radius: 6px; text-align: center;">${newPassword}</p>
+              </div>
+              <p style="color: #94a3b8; font-size: 12px; text-align: center;">Please sign in at <a href="https://amble-ai.web.app" style="color: #6366f1;">amble-ai.web.app</a> and change your password at your earliest convenience.</p>
+              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+              <p style="color: #cbd5e1; font-size: 11px; text-align: center;">Amble AI &bull; Healthcare Intelligence Platform</p>
+            </div>
+          `,
+        });
+        emailSent = true;
+        console.log(`[Admin] Password reset email sent to ${userEmail}`);
+      } catch (emailErr) {
+        console.error('[Admin] Failed to send reset email:', emailErr);
+        // Don't fail the request — password was still reset
+      }
+    }
+
+    return writeJson(res, 200, {
+      success: true,
+      newPassword,
+      emailSent,
+      message: `Password reset for ${userEmail}${emailSent ? ' — email sent' : ''}`,
+    });
+  } catch (e) {
+    console.error('[Admin] Error resetting password:', e);
+    return writeJson(res, 500, { error: e.message });
   }
 }

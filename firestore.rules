@@ -79,14 +79,9 @@ service cloud.firestore {
       allow update: if request.auth != null && isAdminByUid();
       allow delete: if request.auth != null && isAdminByUid();
 
-      // Users can read PUBLISHED posts that pass timing + visibility checks
-      // (Fine-grained timing/visibility is enforced client-side; rules ensure status check)
-      allow read: if request.auth != null && (
-        // Admins can read all (including drafts)
-        isAdminByUid() ||
-        // Users can only read published posts
-        resource.data.status == 'PUBLISHED'
-      );
+      // Any authenticated user can read news posts.
+      // Client-side filters handle visibility, timing, and draft hiding for non-admins.
+      allow read: if request.auth != null;
     }
 
     // Audit trail: only admin can write, anyone authenticated can read

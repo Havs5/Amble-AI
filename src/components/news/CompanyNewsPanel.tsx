@@ -25,7 +25,11 @@ import {
   Tag as TagIcon,
   TrendingUp,
   ChevronRight,
+  ChevronDown,
   X,
+  FileText,
+  Send,
+  Archive,
 } from 'lucide-react';
 import { useCompanyNews } from '@/hooks/useCompanyNews';
 import type { NewsPost } from '@/types/news';
@@ -88,6 +92,9 @@ export function CompanyNewsPanel({
 
   // Filter bar visibility
   const [showFilters, setShowFilters] = useState(false);
+
+  // Drafts section visibility (admin only)
+  const [showDrafts, setShowDrafts] = useState(true);
 
   // Feed display limit
   const [feedLimit, setFeedLimit] = useState(12);
@@ -401,6 +408,84 @@ export function CompanyNewsPanel({
                 Load more ({allRemainingPosts.length - feedLimit} remaining)
                 <ChevronRight size={14} />
               </button>
+            </div>
+          )}
+
+          {/* ─── Drafts & Archived Section (Admin Only) ─────────────────── */}
+          {news.isAdmin && news.drafts.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700/50">
+              <button
+                onClick={() => setShowDrafts((v) => !v)}
+                className="flex items-center gap-2 w-full text-left group"
+              >
+                <ChevronDown
+                  size={14}
+                  className={`text-slate-400 transition-transform ${showDrafts ? '' : '-rotate-90'}`}
+                />
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 group-hover:text-slate-800 dark:group-hover:text-white transition-colors">
+                  <FileText size={14} className="text-amber-500" />
+                  Drafts & Archived
+                </h3>
+                <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+                  {news.drafts.length}
+                </span>
+              </button>
+
+              {showDrafts && (
+                <div className="mt-3 space-y-2">
+                  {news.drafts.map((draft) => (
+                    <div
+                      key={draft.id}
+                      className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
+                    >
+                      {/* Status badge */}
+                      <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                        draft.status === 'DRAFT'
+                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {draft.status === 'DRAFT' ? <FileText size={10} /> : <Archive size={10} />}
+                        {draft.status}
+                      </span>
+
+                      {/* Title & meta */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                          {draft.title || 'Untitled'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {draft.updatedAt
+                            ? `Updated ${lastUpdatedLabel(draft.updatedAt)}`
+                            : draft.createdAt
+                            ? `Created ${lastUpdatedLabel(draft.createdAt)}`
+                            : ''}
+                        </p>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => handleOpenEditor(draft)}
+                          className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                          title="Edit"
+                        >
+                          <FileText size={14} />
+                        </button>
+                        {draft.status === 'DRAFT' && (
+                          <button
+                            onClick={() => news.publishPost(draft.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-white bg-emerald-500 hover:bg-emerald-600 transition-colors"
+                            title="Publish now"
+                          >
+                            <Send size={10} />
+                            Publish
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

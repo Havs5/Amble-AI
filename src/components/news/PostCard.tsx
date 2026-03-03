@@ -227,12 +227,12 @@ export function PostCard({
   if (variant === 'featured') {
     return (
       <div
-        className="group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/60 hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col"
+        className="group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/60 hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col h-full"
         onClick={() => onExpand?.(post.id)}
         style={{ animation: 'fade-in-up 0.3s ease-out both' }}
       >
         {/* Image */}
-        <div className="relative aspect-[16/10] overflow-hidden">
+        <div className="relative flex-1 min-h-[100px] overflow-hidden">
           {hasImage ? (
             <img
               src={post.coverImage!}
@@ -271,11 +271,24 @@ export function PostCard({
         </div>
 
         {/* Text content */}
-        <div className="flex-1 p-4">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-snug mb-1.5 line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+        <div className="shrink-0 p-3">
+          {/* Priority / Pinned badges */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+            {post.priority === 'CRITICAL' && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-white bg-red-500">
+                <AlertTriangle size={9} /> Critical
+              </span>
+            )}
+            {post.pinned && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-white bg-amber-500">
+                <Pin size={9} /> Pinned
+              </span>
+            )}
+          </div>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-snug mb-1 line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
             {post.title}
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-2">
             {post.summary || post.body.slice(0, 120)}
           </p>
 

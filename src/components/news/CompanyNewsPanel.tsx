@@ -128,31 +128,27 @@ export function CompanyNewsPanel({
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
-  // Featured = critical → first pinned → newest post
-  const featuredPost = useMemo(() => {
-    if (news.criticalPost) return news.criticalPost;
-    if (news.pinnedPosts.length > 0) return news.pinnedPosts[0];
-    if (news.feedPosts.length > 0) return news.feedPosts[0];
-    return null;
-  }, [news.criticalPost, news.pinnedPosts, news.feedPosts]);
+  // Sorted: critical → pinned → newest
+  const sortedPosts = useMemo(() => {
+    return [...news.allPosts].sort((a, b) => {
+      if (a.priority === 'CRITICAL' && b.priority !== 'CRITICAL') return -1;
+      if (a.priority !== 'CRITICAL' && b.priority === 'CRITICAL') return 1;
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      const da = a.publishedAt?.getTime() ?? 0;
+      const db = b.publishedAt?.getTime() ?? 0;
+      return db - da;
+    });
+  }, [news.allPosts]);
 
-  // ALL remaining posts (everything except the hero) — uses allPosts so
-  // critical, pinned, and regular posts ALL appear in the grid
+  // Top 3 featured posts (banner row)
+  const topPosts = useMemo(() => sortedPosts.slice(0, 3), [sortedPosts]);
+
+  // Everything else goes into the grid below
   const allRemainingPosts = useMemo(() => {
-    const heroId = featuredPost?.id;
-    return news.allPosts
-      .filter((p) => p.id !== heroId)
-      .sort((a, b) => {
-        // Critical first, then pinned, then by date
-        if (a.priority === 'CRITICAL' && b.priority !== 'CRITICAL') return -1;
-        if (a.priority !== 'CRITICAL' && b.priority === 'CRITICAL') return 1;
-        if (a.pinned && !b.pinned) return -1;
-        if (!a.pinned && b.pinned) return 1;
-        const da = a.publishedAt?.getTime() ?? 0;
-        const db = b.publishedAt?.getTime() ?? 0;
-        return db - da;
-      });
-  }, [featuredPost, news.allPosts]);
+    const topIds = new Set(topPosts.map((p) => p.id));
+    return sortedPosts.filter((p) => !topIds.has(p.id));
+  }, [sortedPosts, topPosts]);
 
   const visibleFeed = allRemainingPosts.slice(0, feedLimit);
   const hasMore = allRemainingPosts.length > feedLimit;
@@ -238,69 +234,101 @@ export function CompanyNewsPanel({
             </div>
           )}
 
-          {/* ─── Critical Alert Banner ───────────────────────────────────── */}
-          {news.criticalPost && featuredPost?.id !== news.criticalPost.id && (
-            <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle
-                  size={18}
-                  className="text-red-500 shrink-0 mt-0.5"
+          {/* ─── Top Stories Banner (up to 3) ────────────────────────────── */}
+          {topPosts.length > 0 && (
+            <div>
+              {topPosts.length === 1 ? (
+                /* Single post — full-width hero */
+                <PostCard
+                  post={topPosts[0]}
+                  variant="hero"
+                  isAdmin={news.isAdmin}
+                  onEdit={(p) => handleOpenEditor(p)}
+                  onArchive={news.archivePost}
+                  onTogglePin={news.togglePin}
+                  onExpand={handleExpandToggle}
                 />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-red-700 dark:text-red-300 uppercase tracking-wide mb-1">
-                    Critical Alert
-                  </p>
-                  <p className="text-sm font-semibold text-red-900 dark:text-red-100">
-                    {news.criticalPost.title}
-                  </p>
-                  <p className="text-sm text-red-600/80 dark:text-red-300/70 mt-1 line-clamp-2">
-                    {news.criticalPost.summary ||
-                      news.criticalPost.body.slice(0, 200)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ─── Featured / Hero Post ────────────────────────────────────── */}
-          {featuredPost && (
-            <PostCard
-              post={featuredPost}
-              variant="hero"
-              isAdmin={news.isAdmin}
-              onEdit={(p) => handleOpenEditor(p)}
-              onArchive={news.archivePost}
-              onTogglePin={news.togglePin}
-              onExpand={handleExpandToggle}
-            />
-          )}
-
-          {/* Expanded hero body */}
-          {featuredPost && expandedPostId === featuredPost.id && (
-            <div
-              className="rounded-xl border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/40 p-5 sm:p-6"
-              style={{ animation: 'fade-in-up 0.2s ease-out both' }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{featuredPost.title}</h3>
-                <button
-                  onClick={() => setExpandedPostId(null)}
-                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                {featuredPost.body}
-              </div>
-              {featuredPost.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-4 pt-3 border-t border-slate-200 dark:border-slate-700/50">
-                  {featuredPost.tags.map((t) => (
-                    <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400">
-                      <TagIcon size={9} /> {t}
-                    </span>
+              ) : topPosts.length === 2 ? (
+                /* Two posts — equal split */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {topPosts.map((p) => (
+                    <PostCard
+                      key={p.id}
+                      post={p}
+                      variant="featured"
+                      isAdmin={news.isAdmin}
+                      onEdit={() => handleOpenEditor(p)}
+                      onArchive={news.archivePost}
+                      onTogglePin={news.togglePin}
+                      onExpand={handleExpandToggle}
+                    />
                   ))}
                 </div>
+              ) : (
+                /* Three posts — large left + two stacked right */
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+                  {/* Main feature (takes 3/5 width) */}
+                  <div className="lg:col-span-3">
+                    <PostCard
+                      post={topPosts[0]}
+                      variant="hero"
+                      isAdmin={news.isAdmin}
+                      onEdit={(p) => handleOpenEditor(p)}
+                      onArchive={news.archivePost}
+                      onTogglePin={news.togglePin}
+                      onExpand={handleExpandToggle}
+                    />
+                  </div>
+                  {/* Two stacked cards on the right (2/5 width) */}
+                  <div className="lg:col-span-2 flex flex-col gap-3">
+                    {topPosts.slice(1, 3).map((p) => (
+                      <div key={p.id} className="flex-1 flex flex-col [&>*]:flex-1">
+                        <PostCard
+                          post={p}
+                          variant="featured"
+                          isAdmin={news.isAdmin}
+                          onEdit={() => handleOpenEditor(p)}
+                          onArchive={news.archivePost}
+                          onTogglePin={news.togglePin}
+                          onExpand={handleExpandToggle}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Expanded body for any top post */}
+              {topPosts.map((tp) =>
+                expandedPostId === tp.id ? (
+                  <div
+                    key={`exp-${tp.id}`}
+                    className="mt-3 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/40 p-5 sm:p-6"
+                    style={{ animation: 'fade-in-up 0.2s ease-out both' }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{tp.title}</h3>
+                      <button
+                        onClick={() => setExpandedPostId(null)}
+                        className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                      {tp.body}
+                    </div>
+                    {tp.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-4 pt-3 border-t border-slate-200 dark:border-slate-700/50">
+                        {tp.tags.map((t) => (
+                          <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400">
+                            <TagIcon size={9} /> {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null,
               )}
             </div>
           )}
@@ -367,7 +395,7 @@ export function CompanyNewsPanel({
           )}
 
           {/* ─── Empty State ─────────────────────────────────────────────── */}
-          {!featuredPost && allRemainingPosts.length === 0 && (
+          {topPosts.length === 0 && allRemainingPosts.length === 0 && (
             <div
               className="text-center py-20"
               style={{ animation: 'fade-in-up 0.4s ease-out both' }}

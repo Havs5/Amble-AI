@@ -148,7 +148,7 @@ export function PostCard({
         style={{ animation: 'fade-in-up 0.3s ease-out both' }}
       >
         {/* Image / gradient background */}
-        <div className="relative aspect-[21/9] min-h-[240px] sm:min-h-[300px]">
+        <div className="relative aspect-[21/8] min-h-[200px] sm:min-h-[240px]">
           {hasImage ? (
             <img
               src={post.coverImage!}

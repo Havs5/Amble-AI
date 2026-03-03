@@ -17,19 +17,12 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   Newspaper,
   AlertTriangle,
-  Pin,
-  Rss,
   Clock,
   Loader2,
-  ExternalLink,
   Sparkles,
   Plus,
   Filter,
-  Calendar,
   Tag as TagIcon,
-  Building2,
-  User,
-  Search,
   TrendingUp,
   ChevronRight,
   X,
@@ -128,7 +121,7 @@ export function CompanyNewsPanel({
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
-  // Featured = critical → first pinned → first feed post
+  // Featured = critical → first pinned → newest post
   const featuredPost = useMemo(() => {
     if (news.criticalPost) return news.criticalPost;
     if (news.pinnedPosts.length > 0) return news.pinnedPosts[0];
@@ -136,20 +129,33 @@ export function CompanyNewsPanel({
     return null;
   }, [news.criticalPost, news.pinnedPosts, news.feedPosts]);
 
-  // Remaining pinned (exclude featured)
-  const remainingPinned = useMemo(
-    () => news.pinnedPosts.filter((p) => p.id !== featuredPost?.id),
-    [news.pinnedPosts, featuredPost],
-  );
+  // ALL remaining posts in one unified feed (pinned + regular, excluding hero)
+  const allRemainingPosts = useMemo(() => {
+    const heroId = featuredPost?.id;
+    // Merge pinned and feed, exclude the hero, sort by pinned-first then date
+    const merged = [...news.pinnedPosts, ...news.feedPosts].filter(
+      (p) => p.id !== heroId,
+    );
+    // Deduplicate (a post could theoretically appear in both)
+    const seen = new Set<string>();
+    const unique = merged.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+    // Sort: pinned first, then by date
+    unique.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      const da = a.publishedAt?.getTime() ?? 0;
+      const db = b.publishedAt?.getTime() ?? 0;
+      return db - da;
+    });
+    return unique;
+  }, [featuredPost, news.pinnedPosts, news.feedPosts]);
 
-  // Feed excluding featured
-  const remainingFeed = useMemo(
-    () => news.feedPosts.filter((p) => p.id !== featuredPost?.id),
-    [news.feedPosts, featuredPost],
-  );
-
-  const visibleFeed = remainingFeed.slice(0, feedLimit);
-  const hasMore = remainingFeed.length > feedLimit;
+  const visibleFeed = allRemainingPosts.slice(0, feedLimit);
+  const hasMore = allRemainingPosts.length > feedLimit;
 
   // Quick stats for admin
   const draftCount = news.drafts.filter((d) => d.status === 'DRAFT').length;
@@ -299,45 +305,18 @@ export function CompanyNewsPanel({
             </div>
           )}
 
-          {/* ─── Pinned Stories Row ──────────────────────────────────────── */}
-          {remainingPinned.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-white">
-                  <Pin size={14} className="text-amber-500" />
-                  Pinned Stories
-                </h3>
-                <span className="text-xs text-slate-400">{remainingPinned.length} pinned</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {remainingPinned.map((p) => (
-                  <PostCard
-                    key={p.id}
-                    post={p}
-                    variant="featured"
-                    isAdmin={news.isAdmin}
-                    onEdit={() => handleOpenEditor(p)}
-                    onArchive={news.archivePost}
-                    onTogglePin={news.togglePin}
-                    onExpand={handleExpandToggle}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ─── Latest Updates Feed ─────────────────────────────────────── */}
+          {/* ─── All Posts Grid ──────────────────────────────────────── */}
           {visibleFeed.length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-white">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-white">
                   <TrendingUp size={14} className="text-indigo-500" />
-                  Latest Updates
+                  All Posts
                 </h3>
-                <span className="text-xs text-slate-400">{remainingFeed.length} posts</span>
+                <span className="text-xs text-slate-400">{allRemainingPosts.length} posts</span>
               </div>
 
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {visibleFeed.map((p) => (
                   <div key={p.id}>
                     <PostCard
@@ -353,7 +332,7 @@ export function CompanyNewsPanel({
                     {/* Expanded body */}
                     {expandedPostId === p.id && (
                       <div
-                        className="ml-32 sm:ml-40 mt-2 rounded-lg border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/40 p-4"
+                        className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/40 p-4"
                         style={{ animation: 'fade-in-up 0.15s ease-out both' }}
                       >
                         <div className="flex items-center justify-between mb-2">
@@ -386,7 +365,7 @@ export function CompanyNewsPanel({
           )}
 
           {/* ─── Empty State ─────────────────────────────────────────────── */}
-          {!featuredPost && remainingFeed.length === 0 && (
+          {!featuredPost && allRemainingPosts.length === 0 && (
             <div
               className="text-center py-20"
               style={{ animation: 'fade-in-up 0.4s ease-out both' }}
@@ -424,7 +403,7 @@ export function CompanyNewsPanel({
                 onClick={() => setFeedLimit((l) => l + 12)}
                 className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-xl transition-colors"
               >
-                Load more ({remainingFeed.length - feedLimit} remaining)
+                Load more ({allRemainingPosts.length - feedLimit} remaining)
                 <ChevronRight size={14} />
               </button>
             </div>

@@ -235,7 +235,7 @@ export function useCompanyNews({ userId, userRole, userName, userDepartmentId }:
   );
 
   const pinnedPosts = useMemo(
-    () => filteredPosts.filter((p) => p.pinned && p.priority !== 'CRITICAL').slice(0, 3),
+    () => filteredPosts.filter((p) => p.pinned && p.priority !== 'CRITICAL'),
     [filteredPosts],
   );
 

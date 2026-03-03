@@ -163,13 +163,18 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex" onClick={onClose}>
+      {/* Backdrop — click to close */}
+      <div className="flex-1 bg-black/30 backdrop-blur-sm" />
+
+      {/* Slide-in panel from right */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden"
+        className="w-full max-w-lg h-full bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col"
+        style={{ animation: 'slide-in-right 0.25s ease-out both' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700/60">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-700/60 shrink-0">
           <h2 className="text-base font-semibold text-slate-900 dark:text-white">
             {isEdit ? 'Edit Post' : 'New Post'}
           </h2>
@@ -184,7 +189,7 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
             >
               <Eye size={14} /> Preview
             </button>
-            <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
+            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
               <X size={18} />
             </button>
           </div>
@@ -424,7 +429,7 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
         </div>
 
         {/* Footer: actions */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/30">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/30 shrink-0">
           <div className="text-[10px] text-slate-400">
             {currentErrors.length > 0 ? (
               <span className="text-amber-500">{currentErrors.length} issue(s)</span>

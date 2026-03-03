@@ -129,30 +129,23 @@ export function CompanyNewsPanel({
     return null;
   }, [news.criticalPost, news.pinnedPosts, news.feedPosts]);
 
-  // ALL remaining posts in one unified feed (pinned + regular, excluding hero)
+  // ALL remaining posts (everything except the hero) — uses allPosts so
+  // critical, pinned, and regular posts ALL appear in the grid
   const allRemainingPosts = useMemo(() => {
     const heroId = featuredPost?.id;
-    // Merge pinned and feed, exclude the hero, sort by pinned-first then date
-    const merged = [...news.pinnedPosts, ...news.feedPosts].filter(
-      (p) => p.id !== heroId,
-    );
-    // Deduplicate (a post could theoretically appear in both)
-    const seen = new Set<string>();
-    const unique = merged.filter((p) => {
-      if (seen.has(p.id)) return false;
-      seen.add(p.id);
-      return true;
-    });
-    // Sort: pinned first, then by date
-    unique.sort((a, b) => {
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
-      const da = a.publishedAt?.getTime() ?? 0;
-      const db = b.publishedAt?.getTime() ?? 0;
-      return db - da;
-    });
-    return unique;
-  }, [featuredPost, news.pinnedPosts, news.feedPosts]);
+    return news.allPosts
+      .filter((p) => p.id !== heroId)
+      .sort((a, b) => {
+        // Critical first, then pinned, then by date
+        if (a.priority === 'CRITICAL' && b.priority !== 'CRITICAL') return -1;
+        if (a.priority !== 'CRITICAL' && b.priority === 'CRITICAL') return 1;
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        const da = a.publishedAt?.getTime() ?? 0;
+        const db = b.publishedAt?.getTime() ?? 0;
+        return db - da;
+      });
+  }, [featuredPost, news.allPosts]);
 
   const visibleFeed = allRemainingPosts.slice(0, feedLimit);
   const hasMore = allRemainingPosts.length > feedLimit;
@@ -311,12 +304,14 @@ export function CompanyNewsPanel({
               <div className="flex items-center justify-between mb-3">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-white">
                   <TrendingUp size={14} className="text-indigo-500" />
-                  All Posts
+                  Latest Updates
                 </h3>
-                <span className="text-xs text-slate-400">{allRemainingPosts.length} posts</span>
+                <span className="text-xs text-slate-400">
+                  {allRemainingPosts.length} {allRemainingPosts.length === 1 ? 'post' : 'posts'}
+                </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {visibleFeed.map((p) => (
                   <div key={p.id}>
                     <PostCard

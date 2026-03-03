@@ -248,27 +248,11 @@ export function CompanyNewsPanel({
                   onTogglePin={news.togglePin}
                   onExpand={handleExpandToggle}
                 />
-              ) : topPosts.length === 2 ? (
-                /* Two posts — equal split */
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {topPosts.map((p) => (
-                    <PostCard
-                      key={p.id}
-                      post={p}
-                      variant="featured"
-                      isAdmin={news.isAdmin}
-                      onEdit={() => handleOpenEditor(p)}
-                      onArchive={news.archivePost}
-                      onTogglePin={news.togglePin}
-                      onExpand={handleExpandToggle}
-                    />
-                  ))}
-                </div>
               ) : (
-                /* Three+ posts — large left + two stacked right */
-                <div className="grid grid-cols-1 md:grid-cols-5 md:grid-rows-2 gap-3 md:max-h-[420px]">
-                  {/* Main feature (takes 3/5 width, spans both rows) */}
-                  <div className="md:col-span-3 md:row-span-2 [&>*]:h-full">
+                /* 2-3 posts — inline flex with first card larger */
+                <div style={{ display: 'flex', gap: '12px', maxHeight: '400px' }}>
+                  {/* Main feature (60% width) */}
+                  <div style={{ flex: topPosts.length >= 3 ? '0 0 58%' : '0 0 50%', display: 'flex', flexDirection: 'column' }}>
                     <PostCard
                       post={topPosts[0]}
                       variant="featured"
@@ -279,20 +263,22 @@ export function CompanyNewsPanel({
                       onExpand={handleExpandToggle}
                     />
                   </div>
-                  {/* Two stacked cards on the right (2/5 width, one per row) */}
-                  {topPosts.slice(1, 3).map((p) => (
-                    <div key={p.id} className="md:col-span-2 [&>*]:h-full">
-                      <PostCard
-                        post={p}
-                        variant="featured"
-                        isAdmin={news.isAdmin}
-                        onEdit={() => handleOpenEditor(p)}
-                        onArchive={news.archivePost}
-                        onTogglePin={news.togglePin}
-                        onExpand={handleExpandToggle}
-                      />
-                    </div>
-                  ))}
+                  {/* Right side: stacked cards */}
+                  <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {topPosts.slice(1, 3).map((p) => (
+                      <div key={p.id} style={{ flex: '1', display: 'flex', flexDirection: 'column' }}>
+                        <PostCard
+                          post={p}
+                          variant="featured"
+                          isAdmin={news.isAdmin}
+                          onEdit={() => handleOpenEditor(p)}
+                          onArchive={news.archivePost}
+                          onTogglePin={news.togglePin}
+                          onExpand={handleExpandToggle}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

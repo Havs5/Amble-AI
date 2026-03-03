@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronUp,
   Link as LinkIcon,
+  ImageIcon,
 } from 'lucide-react';
 import type { NewsPost, NewsPriority, NewsStatus, NewsVisibility } from '@/types/news';
 import { NEWS_DEPARTMENTS, NEWS_TAGS, createBlankPost } from '@/types/news';
@@ -64,6 +65,8 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
   const [allowedDepartmentIds, setAllowedDepartmentIds] = useState<string[]>(post?.allowedDepartmentIds ?? []);
   const [allowedUserIds, setAllowedUserIds] = useState(post?.allowedUserIds?.join(', ') ?? '');
   const [link, setLink] = useState(post?.link ?? '');
+  const [coverImage, setCoverImage] = useState(post?.coverImage ?? '');
+  const [imageError, setImageError] = useState(false);
   const [publishAt, setPublishAt] = useState(post?.publishAt ? toInputDate(post.publishAt) : '');
   const [expiresAt, setExpiresAt] = useState(post?.expiresAt ? toInputDate(post.expiresAt) : '');
 
@@ -91,6 +94,7 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
       allowedDepartmentIds: visibility === 'DEPARTMENTS' ? allowedDepartmentIds : [],
       allowedUserIds: visibility === 'USERS' ? allowedUserIds.split(',').map((s) => s.trim()).filter(Boolean) : [],
       link: link.trim() || undefined,
+      coverImage: coverImage.trim() || undefined,
       publishAt: publishAt ? new Date(publishAt) : null,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       authorId,
@@ -155,6 +159,7 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
     allowedUserIds: [],
     authorId,
     authorName,
+    coverImage: coverImage || undefined,
     createdAt: new Date(),
     updatedAt: new Date(),
     publishedAt: new Date(),
@@ -249,6 +254,42 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
               maxLength={200}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 text-slate-800 dark:text-slate-100"
             />
+          </div>
+
+          {/* Cover Image */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              <ImageIcon size={12} className="inline mr-1" /> Cover Image URL <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              type="url"
+              value={coverImage}
+              onChange={(e) => { setCoverImage(e.target.value); setImageError(false); }}
+              placeholder="https://images.unsplash.com/..."
+              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 text-slate-800 dark:text-slate-100"
+            />
+            {coverImage && !imageError && (
+              <div className="mt-2 relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700/50">
+                <img
+                  src={coverImage}
+                  alt="Cover preview"
+                  className="w-full h-32 object-cover"
+                  onError={() => setImageError(true)}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setCoverImage(''); setImageError(false); }}
+                  className="absolute top-1.5 right-1.5 p-1 bg-black/50 text-white rounded-md hover:bg-black/70 transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+            {imageError && (
+              <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
+                <AlertTriangle size={10} /> Could not load image — check the URL
+              </p>
+            )}
           </div>
 
           {/* Row: Priority + Department */}

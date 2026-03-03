@@ -24,6 +24,7 @@ export interface NewsPost {
   allowedUserIds: string[];        // Only used if visibility === 'USERS'
   authorId: string;
   authorName: string;
+  coverImage?: string;             // Cover image URL for visual cards
   link?: string;                   // Optional external link
   source?: string;                 // Reserved for future integration (Slack, Jira, etc.)
   createdAt: Date | null;
@@ -84,6 +85,7 @@ export function createBlankPost(authorId: string, authorName: string): Omit<News
     allowedUserIds: [],
     authorId,
     authorName,
+    coverImage: undefined,
     publishedAt: null,
     publishAt: null,
     expiresAt: null,

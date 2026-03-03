@@ -1,14 +1,12 @@
 /**
- * CompanyNewsPanel — Main dashboard content showing company news
+ * CompanyNewsPanel — Magazine-style company news layout
  *
- * Modern editorial layout inspired by Linear changelog / Notion updates:
- *  1) Toolbar with title, last-updated, filter & admin toggles, New Post button
- *  2) Critical alert banner (if any)
- *  3) Featured / Hero post (highest-priority or newest published)
- *  4) Pinned posts in a horizontal card row
- *  5) Chronological feed grouped by date with separators
- *  6) Collapsible filters & admin drawer
- *  7) PostEditor as a slide-in right panel
+ * Layout:
+ *  1) Clean toolbar with search, filters, + New Post button
+ *  2) Hero section for featured/critical post (full-width image card)
+ *  3) Pinned stories row (image cards in grid)
+ *  4) Latest updates feed (list items with thumbnails)
+ *  5) PostEditor as slide-in right panel
  *
  * Uses useCompanyNews hook for real-time Firestore data.
  */
@@ -31,13 +29,16 @@ import {
   Tag as TagIcon,
   Building2,
   User,
+  Search,
+  TrendingUp,
+  ChevronRight,
+  X,
 } from 'lucide-react';
 import { useCompanyNews } from '@/hooks/useCompanyNews';
 import type { NewsPost } from '@/types/news';
 import { NEWS_DEPARTMENTS } from '@/types/news';
 import { PostCard } from './PostCard';
 import { NewsFiltersBar } from './NewsFiltersBar';
-import { AdminNewsDrawer } from './AdminNewsDrawer';
 import { PostEditor } from './PostEditor';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -68,12 +69,6 @@ function getDayKey(date: Date | null): string {
   return date.toISOString().slice(0, 10);
 }
 
-const priorityColor: Record<string, string> = {
-  CRITICAL: 'from-red-500 to-orange-500',
-  NORMAL: 'from-indigo-500 to-blue-500',
-  FYI: 'from-slate-400 to-slate-500',
-};
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface CompanyNewsPanelProps {
@@ -95,12 +90,11 @@ export function CompanyNewsPanel({
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<NewsPost | null>(null);
 
-  // Expanded post state
+  // Expanded post state (for reading full body)
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
 
-  // Filter / admin drawer visibility
+  // Filter bar visibility
   const [showFilters, setShowFilters] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
 
   // Feed display limit
   const [feedLimit, setFeedLimit] = useState(12);
@@ -128,6 +122,10 @@ export function CompanyNewsPanel({
     [news],
   );
 
+  const handleExpandToggle = useCallback((postId: string) => {
+    setExpandedPostId((prev) => (prev === postId ? null : postId));
+  }, []);
+
   // ── Derived data ──────────────────────────────────────────────────────────
 
   // Featured = critical → first pinned → first feed post
@@ -153,25 +151,8 @@ export function CompanyNewsPanel({
   const visibleFeed = remainingFeed.slice(0, feedLimit);
   const hasMore = remainingFeed.length > feedLimit;
 
-  // Group visible feed by date
-  const groupedFeed = useMemo(() => {
-    const groups: { date: string; label: string; posts: NewsPost[] }[] = [];
-    let currentKey = '';
-    for (const post of visibleFeed) {
-      const key = getDayKey(post.publishedAt);
-      if (key !== currentKey) {
-        currentKey = key;
-        groups.push({
-          date: key,
-          label: formatDate(post.publishedAt),
-          posts: [post],
-        });
-      } else {
-        groups[groups.length - 1].posts.push(post);
-      }
-    }
-    return groups;
-  }, [visibleFeed]);
+  // Quick stats for admin
+  const draftCount = news.drafts.filter((d) => d.status === 'DRAFT').length;
 
   // ── Loading state ─────────────────────────────────────────────────────────
   if (news.loading) {
@@ -217,26 +198,19 @@ export function CompanyNewsPanel({
             <span className="hidden sm:inline">Filters</span>
           </button>
 
-          {/* Admin controls */}
+          {/* New Post (admin only) */}
           {news.isAdmin && (
-            <>
-              <button
-                onClick={() => setShowAdmin(!showAdmin)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  showAdmin
-                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400'
-                }`}
-              >
-                Admin
-              </button>
-              <button
-                onClick={() => handleOpenEditor()}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors"
-              >
-                <Plus size={14} /> New Post
-              </button>
-            </>
+            <button
+              onClick={() => handleOpenEditor()}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors relative"
+            >
+              <Plus size={14} /> New Post
+              {draftCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {draftCount}
+                </span>
+              )}
+            </button>
           )}
         </div>
       </div>
@@ -246,23 +220,6 @@ export function CompanyNewsPanel({
         {/* ─── News Feed (center / left) ─────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto scrollbar-thin min-w-0">
           <div className="px-5 sm:px-6 pb-8 space-y-6">
-          {/* Admin Tools (collapsible) */}
-          {news.isAdmin && showAdmin && (
-            <div style={{ animation: 'fade-in-up 0.2s ease-out both' }}>
-              <AdminNewsDrawer
-                drafts={news.drafts}
-                allPostsCount={news.allPosts.length}
-                pinnedCount={news.pinnedPosts.length}
-                criticalCount={news.criticalPost ? 1 : 0}
-                onCreatePost={() => handleOpenEditor()}
-                onEditPost={(p) => handleOpenEditor(p)}
-                onPublishPost={handlePublishPost}
-                onArchivePost={news.archivePost}
-                onTogglePin={news.togglePin}
-                saving={news.saving}
-              />
-            </div>
-          )}
 
           {/* Filters (collapsible) */}
           {showFilters && (
@@ -301,191 +258,127 @@ export function CompanyNewsPanel({
 
           {/* ─── Featured / Hero Post ────────────────────────────────────── */}
           {featuredPost && (
+            <PostCard
+              post={featuredPost}
+              variant="hero"
+              isAdmin={news.isAdmin}
+              onEdit={(p) => handleOpenEditor(p)}
+              onArchive={news.archivePost}
+              onTogglePin={news.togglePin}
+              onExpand={handleExpandToggle}
+            />
+          )}
+
+          {/* Expanded hero body */}
+          {featuredPost && expandedPostId === featuredPost.id && (
             <div
-              className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700/50 bg-gradient-to-br from-white to-slate-50 dark:from-slate-800/80 dark:to-slate-800/40"
-              style={{ animation: 'fade-in-up 0.3s ease-out both' }}
+              className="rounded-xl border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/40 p-5 sm:p-6"
+              style={{ animation: 'fade-in-up 0.2s ease-out both' }}
             >
-              {/* Gradient accent strip */}
-              <div
-                className={`h-1.5 bg-gradient-to-r ${
-                  priorityColor[featuredPost.priority] ?? priorityColor.NORMAL
-                }`}
-              />
-
-              <div className="p-5 sm:p-7">
-                {/* Meta row */}
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  {featuredPost.priority === 'CRITICAL' && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-                      <AlertTriangle size={10} /> Critical
-                    </span>
-                  )}
-                  {featuredPost.pinned && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
-                      <Pin size={10} /> Pinned
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                    <Building2 size={11} />{' '}
-                    {NEWS_DEPARTMENTS[featuredPost.departmentId] ??
-                      featuredPost.departmentId}
-                  </span>
-                  <span className="text-slate-300 dark:text-slate-600">·</span>
-                  <span className="text-xs text-slate-400 dark:text-slate-500">
-                    {formatDate(featuredPost.publishedAt)}
-                  </span>
-                </div>
-
-                {/* Title */}
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white leading-tight mb-3">
-                  {featuredPost.title}
-                  {featuredPost.link && (
-                    <a
-                      href={featuredPost.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center ml-2 text-indigo-500 hover:text-indigo-600"
-                    >
-                      <ExternalLink size={16} />
-                    </a>
-                  )}
-                </h3>
-
-                {/* Body preview */}
-                <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {expandedPostId === featuredPost.id
-                    ? featuredPost.body
-                    : featuredPost.summary ||
-                      featuredPost.body.slice(0, 280)}
-                </p>
-                {featuredPost.body.length > 280 && (
-                  <button
-                    onClick={() =>
-                      setExpandedPostId(
-                        expandedPostId === featuredPost.id
-                          ? null
-                          : featuredPost.id,
-                      )
-                    }
-                    className="mt-2 text-sm font-medium text-indigo-500 hover:text-indigo-600 transition-colors"
-                  >
-                    {expandedPostId === featuredPost.id
-                      ? 'Show less'
-                      : 'Read more →'}
-                  </button>
-                )}
-
-                {/* Tags */}
-                {featuredPost.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-4">
-                    {featuredPost.tags.map((t) => (
-                      <span
-                        key={t}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400"
-                      >
-                        <TagIcon size={9} /> {t}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Author & admin edit */}
-                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700/40">
-                  <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                    <User size={14} className="text-indigo-500" />
-                  </div>
-                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                    {featuredPost.authorName}
-                  </span>
-
-                  {news.isAdmin && (
-                    <button
-                      onClick={() => handleOpenEditor(featuredPost)}
-                      className="ml-auto text-xs text-indigo-500 hover:text-indigo-600 font-medium"
-                    >
-                      Edit
-                    </button>
-                  )}
-                </div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{featuredPost.title}</h3>
+                <button
+                  onClick={() => setExpandedPostId(null)}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <X size={16} />
+                </button>
               </div>
+              <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                {featuredPost.body}
+              </div>
+              {featuredPost.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-4 pt-3 border-t border-slate-200 dark:border-slate-700/50">
+                  {featuredPost.tags.map((t) => (
+                    <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400">
+                      <TagIcon size={9} /> {t}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {/* ─── Pinned Posts Row ────────────────────────────────────────── */}
+          {/* ─── Pinned Stories Row ──────────────────────────────────────── */}
           {remainingPinned.length > 0 && (
             <div>
-              <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400 mb-3">
-                <Pin size={12} /> Pinned
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-white">
+                  <Pin size={14} className="text-amber-500" />
+                  Pinned Stories
+                </h3>
+                <span className="text-xs text-slate-400">{remainingPinned.length} pinned</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {remainingPinned.map((p) => (
                   <PostCard
                     key={p.id}
                     post={p}
-                    compact
+                    variant="featured"
                     isAdmin={news.isAdmin}
                     onEdit={() => handleOpenEditor(p)}
                     onArchive={news.archivePost}
                     onTogglePin={news.togglePin}
+                    onExpand={handleExpandToggle}
                   />
                 ))}
               </div>
             </div>
           )}
 
-          {/* ─── Chronological Feed ──────────────────────────────────────── */}
-          {groupedFeed.length > 0 && (
+          {/* ─── Latest Updates Feed ─────────────────────────────────────── */}
+          {visibleFeed.length > 0 && (
             <div>
-              <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-4">
-                <Rss size={12} /> Feed
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-white">
+                  <TrendingUp size={14} className="text-indigo-500" />
+                  Latest Updates
+                </h3>
+                <span className="text-xs text-slate-400">{remainingFeed.length} posts</span>
+              </div>
 
-              <div className="space-y-6">
-                {groupedFeed.map((group) => (
-                  <div key={group.date}>
-                    {/* Date separator */}
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0">
-                        <Calendar
-                          size={12}
-                          className="text-slate-400 dark:text-slate-500"
-                        />
-                        {group.label}
-                      </div>
-                      <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700/50" />
-                    </div>
+              <div className="space-y-3">
+                {visibleFeed.map((p) => (
+                  <div key={p.id}>
+                    <PostCard
+                      post={p}
+                      variant="list"
+                      isAdmin={news.isAdmin}
+                      onEdit={() => handleOpenEditor(p)}
+                      onArchive={news.archivePost}
+                      onTogglePin={news.togglePin}
+                      onExpand={handleExpandToggle}
+                    />
 
-                    {/* Posts in this date group */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {group.posts.map((p) => (
-                        <div key={p.id}>
-                          <PostCard
-                            post={p}
-                            isAdmin={news.isAdmin}
-                            onEdit={() => handleOpenEditor(p)}
-                            onArchive={news.archivePost}
-                            onTogglePin={news.togglePin}
-                          />
-                          {expandedPostId === p.id && (
-                            <div className="mt-1.5 px-4 py-3 rounded-lg bg-slate-50 dark:bg-slate-800/40 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed border border-slate-200 dark:border-slate-700/40">
-                              {p.body}
-                            </div>
-                          )}
+                    {/* Expanded body */}
+                    {expandedPostId === p.id && (
+                      <div
+                        className="ml-32 sm:ml-40 mt-2 rounded-lg border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/40 p-4"
+                        style={{ animation: 'fade-in-up 0.15s ease-out both' }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Full Post</span>
                           <button
-                            onClick={() =>
-                              setExpandedPostId(
-                                expandedPostId === p.id ? null : p.id,
-                              )
-                            }
-                            className="text-xs text-indigo-500 hover:text-indigo-600 font-medium mt-1 ml-1"
+                            onClick={() => setExpandedPostId(null)}
+                            className="p-0.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                           >
-                            {expandedPostId === p.id
-                              ? 'Show less'
-                              : 'Read more'}
+                            <X size={14} />
                           </button>
                         </div>
-                      ))}
-                    </div>
+                        <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                          {p.body}
+                        </div>
+                        {p.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-200 dark:border-slate-700/50">
+                            {p.tags.map((t) => (
+                              <span key={t} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400">
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -498,24 +391,24 @@ export function CompanyNewsPanel({
               className="text-center py-20"
               style={{ animation: 'fade-in-up 0.4s ease-out both' }}
             >
-              <div className="w-20 h-20 bg-slate-100 dark:bg-slate-700/60 rounded-2xl flex items-center justify-center mx-auto mb-5">
+              <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <Newspaper
-                  size={36}
-                  className="text-slate-300 dark:text-slate-500"
+                  size={40}
+                  className="text-indigo-400 dark:text-indigo-500"
                 />
               </div>
-              <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-2">
+              <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200 mb-2">
                 No news yet
               </h3>
               <p className="text-sm text-slate-400 dark:text-slate-500 max-w-md mx-auto leading-relaxed">
                 {news.isAdmin
-                  ? 'Create your first company news post to keep the team informed about announcements, updates, and important information.'
+                  ? 'Create your first company news post. Add a cover image to make it stand out!'
                   : 'Company news and announcements will appear here. Check back soon!'}
               </p>
               {news.isAdmin && (
                 <button
                   onClick={() => handleOpenEditor()}
-                  className="mt-6 inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md hover:shadow-lg transition-all"
+                  className="mt-8 inline-flex items-center gap-2 px-8 py-3 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg hover:shadow-xl transition-all"
                 >
                   <Sparkles size={16} />
                   Create the first post
@@ -532,6 +425,7 @@ export function CompanyNewsPanel({
                 className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-xl transition-colors"
               >
                 Load more ({remainingFeed.length - feedLimit} remaining)
+                <ChevronRight size={14} />
               </button>
             </div>
           )}

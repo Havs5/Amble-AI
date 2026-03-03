@@ -155,23 +155,23 @@ export function LoginRefactored() {
   if (view === 'reset-sent') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
-        <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8 animate-in zoom-in-95 duration-300">
+        <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 p-7 animate-in zoom-in-95 duration-300">
           <div className="text-center">
-            <div className="w-16 h-16 bg-green-600 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg shadow-green-500/30 mx-auto mb-4">
+            <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-green-500/20 mx-auto mb-3">
               ✓
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-1.5">
               Check Your Email
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 mb-6">
+            <p className="text-slate-500 dark:text-slate-400 mb-4 text-sm">
               We've sent password reset instructions to:
             </p>
-            <p className="text-indigo-600 dark:text-indigo-400 font-medium mb-8">
+            <p className="text-indigo-600 dark:text-indigo-400 font-medium mb-6 text-sm">
               {email}
             </p>
             <button
               onClick={goToLogin}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-500/20 transition-all transform active:scale-95"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg shadow-md shadow-indigo-500/15 transition-all transform active:scale-[0.98] text-sm"
             >
               Back to Sign In
             </button>
@@ -188,45 +188,45 @@ export function LoginRefactored() {
   if (view === 'reset-password') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
-        <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8 animate-in zoom-in-95 duration-300">
+        <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 p-7 animate-in zoom-in-95 duration-300">
           <button
             onClick={goToLogin}
-            className="flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-6 transition-colors"
+            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-5 transition-colors text-sm"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={15} />
             Back to Sign In
           </button>
 
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold text-3xl shadow-lg shadow-indigo-500/30 mx-auto mb-4">
-              <Lock size={32} />
+          <div className="text-center mb-6">
+            <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-indigo-500/20 mx-auto mb-3">
+              <Lock size={22} />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">
               Reset Password
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-2">
+            <p className="text-slate-500 dark:text-slate-400 mt-1.5 text-sm">
               Enter your email and we'll send you reset instructions
             </p>
           </div>
 
-          <form onSubmit={handleResetPassword} className="space-y-5">
+          <form onSubmit={handleResetPassword} className="space-y-4">
             {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm text-center">
+              <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-xs text-center">
                 {error}
               </div>
             )}
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
                 Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-900 dark:text-slate-100"
+                  className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-900 dark:text-slate-100 text-sm"
                   placeholder="you@example.com"
                   required
                   autoFocus
@@ -237,10 +237,10 @@ export function LoginRefactored() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-500/20 transition-all transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg shadow-md shadow-indigo-500/15 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed text-sm"
             >
               {isLoading ? (
-                <Loader2 className="animate-spin" size={20} />
+                <Loader2 className="animate-spin" size={16} />
               ) : (
                 'Send Reset Instructions'
               )}
@@ -258,7 +258,7 @@ export function LoginRefactored() {
   return (
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 relative overflow-hidden">
       {/* LEFT SIDE - Brand panel (hidden on mobile) */}
-      <div className="hidden lg:flex lg:w-[55%] relative bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 p-12 flex-col justify-between overflow-hidden">
+      <div className="hidden lg:flex lg:w-[55%] relative bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 p-10 xl:p-12 flex-col justify-between overflow-hidden">
         {/* Background decorations */}
         <div className="absolute inset-0">
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
@@ -270,30 +270,30 @@ export function LoginRefactored() {
 
         {/* Top - Logo */}
         <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/20">
-              <span className="text-white font-bold text-2xl">A</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/20">
+              <span className="text-white font-bold text-lg">A</span>
             </div>
             <div>
-              <h2 className="text-white font-bold text-xl tracking-tight">Amble AI</h2>
-              <p className="text-white/60 text-xs font-medium">Healthcare Intelligence</p>
+              <h2 className="text-white font-semibold text-base tracking-tight">Amble AI</h2>
+              <p className="text-white/50 text-[11px] font-medium">Healthcare Intelligence</p>
             </div>
           </div>
         </div>
 
         {/* Center - Feature highlights */}
-        <div className="relative z-10 space-y-8">
+        <div className="relative z-10 space-y-6">
           <div>
-            <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight tracking-tight">
+            <h1 className="text-3xl xl:text-4xl font-bold text-white leading-tight tracking-tight">
               AI-Powered<br />Healthcare<br />Operations
             </h1>
-            <p className="text-white/70 text-lg mt-4 max-w-md leading-relaxed">
+            <p className="text-white/60 text-sm mt-3 max-w-sm leading-relaxed">
               Streamline billing responses, manage knowledge bases, and leverage multi-model AI for smarter healthcare decisions.
             </p>
           </div>
 
           {/* Feature pills */}
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2">
             {[
               { icon: '🧠', label: 'Deep Reasoning' },
               { icon: '🔍', label: 'Knowledge RAG' },
@@ -301,8 +301,8 @@ export function LoginRefactored() {
               { icon: '📊', label: 'Billing CX' },
               { icon: '🔒', label: 'HIPAA Ready' },
             ].map((feature) => (
-              <div key={feature.label} className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/15 text-white text-sm font-medium">
-                <span>{feature.icon}</span>
+              <div key={feature.label} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded-full border border-white/15 text-white text-xs font-medium">
+                <span className="text-sm">{feature.icon}</span>
                 {feature.label}
               </div>
             ))}
@@ -310,11 +310,11 @@ export function LoginRefactored() {
         </div>
 
         {/* Bottom - Trust indicators */}
-        <div className="relative z-10 flex items-center gap-6 text-white/50 text-xs">
+        <div className="relative z-10 flex items-center gap-4 text-white/40 text-[11px]">
           <span>GPT-5 & Gemini 3</span>
-          <span className="w-1 h-1 bg-white/30 rounded-full" />
+          <span className="w-0.5 h-0.5 bg-white/30 rounded-full" />
           <span>Firebase Cloud</span>
-          <span className="w-1 h-1 bg-white/30 rounded-full" />
+          <span className="w-0.5 h-0.5 bg-white/30 rounded-full" />
           <span>End-to-End Encrypted</span>
         </div>
       </div>
@@ -324,26 +324,26 @@ export function LoginRefactored() {
         {/* Mobile-only background */}
         <div className="lg:hidden absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-gradient-to-b from-indigo-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
 
-        <div className="w-full max-w-md relative z-10">
+        <div className="w-full max-w-[400px] relative z-10">
           {/* Mobile logo (shown on small screens only) */}
           <div className="lg:hidden text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center text-white font-bold text-3xl shadow-lg shadow-indigo-500/30 mx-auto mb-4 animate-glow-pulse">
+            <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-500/30 mx-auto mb-3">
               A
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">
               Amble AI
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
+            <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs">
               Healthcare Intelligence Platform
             </p>
           </div>
 
           {/* Desktop heading */}
-          <div className="hidden lg:block mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+          <div className="hidden lg:block mb-6">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
               Welcome back
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-2">
+            <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
               Sign in to continue to your AI workspace
             </p>
           </div>
@@ -353,34 +353,34 @@ export function LoginRefactored() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={isGoogleLoading || isLoading}
-            className="w-full bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all transform active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow transition-all transform active:scale-[0.98] flex items-center justify-center gap-2.5 disabled:opacity-70 disabled:cursor-not-allowed text-sm"
           >
             {isGoogleLoading ? (
-              <Loader2 className="animate-spin" size={20} />
+              <Loader2 className="animate-spin" size={16} />
             ) : (
               <>
-                <GoogleIcon className="w-5 h-5" />
+                <GoogleIcon className="w-4 h-4" />
                 Continue with Google
               </>
             )}
           </button>
 
           {/* Divider */}
-          <div className="relative my-6">
+          <div className="relative my-5">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
             </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="px-4 bg-slate-50 dark:bg-slate-950 text-slate-400 font-medium uppercase tracking-wider">
+            <div className="relative flex justify-center text-[11px]">
+              <span className="px-3 bg-slate-50 dark:bg-slate-950 text-slate-400 font-medium uppercase tracking-wider">
                 or
               </span>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3.5">
             {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
+              <div className="flex items-center gap-2 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-xs">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
                   <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/>
                   <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                 </svg>
@@ -388,43 +388,43 @@ export function LoginRefactored() {
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
                 Email address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="input-enhanced pl-10"
+                  className="input-enhanced pl-9 !py-2.5 !text-sm !rounded-lg"
                   placeholder="name@company.com"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <div className="flex justify-between items-center">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
                   Password
                 </label>
                 <button
                   type="button"
                   onClick={goToResetPassword}
-                  className="text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium transition-colors"
+                  className="text-[11px] text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium transition-colors"
                 >
                   Forgot password?
                 </button>
               </div>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="input-enhanced pl-10"
+                  className="input-enhanced pl-9 !py-2.5 !text-sm !rounded-lg"
                   placeholder="••••••••"
                   required
                 />
@@ -434,19 +434,19 @@ export function LoginRefactored() {
             <button
               type="submit"
               disabled={isLoading || isGoogleLoading}
-              className="w-full btn-futuristic py-3.5 rounded-xl flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed text-sm"
+              className="w-full btn-futuristic py-2.5 rounded-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed text-sm mt-1"
             >
               {isLoading ? (
-                <Loader2 className="animate-spin relative z-10" size={20} />
+                <Loader2 className="animate-spin relative z-10" size={16} />
               ) : (
-                <span className="relative z-10 font-bold">Sign In</span>
+                <span className="relative z-10 font-semibold">Sign In</span>
               )}
             </button>
           </form>
 
           {/* Footer info */}
-          <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
-            <p className="text-xs text-slate-400 dark:text-slate-500 text-center leading-relaxed">
+          <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center leading-relaxed">
               Sign in with Google for Knowledge Base access.<br />
               Protected by Firebase Authentication.
             </p>

@@ -60,26 +60,30 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    // ─── Company News ────────────────────────────────────────────────────────
-
-    // Helper function: is the requester an admin?
-    function isAdmin() {
-      return request.auth != null &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
+    // ─── Organizations ──────────────────────────────────────────────────────
+    match /organizations/{orgId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && isAdminByUid();
     }
+
+    match /org_members/{memberId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ─── Company News ────────────────────────────────────────────────────────
 
     match /news_posts/{postId} {
       // Admin can do anything
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if request.auth != null && isAdminByUid();
+      allow update: if request.auth != null && isAdminByUid();
+      allow delete: if request.auth != null && isAdminByUid();
 
       // Users can read PUBLISHED posts that pass timing + visibility checks
       // (Fine-grained timing/visibility is enforced client-side; rules ensure status check)
       allow read: if request.auth != null && (
         // Admins can read all (including drafts)
-        isAdmin() ||
+        isAdminByUid() ||
         // Users can only read published posts
         resource.data.status == 'PUBLISHED'
       );
@@ -88,7 +92,7 @@ service cloud.firestore {
     // Audit trail: only admin can write, anyone authenticated can read
     match /news_audit/{auditId} {
       allow read: if request.auth != null;
-      allow write: if isAdmin();
+      allow write: if request.auth != null && isAdminByUid();
     }
 
     // ─── Default deny ────────────────────────────────────────────────────────

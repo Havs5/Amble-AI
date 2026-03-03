@@ -241,9 +241,11 @@ export function CompanyNewsPanel({
         </div>
       </div>
 
-      {/* ─── Scrollable Body ─────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="px-5 sm:px-6 pb-8 space-y-6">
+      {/* ─── Main content: News (left) + Editor sidebar (right) ──────────── */}
+      <div className="flex-1 flex min-h-0">
+        {/* ─── News Feed (center / left) ─────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin min-w-0">
+          <div className="px-5 sm:px-6 pb-8 space-y-6">
           {/* Admin Tools (collapsible) */}
           {news.isAdmin && showAdmin && (
             <div style={{ animation: 'fade-in-up 0.2s ease-out both' }}>
@@ -541,23 +543,28 @@ export function CompanyNewsPanel({
             </div>
           )}
         </div>
-      </div>
+        </div>
+        {/* ── End of News Feed column ── */}
 
-      {/* ─── Post Editor Slide-in Panel ──────────────────────────────────── */}
-      {editorOpen && (
-        <PostEditor
-          post={editingPost}
-          authorId={userId}
-          authorName={userName}
-          onSave={handleSavePost}
-          onPublish={handlePublishPost}
-          onClose={() => {
-            setEditorOpen(false);
-            setEditingPost(null);
-          }}
-          saving={news.saving}
-        />
-      )}
+        {/* ─── Editor Sidebar (right, admin only) ────────────────────────── */}
+        {editorOpen && news.isAdmin && (
+          <div className="w-[380px] xl:w-[420px] shrink-0 border-l border-slate-200 dark:border-slate-700/50 overflow-y-auto scrollbar-thin">
+            <PostEditor
+              post={editingPost}
+              authorId={userId}
+              authorName={userName}
+              onSave={handleSavePost}
+              onPublish={handlePublishPost}
+              onClose={() => {
+                setEditorOpen(false);
+                setEditingPost(null);
+              }}
+              saving={news.saving}
+            />
+          </div>
+        )}
+      </div>
+      {/* ── End of main flex row ── */}
     </div>
   );
 }

@@ -163,15 +163,9 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex" onClick={onClose}>
-      {/* Backdrop — click to close */}
-      <div className="flex-1 bg-black/30 backdrop-blur-sm" />
-
-      {/* Slide-in panel from right */}
       <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg h-full bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col"
-        style={{ animation: 'slide-in-right 0.25s ease-out both' }}
+        className="flex flex-col h-full bg-white dark:bg-slate-900"
+        style={{ animation: 'fade-in-up 0.2s ease-out both' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-700/60 shrink-0">
@@ -455,7 +449,6 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
           </div>
         </div>
       </div>
-    </div>
   );
 }
 

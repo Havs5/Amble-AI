@@ -29,8 +29,6 @@ import {
 import type { NewsPost, NewsPriority, NewsStatus, NewsVisibility } from '@/types/news';
 import { NEWS_DEPARTMENTS, NEWS_TAGS, createBlankPost } from '@/types/news';
 import { PostCard } from './PostCard';
-import { storage } from '@/lib/firebase';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -84,10 +82,6 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
 
   // ── Image file upload handler ───────────────────────────────────────────
   async function handleImageUpload(file: File) {
-    if (!storage) {
-      setErrors((prev) => [...prev, 'Firebase Storage is not configured']);
-      return;
-    }
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
       setErrors((prev) => [...prev, 'Image must be under 5MB']);
@@ -103,28 +97,35 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
     setImageError(false);
 
     try {
-      const ext = file.name.split('.').pop() || 'jpg';
-      const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const storageRef = ref(storage, `news_images/${filename}`);
-      const uploadTask = uploadBytesResumable(storageRef, file, {
-        contentType: file.type,
-        customMetadata: { uploadedBy: authorId },
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Use XMLHttpRequest for progress tracking
+      const url: string = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload');
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const data = JSON.parse(xhr.responseText);
+            resolve(data.url);
+          } else {
+            const data = JSON.parse(xhr.responseText || '{}');
+            reject(new Error(data.error || `Upload failed (${xhr.status})`));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.send(formData);
       });
 
-      await new Promise<void>((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-            setUploadProgress(pct);
-          },
-          (err) => reject(err),
-          () => resolve(),
-        );
-      });
-
-      const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-      setCoverImage(downloadUrl);
+      setCoverImage(url);
     } catch (err: any) {
       console.error('Image upload failed:', err);
       setErrors((prev) => [...prev, `Upload failed: ${err.message || 'Unknown error'}`]);

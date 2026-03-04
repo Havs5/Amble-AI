@@ -29,17 +29,17 @@ export function SplashScreen({ onFinish, minDuration = 1800 }: SplashScreenProps
         {/* Animated logo */}
         <div className="relative">
           {/* Outer glow ring */}
-          <div className="absolute inset-0 w-24 h-24 rounded-full bg-[#1a1a1a] blur-xl opacity-30 animate-glow-pulse" />
+          <div className="absolute inset-0 w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 blur-xl opacity-40 animate-glow-pulse" />
           
           {/* Logo container */}
-          <div className="relative w-24 h-24 bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-2xl">
+          <div className="relative w-24 h-24 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl shadow-indigo-500/30">
             {/* Orbiting particles */}
             <div className="absolute inset-0">
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white/80" style={{ animation: 'orbit 3s linear infinite' }} />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-400/60" style={{ animation: 'orbit 4s linear infinite reverse' }} />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-pink-300/60" style={{ animation: 'orbit 4s linear infinite reverse' }} />
             </div>
             
-            <span className="text-white font-semibold text-5xl tracking-tighter relative z-10" style={{ fontFamily: "'DM Sans', 'Inter', system-ui, sans-serif" }}>a</span>
+            <span className="text-white font-semibold text-6xl leading-none relative z-10">a</span>
           </div>
         </div>
 

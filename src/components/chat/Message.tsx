@@ -93,7 +93,7 @@ export function Message({ message, isStreaming = false }: MessageProps) {
          {/* Author Name / Meta - Only for AI */}
          {!isUser && (
             <div className="flex items-center gap-2 mb-1.5 px-1">
-                <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">
+                <span className="font-semibold text-sm bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500">
                   Amble AI
                 </span>
                 <span className="text-[11px] text-muted-foreground/70">

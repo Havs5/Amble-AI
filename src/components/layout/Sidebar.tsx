@@ -99,8 +99,8 @@ export function Sidebar({
       {/* Sidebar Header (Logo + Branding) */}
       <div className="h-16 flex items-center justify-between px-3 shrink-0">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-lg shrink-0 relative">
-             <span className="text-white font-semibold text-xl" style={{ fontFamily: "'DM Sans', 'Inter', system-ui, sans-serif" }}>a</span>
+          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0 relative">
+             <span className="text-white font-semibold text-2xl leading-none">a</span>
              {/* Online indicator */}
              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-[#0a0f1a]" />
           </div>

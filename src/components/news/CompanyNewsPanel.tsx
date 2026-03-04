@@ -264,9 +264,9 @@ export function CompanyNewsPanel({
                     />
                   </div>
                   {/* Right side: stacked cards */}
-                  <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '12px', overflow: 'hidden' }}>
+                  <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {topPosts.slice(1, 3).map((p) => (
-                      <div key={p.id} style={{ flex: '1', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+                      <div key={p.id} style={{ flex: '1', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                         <PostCard
                           post={p}
                           variant="featured"

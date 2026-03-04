@@ -272,7 +272,7 @@ export function LoginRefactored() {
         <div className="relative z-10">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <span className="text-white font-bold text-[26px] leading-none" style={{ fontFamily: 'var(--font-poppins), Poppins, sans-serif' }}>a</span>
+              <span className="text-white font-bold text-lg">A</span>
             </div>
             <div>
               <h2 className="text-white font-semibold text-base tracking-tight">Amble AI</h2>
@@ -328,7 +328,7 @@ export function LoginRefactored() {
           {/* Mobile logo (shown on small screens only) */}
           <div className="lg:hidden text-center mb-8">
             <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30 mx-auto mb-3">
-              <span className="text-white font-bold text-[30px] leading-none" style={{ fontFamily: 'var(--font-poppins), Poppins, sans-serif' }}>a</span>
+              <span className="text-white font-bold text-xl">A</span>
             </div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white">
               Amble AI

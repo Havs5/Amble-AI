@@ -292,7 +292,7 @@ export function MessageList() {
           {/* Logo */}
           <div className="relative mb-6">
             <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <span className="text-white font-bold text-5xl sm:text-6xl leading-none" style={{ fontFamily: 'var(--font-poppins), Poppins, sans-serif' }}>a</span>
+              <span className="text-white font-bold text-3xl sm:text-4xl">A</span>
             </div>
           </div>
           

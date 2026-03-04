@@ -100,7 +100,7 @@ export function Sidebar({
       <div className="h-16 flex items-center justify-between px-3 shrink-0">
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0 relative">
-             <span className="text-white font-bold text-[26px] leading-none" style={{ fontFamily: 'var(--font-poppins), Poppins, sans-serif' }}>a</span>
+             <span className="text-white font-bold text-xl">A</span>
              {/* Online indicator */}
              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-[#0a0f1a]" />
           </div>

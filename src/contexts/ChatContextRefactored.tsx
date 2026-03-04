@@ -83,6 +83,7 @@ interface ChatContextType {
   createSession: (forProjectId?: string | null) => void;
   switchSession: (sessionId: string) => void;
   deleteSession: (sessionId: string) => void;
+  renameSession: (sessionId: string, newTitle: string) => void;
   shareSession: (sessionId: string, visibility: 'private' | 'org') => Promise<void>;
   sendMessage: (content: string, attachments: Attachment[], mode: ReasoningMode, context?: Record<string, any>) => Promise<void>;
   stopGeneration: () => void;
@@ -502,6 +503,15 @@ export function ChatProvider({
     if (onSessionDelete) onSessionDelete(sessionId);
   }, [currentSessionId, onSessionDelete, user?.id]);
   
+  const renameSession = useCallback((sessionId: string, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: trimmed } : s));
+    if (user?.id) {
+      updateDoc(doc(db, 'chats', sessionId), { title: trimmed }).catch(console.error);
+    }
+  }, [user?.id]);
+
   const shareSession = useCallback(async (sessionId: string, visibility: 'private' | 'org') => {
     if (!user?.id) return;
     
@@ -587,6 +597,12 @@ export function ChatProvider({
       }
       
       generateTitle(activeSessionId, content);
+    } else {
+      // If user pre-created a session ("New Chat") and this is the first message, generate a title
+      const currentSession = sessions.find(s => s.id === activeSessionId);
+      if (currentSession && currentSession.title === 'New Chat') {
+        generateTitle(activeSessionId, content);
+      }
     }
     
     // Create user message
@@ -864,6 +880,7 @@ export function ChatProvider({
       createSession,
       switchSession,
       deleteSession,
+      renameSession,
       shareSession,
       sendMessage,
       stopGeneration,

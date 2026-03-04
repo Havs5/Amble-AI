@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, MessageSquare, Trash2, Search, X, AlertTriangle, Folder, ChevronRight, ChevronDown, Settings, FolderPlus } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Plus, MessageSquare, Trash2, Search, X, AlertTriangle, Folder, ChevronRight, ChevronDown, Settings, FolderPlus, Pencil } from 'lucide-react';
 import { useChat } from '@/contexts';
 import { useAuth } from '@/components/auth/AuthContextRefactored';
 import { ChatSession } from '@/types/chat';
@@ -17,7 +17,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
-  const { sessions, currentSessionId, createSession, switchSession, deleteSession } = useChat();
+  const { sessions, currentSessionId, createSession, switchSession, deleteSession, renameSession } = useChat();
   const { user } = useAuth();
   const { currentOrg } = useOrganization();
   
@@ -28,11 +28,56 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const [deletingSession, setDeletingSession] = useState<string | null>(null);
   const [deletingProject, setDeletingProject] = useState<string | null>(null);
   
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null);
+  
+  // Rename state
+  const [renamingSession, setRenamingSession] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
   // Project state
   const [projects, setProjects] = useState<Project[]>([]);
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+
+  // Close context menu on click anywhere
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [contextMenu]);
+
+  // Focus rename input when renaming starts
+  useEffect(() => {
+    if (renamingSession && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [renamingSession]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, sessionId });
+  }, []);
+
+  const startRename = useCallback((sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    setRenameValue(session?.title || '');
+    setRenamingSession(sessionId);
+    setContextMenu(null);
+  }, [sessions]);
+
+  const confirmRename = useCallback(() => {
+    if (renamingSession && renameValue.trim()) {
+      renameSession(renamingSession, renameValue.trim());
+    }
+    setRenamingSession(null);
+    setRenameValue('');
+  }, [renamingSession, renameValue, renameSession]);
 
   // Load projects from Firestore
   useEffect(() => {
@@ -151,39 +196,62 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   }, [generalSessions]);
 
   // Render a single chat item
-  const renderChatItem = (session: ChatSession, compact = false) => (
-    <div 
-      key={session.id}
-      className={`
-        group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-all duration-150
-        ${currentSessionId === session.id 
-          ? 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200/60 dark:border-indigo-500/20' 
-          : 'hover:bg-white dark:hover:bg-slate-800/60 border border-transparent'}
-      `}
-      onClick={() => switchSession(session.id)}
-      onMouseEnter={() => setHoveredSession(session.id)}
-      onMouseLeave={() => setHoveredSession(null)}
-      role="button"
-      tabIndex={0}
-    >
-      <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${currentSessionId === session.id ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`} />
-      <div className="flex-1 min-w-0">
-        <span className={`${compact ? 'text-[11px]' : 'text-xs'} font-medium truncate block transition-colors ${currentSessionId === session.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200'}`}>
-          {session.title}
-        </span>
-      </div>
-      <button 
-        onClick={(e) => {
-          e.stopPropagation();
-          setDeletingSession(session.id);
-        }}
-        className="p-1 hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-500 dark:hover:text-red-400 rounded transition-all text-slate-400 opacity-0 group-hover:opacity-100 shrink-0"
-        title="Delete chat"
+  const renderChatItem = (session: ChatSession, compact = false) => {
+    const isRenaming = renamingSession === session.id;
+    
+    return (
+      <div 
+        key={session.id}
+        className={`
+          group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-all duration-150
+          ${currentSessionId === session.id 
+            ? 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200/60 dark:border-indigo-500/20' 
+            : 'hover:bg-white dark:hover:bg-slate-800/60 border border-transparent'}
+        `}
+        onClick={() => !isRenaming && switchSession(session.id)}
+        onContextMenu={(e) => handleContextMenu(e, session.id)}
+        onMouseEnter={() => setHoveredSession(session.id)}
+        onMouseLeave={() => setHoveredSession(null)}
+        role="button"
+        tabIndex={0}
       >
-        <Trash2 className="w-3 h-3" />
-      </button>
-    </div>
-  );
+        <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${currentSessionId === session.id ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`} />
+        <div className="flex-1 min-w-0">
+          {isRenaming ? (
+            <input
+              ref={renameInputRef}
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmRename();
+                if (e.key === 'Escape') { setRenamingSession(null); setRenameValue(''); }
+              }}
+              onBlur={confirmRename}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full bg-white dark:bg-slate-700 text-xs font-medium px-1.5 py-0.5 rounded border border-indigo-400 dark:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 text-slate-800 dark:text-slate-200"
+            />
+          ) : (
+            <span className={`${compact ? 'text-[11px]' : 'text-xs'} font-medium truncate block transition-colors ${currentSessionId === session.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200'}`}>
+              {session.title}
+            </span>
+          )}
+        </div>
+        {!isRenaming && (
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeletingSession(session.id);
+            }}
+            className="p-1 hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-500 dark:hover:text-red-400 rounded transition-all text-slate-400 opacity-0 group-hover:opacity-100 shrink-0"
+            title="Delete chat"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -426,6 +494,30 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
             </div>
           </div>
         </>
+      )}
+
+      {/* Right-click Context Menu */}
+      {contextMenu && (
+        <div 
+          className="fixed z-[100] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 py-1.5 min-w-[160px] animate-in zoom-in-95 fade-in duration-100"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => startRename(contextMenu.sessionId)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left"
+          >
+            <Pencil className="w-3.5 h-3.5 text-slate-400" />
+            Rename
+          </button>
+          <button
+            onClick={() => { setDeletingSession(contextMenu.sessionId); setContextMenu(null); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
+          </button>
+        </div>
       )}
 
       {/* Project Settings Modal (Create / Edit) */}

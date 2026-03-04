@@ -141,6 +141,7 @@ const DEFAULT_AI_CONFIG: AIConfig = {
 const SESSION_KEY = 'amble_auth_session';
 const LAST_ACTIVITY_KEY = 'amble_last_activity';
 const SESSION_START_KEY = 'amble_session_start';
+const TAB_SESSION_KEY = 'amble_tab_active'; // sessionStorage — cleared when tab/browser closes
 const TOKEN_REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes before expiry
 const INACTIVITY_TIMEOUT = 12 * 60 * 60 * 1000; // 12 hours inactivity timeout
 const MAX_SESSION_DURATION = 12 * 60 * 60 * 1000; // 12 hours absolute session timeout
@@ -182,11 +183,28 @@ export class AuthService {
         unsubscribe();
         
         if (firebaseUser) {
+          // If sessionStorage tab marker is missing, the tab/browser was closed
+          // and re-opened — treat as a forced logout ("hard refresh").
+          const isTabAlive = typeof window !== 'undefined' && sessionStorage.getItem(TAB_SESSION_KEY);
+
+          if (!isTabAlive) {
+            // First check if we ever had a session (avoids logging out on the
+            // very first login where sessionStorage hasn't been set yet).
+            const hadPreviousSession = localStorage.getItem(SESSION_KEY);
+            if (hadPreviousSession) {
+              console.log('[AuthService] Tab session marker missing — forcing sign-out');
+              this.clearSession();
+              await signOut(this.auth).catch(console.error);
+              resolve(null);
+              return;
+            }
+          }
+
           // Check if session has expired due to inactivity or max duration
           if (!this.isSessionValid()) {
             console.log('[AuthService] Session expired, signing out');
-            this.signOut().catch(console.error);
             this.clearSession();
+            await signOut(this.auth).catch(console.error);
             resolve(null);
             return;
           }
@@ -393,11 +411,13 @@ export class AuthService {
    * Returns true if session is still valid, false if expired
    */
   isSessionValid(): boolean {
-    if (!this.currentSession) return false;
-
     const now = Date.now();
     
     try {
+      // Check if we have any session evidence (in-memory OR persisted)
+      const hasPersistedSession = localStorage.getItem(SESSION_KEY);
+      if (!this.currentSession && !hasPersistedSession) return false;
+
       // Check inactivity timeout
       const lastActivity = localStorage.getItem(LAST_ACTIVITY_KEY);
       if (lastActivity) {
@@ -760,8 +780,11 @@ export class AuthService {
       }
       // Record initial activity
       this.recordActivity();
+      // Mark the tab as alive (persists through F5 / Ctrl+R refreshes,
+      // but is cleared when the tab or browser is closed).
+      sessionStorage.setItem(TAB_SESSION_KEY, '1');
     } catch {
-      // localStorage not available
+      // localStorage/sessionStorage not available
     }
 
     this.saveSessionToStorage();
@@ -795,8 +818,9 @@ export class AuthService {
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(LAST_ACTIVITY_KEY);
       localStorage.removeItem(SESSION_START_KEY);
+      sessionStorage.removeItem(TAB_SESSION_KEY);
     } catch {
-      // localStorage not available
+      // localStorage/sessionStorage not available
     }
   }
 

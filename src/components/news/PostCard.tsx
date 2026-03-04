@@ -271,7 +271,7 @@ export function PostCard({
         </div>
 
         {/* Text content */}
-        <div className="shrink-0 px-4 pt-3 pb-5">
+        <div className="shrink-0" style={{ padding: '12px 16px 24px 16px' }}>
           {/* Priority / Pinned badges */}
           <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
             {post.priority === 'CRITICAL' && (

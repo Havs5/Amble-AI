@@ -80,7 +80,7 @@ interface ChatContextType {
   wasParentInitiated: () => boolean;
   clearParentInitiatedFlag: () => void;
   
-  createSession: () => void;
+  createSession: (forProjectId?: string | null) => void;
   switchSession: (sessionId: string) => void;
   deleteSession: (sessionId: string) => void;
   shareSession: (sessionId: string, visibility: 'private' | 'org') => Promise<void>;
@@ -425,7 +425,8 @@ export function ChatProvider({
   
   // === ACTIONS ===
   
-  const createSession = useCallback(() => {
+  const createSession = useCallback((forProjectId?: string | null) => {
+    const effectiveProjectId = forProjectId !== undefined ? forProjectId : (projectId || null);
     const newSession: ChatSession = {
       id: Date.now().toString(),
       title: 'New Chat',
@@ -435,12 +436,12 @@ export function ChatProvider({
       tags: [],
       ownerId: user?.id,
       visibility: 'private',
-      projectId: projectId || null
+      projectId: effectiveProjectId
     };
     
     setSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newSession.id);
-    setCurrentSessionProjectId(projectId || null);
+    setCurrentSessionProjectId(effectiveProjectId);
     setMessages([]);
     setArtifacts([]);
     setActiveArtifact(null);
@@ -450,7 +451,7 @@ export function ChatProvider({
         ...sanitizeForFirestore(newSession),
         userId: user.id,
         ownerId: user.id,
-        projectId: projectId || null
+        projectId: effectiveProjectId
       }).catch(e => console.error("Failed to create chat", e));
     }
   }, [user?.id, projectId]);

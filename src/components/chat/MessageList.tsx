@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useMemo, memo } from 'react';
 import { Message } from './Message';
 import { useChat } from '@/contexts';
-import { Search, Globe, Sparkles, Brain, ImageIcon, FileText, Lightbulb, Cpu, BookOpen, Zap, ChevronDown, ChevronRight, CheckCircle2, Loader2, MessageSquare, ArrowRight, Database, PenTool, FolderSearch, Eye, XCircle, MinusCircle, Clock } from 'lucide-react';
+import { Search, Globe, Sparkles, Brain, ImageIcon, FileText, Cpu, BookOpen, Zap, ChevronDown, ChevronRight, CheckCircle2, Loader2, FolderSearch, XCircle, MinusCircle, Database } from 'lucide-react';
 import { MessageSkeleton } from '@/components/ui/TypingIndicator';
 import { useRenderPerformance } from '@/utils/performanceMonitor';
 
@@ -244,26 +244,7 @@ function ThinkingProcess({ thinkingStatus, traceEvents }: { thinkingStatus: stri
   );
 }
 
-// Suggested prompt button for empty state
-function SuggestButton({ icon, title, subtitle, query }: { icon: React.ReactNode; title: string; subtitle: string; query: string }) {
-  const { sendMessage } = useChat();
-  
-  return (
-    <button
-      onClick={() => sendMessage(query, [], 'instant')}
-      className="group flex items-start gap-3 p-4 rounded-xl bg-white/60 dark:bg-slate-800/40 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:bg-white dark:hover:bg-slate-800/60 transition-all duration-200 hover:shadow-md hover:shadow-indigo-500/5 text-left"
-    >
-      <div className="shrink-0 mt-0.5 p-2 rounded-lg bg-slate-100 dark:bg-slate-700/50 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/20 transition-colors">
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{title}</p>
-        <p className="text-xs text-muted-foreground/60 mt-0.5 truncate">{subtitle}</p>
-      </div>
-      <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-indigo-400 transition-all group-hover:translate-x-0.5 shrink-0 mt-1" />
-    </button>
-  );
-}
+
 
 export function MessageList() {
   const { messages, isStreaming, thinkingStatus, traceEvents, currentSessionId, isLoadingMessages } = useChat();
@@ -319,37 +300,9 @@ export function MessageList() {
           <h2 className="text-2xl sm:text-3xl font-bold mb-2 text-slate-800 dark:text-slate-100">
             Welcome to Amble AI
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto text-sm leading-relaxed mb-8">
+          <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto text-sm leading-relaxed">
             Your intelligent AI assistant for patient care, billing, analysis, and more.
           </p>
-
-          {/* Suggestion Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
-            <SuggestButton
-              icon={<Lightbulb className="w-4 h-4 text-amber-500" />}
-              title="Patient Summary"
-              subtitle="Summarize a patient case"
-              query="Help me create a comprehensive patient case summary"
-            />
-            <SuggestButton
-              icon={<FileText className="w-4 h-4 text-blue-500" />}
-              title="Billing Code"
-              subtitle="Find the right CPT code"
-              query="Help me find the correct CPT billing code for a procedure"
-            />
-            <SuggestButton
-              icon={<Database className="w-4 h-4 text-emerald-500" />}
-              title="Drug Interactions"
-              subtitle="Check medication safety"
-              query="Check for potential drug interactions between medications"
-            />
-            <SuggestButton
-              icon={<PenTool className="w-4 h-4 text-purple-500" />}
-              title="Clinical Note"
-              subtitle="Draft a clinical document"
-              query="Help me draft a clinical note for a patient visit"
-            />
-          </div>
         </div>
       </div>
     );

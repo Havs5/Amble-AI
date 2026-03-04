@@ -418,7 +418,7 @@ function AmbleAppContent() {
           </button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-extrabold text-lg leading-none" style={{ fontFamily: 'var(--font-nunito), Nunito, sans-serif' }}>a</span>
+              <span className="text-white font-bold text-lg leading-none" style={{ fontFamily: 'var(--font-poppins), Poppins, sans-serif' }}>a</span>
             </div>
             <span className="font-bold text-base tracking-tight">Amble AI</span>
           </div>

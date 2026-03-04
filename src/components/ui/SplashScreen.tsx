@@ -39,7 +39,7 @@ export function SplashScreen({ onFinish, minDuration = 1800 }: SplashScreenProps
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-pink-300/60" style={{ animation: 'orbit 4s linear infinite reverse' }} />
             </div>
             
-            <span className="text-white font-extrabold text-7xl leading-none relative z-10" style={{ fontFamily: 'var(--font-nunito), Nunito, sans-serif' }}>a</span>
+            <span className="text-white font-bold text-7xl leading-none relative z-10" style={{ fontFamily: 'var(--font-poppins), Poppins, sans-serif' }}>a</span>
           </div>
         </div>
 

@@ -250,12 +250,12 @@ export function CompanyNewsPanel({
                 />
               ) : (
                 /* 2-3 posts — inline flex with first card larger */
-                <div style={{ display: 'flex', gap: '12px', maxHeight: '400px' }}>
-                  {/* Main feature (60% width) */}
-                  <div style={{ flex: topPosts.length >= 3 ? '0 0 58%' : '0 0 50%', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', gap: '12px', height: '420px' }}>
+                  {/* Main feature (58% width) — hero variant so text overlays the image */}
+                  <div style={{ flex: topPosts.length >= 3 ? '0 0 58%' : '0 0 50%', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: '12px' }}>
                     <PostCard
                       post={topPosts[0]}
-                      variant="featured"
+                      variant="hero"
                       isAdmin={news.isAdmin}
                       onEdit={(p) => handleOpenEditor(p)}
                       onArchive={news.archivePost}
@@ -264,9 +264,9 @@ export function CompanyNewsPanel({
                     />
                   </div>
                   {/* Right side: stacked cards */}
-                  <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '12px', overflow: 'hidden' }}>
                     {topPosts.slice(1, 3).map((p) => (
-                      <div key={p.id} style={{ flex: '1', display: 'flex', flexDirection: 'column' }}>
+                      <div key={p.id} style={{ flex: '1', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                         <PostCard
                           post={p}
                           variant="featured"

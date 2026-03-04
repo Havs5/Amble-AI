@@ -143,12 +143,12 @@ export function PostCard({
   if (variant === 'hero') {
     return (
       <div
-        className="relative rounded-2xl overflow-hidden group cursor-pointer"
+        className="relative rounded-2xl overflow-hidden group cursor-pointer h-full"
         onClick={() => onExpand?.(post.id)}
         style={{ animation: 'fade-in-up 0.3s ease-out both' }}
       >
         {/* Image / gradient background */}
-        <div className="relative aspect-[21/8] min-h-[200px] sm:min-h-[240px]">
+        <div className="relative h-full min-h-[200px]">
           {hasImage ? (
             <img
               src={post.coverImage!}

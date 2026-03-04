@@ -417,8 +417,8 @@ function AmbleAppContent() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">A</span>
+            <div className="w-7 h-7 bg-[#1a1a1a] rounded-full flex items-center justify-center">
+              <span className="text-white font-semibold text-sm" style={{ fontFamily: "'DM Sans', 'Inter', system-ui, sans-serif" }}>a</span>
             </div>
             <span className="font-bold text-base tracking-tight">Amble AI</span>
           </div>

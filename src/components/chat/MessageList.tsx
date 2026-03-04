@@ -291,8 +291,8 @@ export function MessageList() {
         <div className="relative z-10 w-full max-w-2xl">
           {/* Logo */}
           <div className="relative mb-6">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <span className="text-white font-bold text-3xl sm:text-4xl">A</span>
+            <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-full bg-[#1a1a1a] flex items-center justify-center shadow-lg">
+              <span className="text-white font-semibold text-3xl sm:text-4xl" style={{ fontFamily: "'DM Sans', 'Inter', system-ui, sans-serif" }}>a</span>
             </div>
           </div>
           

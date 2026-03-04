@@ -232,7 +232,7 @@ export function PostCard({
         style={{ animation: 'fade-in-up 0.3s ease-out both' }}
       >
         {/* Image */}
-        <div className="relative flex-1 min-h-[100px] overflow-hidden">
+        <div className="relative flex-1 min-h-[60px] overflow-hidden">
           {hasImage ? (
             <img
               src={post.coverImage!}

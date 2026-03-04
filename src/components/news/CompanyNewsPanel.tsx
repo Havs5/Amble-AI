@@ -250,7 +250,7 @@ export function CompanyNewsPanel({
                 />
               ) : (
                 /* 2-3 posts — inline flex with first card larger */
-                <div style={{ display: 'flex', gap: '12px', height: '420px' }}>
+                <div style={{ display: 'flex', gap: '12px', height: '500px' }}>
                   {/* Main feature (58% width) — hero variant so text overlays the image */}
                   <div style={{ flex: topPosts.length >= 3 ? '0 0 58%' : '0 0 50%', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: '12px' }}>
                     <PostCard

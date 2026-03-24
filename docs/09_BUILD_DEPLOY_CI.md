@@ -1,6 +1,6 @@
 # 09 — Build & Deploy
 
-> **Last updated:** 2025-07-15  
+> **Last updated:** 2026-03-24  
 > **Scope:** Build pipeline, SSR deployment, scripts, hosting architecture
 
 ---
@@ -10,7 +10,7 @@
 ```
 ┌────────────────────── Developer Machine ──────────────────────┐
 │                                                                │
-│  npm run deploy  →  scripts/deploy_ssr.js                     │
+│  npm run deploy  →  scripts/deploy_ssr.js && firebase deploy  │
 │                                                                │
 │  Step 1: Clean public/_next (remove stale static assets)      │
 │  Step 2: next build (with retry on failure)                   │
@@ -19,9 +19,9 @@
 │  Step 5: Copy next.config.js → functions/next.config.js       │
 │  Step 6: Filter .env.local → functions/.env (strip secrets)   │
 │  Step 7: Copy .next/static/ → public/_next/static/ (CDN)     │
-│  Step 8: Print "firebase deploy --only functions,hosting"     │
+│  Step 8: firebase deploy (functions + hosting)                │
 │                                                                │
-│  Then manually: firebase deploy --only functions,hosting       │
+│  Then: firebase deploy runs automatically (part of npm run deploy) │
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
                             │
@@ -84,11 +84,10 @@
    - These files are served directly by Firebase Hosting CDN
    - Bypasses the Cloud Function for better performance
 
-8. **Print deploy command:**
+8. **Deploy:** `firebase deploy` runs automatically via npm script chain
    ```
-   firebase deploy --only functions,hosting
+   npm run deploy = node scripts/deploy_ssr.js && firebase deploy
    ```
-   (Manual step — the script does NOT auto-deploy)
 
 ---
 
@@ -120,8 +119,7 @@
 
 ### `scripts/deploy_ssr.js` — Deployment Pipeline
 - **Purpose:** Build + prepare files for Firebase deployment
-- **Invoked by:** `npm run deploy`
-- **Duration:** ~2-5 minutes (mostly Next.js build time)
+- **Invoked by:** `npm run deploy` (which chains: `deploy_ssr.js && firebase deploy`)
 - **Idempotent:** Yes (cleans before copying)
 
 ### `scripts/clean_public_next.js` — Build Cleanup
@@ -185,11 +183,13 @@ Firebase Hosting CDN
 | **Framework** | next, react, react-dom |
 | **AI/ML** | openai, @google/generative-ai, @google/genai |
 | **Firebase** | firebase, firebase-admin |
-| **UI** | lucide-react, framer-motion, tailwindcss, @tailwindcss/typography |
-| **Content** | markdown-it, @react-pdf/renderer, mermaid |
-| **Auth** | googleapis, google-auth-library |
-| **Utils** | zod, jszip, pdf-parse, highlight.js |
-| **Media** | recorder-rtc (audio recording) |
+| **UI** | lucide-react, tailwindcss, @tailwindcss/typography |
+| **Content** | markdown-it, @react-pdf/renderer |
+| **Auth** | googleapis |
+| **Utils** | zod, jszip, pdf-parse, pdf-lib, highlight.js, dompurify |
+| **Monitoring** | @opentelemetry/api |
+| **Charts** | recharts |
+| **Toasts** | sonner |
 
 ### Dev Dependencies — 14 packages
 
@@ -207,8 +207,7 @@ Firebase Hosting CDN
 |---------|------------------|
 | `lucide-react` | Icon library — SSR shouldn't render icons |
 | `markdown-it` | Markdown rendering — should be client-only |
-| `framer-motion` | Animations — SSR shouldn't animate |
-| `highlight.js` | Syntax highlighting — client-side feature |
+
 
 These are likely included because the Functions deployment includes the full Next.js build output, and tree-shaking may not eliminate them from server bundles.
 

@@ -1,6 +1,6 @@
 # 05 — Auth & Session
 
-> **Last updated:** 2025-07-15  
+> **Last updated:** 2026-03-24  
 > **Scope:** Authentication flow, session management, permissions model
 
 ---

@@ -1,6 +1,6 @@
 # 08 — Config & Environment
 
-> **Last updated:** 2025-07-15  
+> **Last updated:** 2026-03-24  
 > **Scope:** Environment variables, Firebase config, feature flags, build config
 
 ---
@@ -166,14 +166,11 @@ The deploy script (`scripts/deploy_ssr.js`) copies `.env.local` to `functions/.e
   coverageThreshold: {
     global: { branches: 50, functions: 50, lines: 50, statements: 50 }
   },
-  // BUG: typo — should be "setupFilesAfterSetup"
-  setupFilesAfterEnup: ['<rootDir>/jest.setup.js']
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js']
 }
 ```
 
-**Known issue:** The `setupFilesAfterEnup` key is a typo. Should be `setupFilesAfterSetup`. This means `jest.setup.js` may not be loaded, and Firebase/localStorage mocks may not be active during tests.
-
-### `jest.setup.js` (may not load due to typo)
+### `jest.setup.js`
 - Mocks: `firebase/app`, `firebase/auth`, `firebase/firestore`, `localStorage`
 - Polyfills: `TextEncoder`, `TextDecoder`, `ReadableStream`, `WritableStream`, `TransformStream`
 
@@ -197,27 +194,49 @@ Tailwind CSS v4 with PostCSS plugin (no separate `tailwind.config.js` — config
 
 ## `.gitignore`
 
-**Current contents (MINIMAL):**
+**Current contents (~40 lines, expanded in Phase 1 cleanup):**
 ```
-amble-kb-sync-key.json
-```
-
-**Missing recommended entries:**
-```
+# Dependencies
 node_modules/
+
+# Build outputs
 .next/
 functions/.next/
 functions/node_modules/
 functions/public/
 functions/.env
 public/_next/
+
+# Environment
 .env.local
 .env
-*.log
-.DS_Store
-```
 
-**Risk:** Build artifacts, secrets, and large directories may be accidentally committed.
+# Secrets
+amble-kb-sync-key.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Deploy artifacts
+deploy_*.txt
+build_output.log
+functions/.build_timestamp
+
+# Coverage
+coverage/
+
+# Misc
+*.tsbuildinfo
+next-env.d.ts
+```
 
 ---
 

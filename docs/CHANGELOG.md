@@ -93,21 +93,21 @@ Every file below was verified to have **zero imports** by any component, service
 
 ---
 
-## Documentation Created (11 files)
+## Documentation Created (11 files, later reduced to 9)
 
 | File | Title | Size |
 |------|-------|------|
 | `docs/00_EXEC_SUMMARY.md` | Executive Summary | Key findings, metrics, action plan |
 | `docs/01_SYSTEM_OVERVIEW.md` | System Overview | Architecture, tech stack, Firestore schema |
 | `docs/02_FILE_TREE_ANNOTATED.md` | Annotated File Tree | Every file with status annotation |
-| `docs/03_DEPENDENCY_GRAPH.md` | Dependency Graph | Import relationships, module boundaries |
+| ~~`docs/03_DEPENDENCY_GRAPH.md`~~ | ~~Dependency Graph~~ | Deleted March 2026 (stale, too granular) |
 | `docs/04_DATA_FLOW.md` | Data Flow | Message lifecycle, state management, caching |
 | `docs/05_AUTH_AND_SESSION.md` | Auth & Session | Auth flow, permissions, security observations |
 | `docs/06_AI_PIPELINE.md` | AI Pipeline | Model routing, RAG, agents, tools, streaming |
 | `docs/07_API_SURFACE.md` | API Surface | All endpoints, route duplication analysis |
 | `docs/08_CONFIG_AND_ENV.md` | Config & Environment | Env vars, build config, feature flags |
 | `docs/09_BUILD_DEPLOY_CI.md` | Build & Deploy | Deploy pipeline, hosting architecture |
-| `docs/10_DEAD_CODE_CANDIDATES.md` | Dead Code Candidates | Evidence-based inventory (updated post-cleanup) |
+| ~~`docs/10_DEAD_CODE_CANDIDATES.md`~~ | ~~Dead Code Candidates~~ | Deleted March 2026 (Phase 1 complete) |
 
 ---
 

@@ -1,6 +1,6 @@
 # 07 — API Surface
 
-> **Last updated:** 2025-07-15  
+> **Last updated:** 2026-03-24  
 > **Scope:** All API endpoints, request/response schemas, duplication analysis
 
 ---
@@ -181,6 +181,21 @@ This means **duplicated routes always use the Functions version in production**.
 
 ---
 
+### Admin (Next.js routes)
+
+| Method | Path | Handler Source | Auth | Description |
+|--------|------|---------------|------|-------------|
+| POST | `/api/admin/create-user` | Next.js only | Admin | Create new user |
+| POST | `/api/admin/delete-user` | Next.js only | Admin | Delete user |
+
+### Upload (Next.js-only)
+
+| Method | Path | Handler Source | Auth | Description |
+|--------|------|---------------|------|-------------|
+| POST | `/api/upload` | Next.js only | — | File upload handler |
+
+---
+
 ### Admin (Functions-only, inline handlers)
 
 | Method | Path | Handler Source | Auth | Description |
@@ -212,7 +227,7 @@ This means **duplicated routes always use the Functions version in production**.
 
 | Route | Purpose | Risk if Removed |
 |-------|---------|----------------|
-| `/api/rewrite` | Text rewriting | BillingView "Rewrite" feature breaks |
+| `/api/rewrite` | Text rewriting | **No longer called by BillingView** (now uses `/api/chat` with `stream: false`). May be orphaned. |
 | `/api/knowledge/ingest` | Doc ingestion + embedding | Cannot ingest new KB docs |
 | `/api/kb/search` | User RAG search | Project-scoped RAG breaks |
 | `/api/video/analyze` | Video analysis | Video analysis feature breaks |

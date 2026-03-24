@@ -56,7 +56,6 @@
 | Tailwind CSS | v4 | Utility-first styling |
 | @tailwindcss/typography | latest | Prose formatting for markdown content |
 | Lucide React | latest | Icon library |
-| Framer Motion | 12.x | Animations |
 | markdown-it | latest | Markdown rendering |
 | @react-pdf/renderer | latest | PDF export (dynamic import) |
 | Zod | latest | Runtime schema validation |
@@ -109,7 +108,7 @@ src/
 ├── app/           → Next.js routes (pages + API)
 ├── components/    → React UI (14 subdirectories)
 ├── contexts/      → React context providers (Chat, Org)
-├── hooks/         → Custom React hooks (36 files)
+├── hooks/         → Custom React hooks (15 files)
 ├── lib/           → Shared utilities, Firebase, validation, agents
 ├── services/      → Business logic (ai, auth, chat, knowledge, ui)
 ├── types/         → TypeScript type definitions

@@ -1,6 +1,6 @@
 # 04 — Data Flow
 
-> **Last updated:** 2025-07-15  
+> **Last updated:** 2026-03-24  
 > **Scope:** Request lifecycles, state management, Firestore schema
 
 ---
@@ -243,19 +243,20 @@ Agent enters patient chat + verified notes
     ▼
 BillingView: "Draft Reply" button
     │
-    ├── Constructs system prompt (AMBLE_SYSTEM_PROMPT from lib/systemPrompt.ts)
+    ├── Constructs system prompt (from useAmbleConfig hook, Firestore cxConfig)
     ├── Injects: patient chat, agent notes, AI-detected notes
+    ├── Policies triple-injected: system prompt top + bottom + user message
     ├── Optional: PII redaction (SSN, phone, email, dates, cards)
     │
     ▼
-POST /api/chat (stream: true)
+POST /api/chat (stream: true, systemPrompt + policies in body)
     │
     ▼
 Streams draft response into BillingView
     │
     ├── "Rewrite" options: Shorter / Firmer
-    │     → POST /api/rewrite (Functions-only route)
-    │     → GPT-4o-mini rewrites the draft
+    │     → POST /api/chat (stream: false, systemPrompt + policies)
+    │     → Returns rewritten draft with policy compliance
     │
     └── Export: Copy to clipboard / Download PDF
           → @react-pdf/renderer (dynamic import)

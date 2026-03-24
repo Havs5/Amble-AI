@@ -1,6 +1,6 @@
 # 06 — AI Pipeline
 
-> **Last updated:** 2025-07-15  
+> **Last updated:** 2026-03-24  
 > **Scope:** Model routing, RAG, agents, tools, streaming, knowledge systems
 
 ---

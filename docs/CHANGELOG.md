@@ -1,7 +1,42 @@
-# Changelog — Amble AI Codebase Audit
+# Changelog — Amble AI
 
-> **Date:** 2025-07-15  
-> **Scope:** Full architecture audit, documentation, and Phase 1 dead code cleanup  
+---
+
+## 2026-03-24 — CX Policy Fix, Code Cleanup & Docs Update
+
+### CX Policy Enforcement Fix
+- **Triple-injection strategy** for policy compliance: policies now injected at top of system prompt, bottom of system prompt, AND reinforced in the user message
+- `BillingView.tsx` — `handleDraftReply` now builds enhanced user messages that explicitly reference configured policies (format, tone, style)
+- `BillingView.tsx` — `handleRewrite` (Make Shorter / Make Firmer) fixed: was calling non-existent `/api/rewrite` endpoint, now correctly uses `/api/chat` with `stream: false` and passes systemPrompt + policies
+- `route.ts` — `buildSystemPrompt()` double-injects policies at top and bottom of system context to combat LLM attention dilution
+
+### Debug Log Cleanup
+- Removed ~40 `console.log` debug statements from production code across 3 files:
+  - `src/app/api/chat/route.ts` — ~30 logs removed
+  - `src/components/views/BillingView.tsx` — ~2 logs removed
+  - `src/services/knowledge/DriveSearchService.ts` — ~18 logs removed
+- Kept all `console.error` statements for real error handling
+
+### Deploy Artifact Cleanup
+- Deleted 6 stale deploy/build artifact files from project root
+- Updated `.gitignore` with patterns: `deploy_*.txt`, `build_output.log`, `functions/.build_timestamp`
+
+### Documentation Update
+- Deleted `docs/10_DEAD_CODE_CANDIDATES.md` — Phase 1 complete, no longer needed
+- Deleted `docs/03_DEPENDENCY_GRAPH.md` — Point-in-time import analysis, too granular to maintain
+- Rewrote `docs/02_FILE_TREE_ANNOTATED.md` — Full refresh matching current file structure (no more dead hook references)
+- Updated `docs/00_EXEC_SUMMARY.md` — Corrected Next.js version, updated metrics and issue tracker
+- Updated `docs/01_SYSTEM_OVERVIEW.md` — Corrected version number
+
+### Deployment
+- Built and deployed to Firebase: https://amble-ai.web.app
+- Pushed to GitHub main: https://github.com/Havs5/Amble-AI.git
+
+---
+
+## 2025-07-15 — Architecture Audit & Phase 1 Dead Code Cleanup
+
+> **Scope:** Full architecture audit, documentation, and Phase 1 dead code cleanup
 > **Build verified:** `npm run build` — compiled successfully, 21/21 pages generated, zero errors
 
 ---

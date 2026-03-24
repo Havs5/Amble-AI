@@ -1,6 +1,6 @@
 # 01 — System Overview
 
-> **Last updated:** 2025-07-15  
+> **Last updated:** 2026-03-24  
 > **Scope:** Architecture, tech stack, deployment model
 
 ---
@@ -50,7 +50,7 @@
 ### Frontend
 | Technology | Version | Purpose |
 |-----------|---------|---------|
-| Next.js | 15.5.9 | App Router, SSR, API routes |
+| Next.js | ^15.0.3 | App Router, SSR, API routes |
 | React | 18.3.1 | UI rendering |
 | TypeScript | 5.x | Type safety (strict mode) |
 | Tailwind CSS | v4 | Utility-first styling |

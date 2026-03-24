@@ -1,14 +1,13 @@
 # 00 — Executive Summary
 
-> **Last updated:** 2025-07-15  
-> **Scope:** Full codebase audit of `amble-ai`  
-> **Author:** Automated Architecture Review
+> **Last updated:** 2026-03-24
+> **Scope:** Full codebase audit + ongoing maintenance of `amble-ai`
 
 ---
 
 ## What Is Amble AI?
 
-Amble AI is a **multi-modal AI assistant platform** built for healthcare/pharmacy operations. It combines conversational AI (GPT-5, Gemini 3), knowledge base management (Google Drive + vector embeddings), billing CX tools, media generation (images via DALL-E/Imagen, video via Sora/Veo), and a multi-agent system — all deployed as a Firebase-hosted SSR application.
+Amble AI is a **multi-modal AI assistant platform** built for healthcare/pharmacy operations. It combines conversational AI (GPT-5, Gemini 3), knowledge base management (Google Drive + vector embeddings), billing CX tools with configurable policy enforcement, media generation (images via DALL-E/Imagen, video via Sora/Veo), and a multi-agent system — all deployed as a Firebase-hosted SSR application.
 
 **Live URL:** `https://amble-ai.web.app`
 
@@ -18,7 +17,7 @@ Amble AI is a **multi-modal AI assistant platform** built for healthcare/pharmac
 
 | Layer | Technology |
 |-------|-----------|
-| **Framework** | Next.js 15.5.9 (App Router, SSR) |
+| **Framework** | Next.js ^15.0.3 (App Router, SSR) |
 | **UI** | React 18.3.1, TypeScript 5, Tailwind CSS v4 |
 | **Backend** | Firebase Cloud Functions v2 (Node 22) |
 | **Database** | Firestore (vector indexes, composite indexes) |
@@ -43,38 +42,39 @@ Amble AI is a **multi-modal AI assistant platform** built for healthcare/pharmac
 
 | Severity | Issue | Impact |
 |----------|-------|--------|
-| ✅ Fixed | ~~**21 dead hook files**~~ (of 36 total) — 22 dead hook files deleted in Phase 1 cleanup | ~4,100 lines of dead code removed |
+| ✅ Fixed | **22 dead hook files** deleted in Phase 1 cleanup (July 2025) | ~4,100 lines of dead code removed |
+| ✅ Fixed | **CX Policy enforcement** — policies now triple-injected (system prompt top + bottom + user message) | AI drafts respect configured formatting/tone/style policies |
+| ✅ Fixed | **Broken handleRewrite** — Make Shorter/Firmer buttons called non-existent `/api/rewrite` | Now correctly uses `/api/chat` with policy pass-through |
+| ✅ Fixed | **Debug log pollution** — ~40 console.log statements removed from production code | Cleaner production output |
+| ✅ Fixed | **Minimal .gitignore** — expanded to comprehensive ~35-line file | Proper ignore coverage |
 | 🔴 High | **Route duplication** — 10 API routes exist in both `functions/src/routes/` and `src/app/api/`; Functions code always wins in prod | Maintenance confusion, divergent logic |
 | 🟡 Medium | **System prompt duplication** — `ENHANCED_SYSTEM_PROMPT` defined inline in route.ts AND in `lib/systemPrompt.ts` (not imported) | Drift risk between two copies |
-| ✅ Fixed | ~~**jest.config.js typo**~~ — was initially flagged but `setupFilesAfterEnv` is correct | No issue (false alarm) |
-| ✅ Fixed | ~~**Minimal .gitignore**~~ — expanded to comprehensive 35-line .gitignore | Fixed in Phase 1 cleanup |
 | 🟡 Medium | **Three overlapping RAG systems** — `RAGService` (old), `RAGPipeline` (new), `KnowledgeContextService` (legacy) all run simultaneously | Redundant API calls, higher latency + cost |
 | 🟢 Low | **Test-only hooks** — 4 hooks (`useClipboard`, `useDebounce`, `useLocalStorage`, `useMutation`) only used in tests | Mild bundle overhead |
-| 🟢 Low | **Unused functions/ deps** — `lucide-react`, `markdown-it` in functions/package.json unlikely needed for SSR | Larger function deployment |
 
 ### Metrics
 
 | Metric | Count |
 |--------|-------|
-| Source files (src/) | ~170 |
-| Components | 55 |
-| Hooks | 15 active (22 dead hooks deleted in Phase 1) |
-| API Routes (Next.js) | 19 |
+| Source files (src/) | ~150 |
+| Components | 52 |
+| Hooks | 9 active + 4 test-only |
+| API Routes (Next.js) | 20 |
 | Cloud Function Routes | 17 |
 | Services | 33 |
-| Lib modules | 23 |
+| Lib modules | 18 |
 | Test files | 8 |
 | Firestore collections | 15+ |
-| Dead code files removed | 22 hooks (Phase 1 complete) |
-| Dead LOC removed | ~4,100 |
 
 ---
 
 ## Recommended Actions (Priority Order)
 
-1. **Phase 1 (Safe):** ✅ COMPLETED — Deleted 22 dead hook files, cleaned barrel exports, expanded .gitignore. Build verified clean.
-2. **Phase 2 (Medium-risk):** Consolidate system prompts, audit Functions vs Next.js route divergence, prune functions/package.json
-3. **Phase 3 (Strategic):** Deprecate legacy KB system, unify RAG paths, remove duplicate API routes
+1. **Phase 1 (Safe):** ✅ COMPLETED — Deleted 22 dead hook files, cleaned barrel exports, expanded .gitignore.
+2. **CX Policy Fix:** ✅ COMPLETED — Triple-injection strategy for policy enforcement, fixed broken rewrite handler.
+3. **Code Cleanup:** ✅ COMPLETED — Removed ~40 debug console.logs, deleted deploy artifacts.
+4. **Phase 2 (Medium-risk):** Consolidate system prompts, audit Functions vs Next.js route divergence, prune functions/package.json
+5. **Phase 3 (Strategic):** Deprecate legacy KB system, unify RAG paths, remove duplicate API routes
 
 ---
 
@@ -85,11 +85,9 @@ Amble AI is a **multi-modal AI assistant platform** built for healthcare/pharmac
 | [00](00_EXEC_SUMMARY.md) | Executive Summary | This document |
 | [01](01_SYSTEM_OVERVIEW.md) | System Overview | Architecture, tech stack, deployment model |
 | [02](02_FILE_TREE_ANNOTATED.md) | Annotated File Tree | Every file with purpose annotation |
-| [03](03_DEPENDENCY_GRAPH.md) | Dependency Graph | Import relationships, module boundaries |
 | [04](04_DATA_FLOW.md) | Data Flow | Request lifecycle, state management, Firestore schema |
 | [05](05_AUTH_AND_SESSION.md) | Auth & Session | Authentication flow, session management, permissions |
 | [06](06_AI_PIPELINE.md) | AI Pipeline | Model routing, RAG, agents, tools, streaming |
 | [07](07_API_SURFACE.md) | API Surface | All endpoints, request/response schemas |
 | [08](08_CONFIG_AND_ENV.md) | Config & Environment | Environment variables, Firebase config, feature flags |
 | [09](09_BUILD_DEPLOY_CI.md) | Build & Deploy | Build pipeline, SSR deployment, scripts |
-| [10](10_DEAD_CODE_CANDIDATES.md) | Dead Code Candidates | Evidence-based unused code inventory |

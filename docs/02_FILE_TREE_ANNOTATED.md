@@ -1,7 +1,7 @@
 # 02 — Annotated File Tree
 
-> **Last updated:** 2025-07-15  
-> **Legend:** 🟢 Active | 🟡 Test-only | 🔴 Dead code | ⚙️ Config | 📄 Documentation
+> **Last updated:** 2026-03-24
+> **Legend:** 🟢 Active | 🟡 Test-only | ⚙️ Config
 
 ---
 
@@ -9,52 +9,52 @@
 amble-ai/
 │
 ├── ⚙️ .env.local                          # Environment variables (secrets, Firebase config)
-├── ⚙️ .gitignore                           # MINIMAL — only excludes amble-kb-sync-key.json
+├── ⚙️ .gitignore                           # Comprehensive ignore rules (~35 lines)
 ├── ⚙️ amble-kb-sync-key.json              # Google service account key for KB sync
 ├── ⚙️ firebase.json                        # Firebase Hosting + Functions + Firestore config
 ├── ⚙️ firestore.indexes.json              # 8 Firestore indexes (vector, composite)
 ├── ⚙️ firestore.rules                     # Security rules for 10 collections
-├── ⚙️ jest.config.js                      # Jest config (has typo: setupFilesAfterEnup)
+├── ⚙️ jest.config.js                      # Jest config (setupFilesAfterEnv)
 ├── ⚙️ jest.setup.js                       # Test mocks (Firebase, localStorage, streams)
 ├── ⚙️ next-env.d.ts                       # Next.js TypeScript declarations
 ├── ⚙️ next.config.js                      # Next.js config (bundle analyzer, serverActions, headers)
 ├── ⚙️ package.json                        # 28 deps + 14 devDeps, scripts: dev/build/deploy/test
 ├── ⚙️ postcss.config.mjs                  # Tailwind CSS v4 PostCSS plugin
+├── ⚙️ storage.rules                       # Firebase Storage security rules
 ├── ⚙️ tsconfig.json                       # TS strict mode, @/* path alias
 │
-├── 📄 docs/
-│   ├── AMBLE_AI_COMPLETE_ANALYSIS_2026.md  # Prior comprehensive analysis
-│   └── UI_UX_AUDIT_2025.md                 # Prior UI/UX audit
+├── 📄 docs/                                # Architecture documentation (9 files)
 │
 ├── scripts/
 │   ├── 🟢 clean_public_next.js             # Removes public/_next (pre-build cleanup)
 │   ├── 🟢 deploy_ssr.js                    # Full SSR deployment pipeline (build → copy → deploy)
-│   └── 🟢 seed_news.js                     # Seeds 6 sample news_posts to Firestore
+│   └── 🟢 seed_news.js                     # Seeds sample news_posts to Firestore
 │
 ├── public/                                  # Static assets (served by Firebase Hosting CDN)
+│   └── favicon.ico, favicon.svg, manifest.json
 │
 ├── functions/                               # ── Cloud Functions Backend ──
-│   ├── ⚙️ package.json                     # Node 22, mirrors main deps (some unnecessary)
-│   ├── 🟢 index.js                         # SSR entry: ssrambleai Cloud Function v2 (513 lines)
+│   ├── ⚙️ package.json                     # Node 22, mirrors main deps
+│   ├── 🟢 index.js                         # SSR entry: ssrambleai Cloud Function v2
 │   └── src/
 │       ├── config/
-│       │   └── 🟢 pricing.js               # Per-model token pricing table (10 models)
+│       │   └── 🟢 pricing.js               # Per-model token pricing table
 │       ├── routes/
 │       │   ├── 🟢 index.js                 # Barrel export for all route handlers
-│       │   ├── 🟢 chat.js                  # POST /api/chat — Chat completions (644 lines)
+│       │   ├── 🟢 chat.js                  # POST /api/chat — Chat completions
 │       │   ├── 🟢 image.js                 # POST /api/image — DALL-E/Imagen generation
-│       │   ├── 🟢 video.js                 # POST /api/veo — Sora/Veo generation (357 lines)
-│       │   ├── 🟢 audio.js                 # POST /api/transcribe, /api/rewrite, /api/audio/speech
+│       │   ├── 🟢 video.js                 # POST /api/veo — Sora/Veo generation
+│       │   ├── 🟢 audio.js                 # POST /api/transcribe, /api/audio/speech
 │       │   ├── 🟢 tools.js                 # POST /api/tools/search, /api/tools/extract
 │       │   ├── 🟢 gallery.js               # GET/DELETE /api/gallery
-│       │   ├── 🟢 knowledge.js             # POST /api/knowledge/ingest, /kb/search, /knowledge/search
+│       │   ├── 🟢 knowledge.js             # POST /api/knowledge/ingest, /kb/search
 │       │   ├── 🟢 videoAnalyze.js          # POST /api/video/analyze — Gemini video analysis
 │       │   └── 🟢 driveSync.js             # POST /api/knowledge/drive-sync
 │       ├── services/
-│       │   ├── 🟢 driveSearchService.js    # Google Drive search via service account (740 lines)
+│       │   ├── 🟢 driveSearchService.js    # Google Drive search via service account
 │       │   ├── 🟢 intelligentSearch.js     # Multi-source web search orchestration
 │       │   ├── 🟢 knowledgeService.js      # Vector nearest-neighbor search
-│       │   ├── 🟢 searchService.js         # Google/Tavily/DuckDuckGo search (233 lines)
+│       │   ├── 🟢 searchService.js         # Google/Tavily/DuckDuckGo search
 │       │   └── 🟢 usageService.js          # Token usage logging to Firestore
 │       └── utils/
 │           └── 🟢 helpers.js               # Response helpers, body parsing, error extraction
@@ -65,48 +65,37 @@ amble-ai/
     │   ├── 🟢 globals.css                  # Global styles + Tailwind imports
     │   ├── 🟢 layout.tsx                   # Root layout (metadata, viewport)
     │   ├── 🟢 page.tsx                     # Home page (renders AmbleApp)
-    │   ├── 🟢 embed/page.tsx              # Embeddable chat widget page
+    │   ├── 🟢 favicon.ico                  # App favicon
+    │   ├── embed/
+    │   │   └── 🟢 page.tsx                 # Embeddable chat widget page
     │   └── api/
-    │       ├── chat/
-    │       │   └── 🟢 route.ts             # Chat API (1267 lines) — central AI orchestrator
-    │       ├── image/
-    │       │   └── 🟢 route.ts             # Image generation (DALL-E/Imagen)
-    │       ├── veo/
-    │       │   └── 🟢 route.ts             # Video generation (Sora/Veo)
-    │       ├── transcribe/
-    │       │   └── 🟢 route.ts             # Audio transcription (Whisper)
-    │       ├── audio/speech/
-    │       │   └── 🟢 route.ts             # Text-to-speech (TTS-1)
-    │       ├── gallery/
-    │       │   └── 🟢 route.ts             # Gallery CRUD
-    │       ├── tools/
-    │       │   ├── search/
-    │       │   │   └── 🟢 route.ts         # Web search (Google + Tavily)
-    │       │   └── extract/
-    │       │       └── 🟢 route.ts         # URL content extraction
+    │       ├── admin/
+    │       │   ├── create-user/route.ts     # Admin user creation
+    │       │   └── delete-user/route.ts     # Admin user deletion
     │       ├── auth/google/
-    │       │   ├── callback/
-    │       │   │   └── 🟢 route.ts         # OAuth callback handler
-    │       │   └── refresh/
-    │       │       └── 🟢 route.ts         # Token refresh
-    │       └── knowledge/
-    │           ├── debug/
-    │           │   └── 🟢 route.ts         # KB debug endpoint
-    │           ├── documents/
-    │           │   └── 🟢 route.ts         # Document management
-    │           ├── drive-list/
-    │           │   └── 🟢 route.ts         # Drive folder listing
-    │           ├── drive-sync/
-    │           │   └── 🟢 route.ts         # Drive sync trigger
-    │           ├── search/
-    │           │   └── 🟢 route.ts         # Vector KB search
-    │           ├── status/
-    │           │   └── 🟢 route.ts         # KB sync status
-    │           └── sync/
-    │               └── 🟢 route.ts         # Knowledge sync
+    │       │   ├── callback/route.ts        # OAuth callback handler
+    │       │   └── refresh/route.ts         # Token refresh
+    │       ├── audio/speech/route.ts        # Text-to-speech (TTS-1)
+    │       ├── chat/route.ts                # Chat API — central AI orchestrator
+    │       ├── gallery/route.ts             # Gallery CRUD
+    │       ├── image/route.ts               # Image generation (DALL-E/Imagen)
+    │       ├── knowledge/
+    │       │   ├── debug/route.ts           # KB debug endpoint
+    │       │   ├── documents/route.ts       # Document management
+    │       │   ├── drive-list/route.ts      # Drive folder listing
+    │       │   ├── drive-sync/route.ts      # Drive sync trigger
+    │       │   ├── search/route.ts          # Vector KB search
+    │       │   ├── status/route.ts          # KB sync status
+    │       │   └── sync/route.ts            # Knowledge sync
+    │       ├── tools/
+    │       │   ├── search/route.ts          # Web search (Google + Tavily)
+    │       │   └── extract/route.ts         # URL content extraction
+    │       ├── transcribe/route.ts          # Audio transcription (Whisper)
+    │       ├── upload/route.ts              # File upload handler
+    │       └── veo/route.ts                 # Video generation (Sora/Veo)
     │
-    ├── components/                          # ── React Components (55 files) ──
-    │   ├── 🟢 AmbleApp.tsx                 # Main app shell (584 lines)
+    ├── components/                          # ── React Components (52 files) ──
+    │   ├── 🟢 AmbleApp.tsx                 # Main app shell
     │   │
     │   ├── admin/
     │   │   ├── 🟢 KnowledgeBaseAdmin.tsx   # Admin KB management UI
@@ -130,7 +119,7 @@ amble-ai/
     │   │   ├── 🟢 ArtifactsPanel.tsx       # Artifact side panel
     │   │   ├── 🟢 ChatErrorBoundary.tsx    # Error boundary for chat
     │   │   ├── 🟢 ChatInterface.tsx        # Chat page wrapper + layout
-    │   │   ├── 🟢 Composer.tsx             # Message input (404 lines)
+    │   │   ├── 🟢 Composer.tsx             # Message input with dictation
     │   │   ├── 🟢 EmbedChat.tsx            # Embeddable chat widget
     │   │   ├── 🟢 Message.tsx              # Single message renderer
     │   │   ├── 🟢 MessageFeedback.tsx      # Thumbs up/down feedback
@@ -165,6 +154,8 @@ amble-ai/
     │   ├── organization/
     │   │   └── 🟢 OrgSwitcher.tsx          # Multi-org switcher dropdown
     │   │
+    │   ├── settings/                        # Empty — reserved for future use
+    │   │
     │   ├── studio/
     │   │   ├── 🟢 ImageStudio.tsx          # Image generation UI (DALL-E/Imagen)
     │   │   ├── 🟢 LiveStudio.tsx           # Live/realtime studio
@@ -185,101 +176,73 @@ amble-ai/
     │   │   └── 🟢 VideoResult.tsx          # Video result display
     │   │
     │   └── views/
-    │       ├── 🟢 BillingView.tsx          # Billing CX workspace (744 lines)
+    │       ├── 🟢 BillingView.tsx          # Billing CX workspace (policy-aware drafts)
     │       ├── 🟢 DashboardView.tsx        # Main dashboard with widgets
-    │       ├── 🟢 KnowledgeBaseView.tsx    # KB management (1220 lines)
+    │       ├── 🟢 KnowledgeBaseView.tsx    # KB management interface
     │       └── 🟢 PharmacyView.tsx         # Pharmacy operations view
     │
     ├── contexts/
-    │   ├── 🟢 ChatContextRefactored.tsx    # Chat state + streaming (885 lines)
+    │   ├── 🟢 ChatContextRefactored.tsx    # Chat state + streaming
     │   ├── 🟢 OrganizationContext.tsx      # Multi-org state
     │   └── 🟢 index.ts                    # Barrel export
     │
-    ├── hooks/                               # ── Custom Hooks (36 files) ──
-    │   │
-    │   │  ── ACTIVE (imported by components) ──
+    ├── hooks/                               # ── Custom Hooks (13 active + index files) ──
     │   ├── 🟢 useAiDictation.ts            # AI-powered dictation (browser + Whisper)
     │   ├── 🟢 useAmbleConfig.ts            # AI config (prompts, capabilities, policies)
     │   ├── 🟢 useAppNavigation.ts          # View state (dashboard/amble/billing)
+    │   ├── 🟡 useClipboard.ts              # Clipboard operations (test-only)
     │   ├── 🟢 useCompanyNews.ts            # Firestore real-time news CRUD
+    │   ├── 🟡 useDebounce.ts               # Debounce/throttle utilities (test-only)
     │   ├── 🟢 useFirebaseAuth.ts           # Firebase Auth state + session
     │   ├── 🟢 useHotkeys.ts               # Global keyboard shortcuts
+    │   ├── 🟡 useLocalStorage.ts           # Enhanced localStorage with TTL (test-only)
     │   ├── 🟢 useModelSelection.ts         # Provider/model/mode state
+    │   ├── 🟡 useMutation.ts               # Async mutation with retry/rollback (test-only)
     │   ├── 🟢 useProjectState.ts           # Firebase project/chat state
     │   ├── 🟢 useStandardDictation.ts      # Browser Web Speech API dictation
-    │   │
-    │   │  ── TEST-ONLY (imported only in test files) ──
-    │   ├── 🟡 useClipboard.ts              # Clipboard operations
-    │   ├── 🟡 useDebounce.ts               # Debounce/throttle utilities
-    │   ├── 🟡 useLocalStorage.ts           # Enhanced localStorage with TTL
-    │   ├── 🟡 useMutation.ts               # Async mutation with retry/rollback
-    │   │
-    │   │  ── DEAD CODE (zero imports outside own file) ──
-    │   ├── 🔴 useAccessibility.tsx          # 10 a11y hooks — never used
-    │   ├── 🔴 useAnalytics.ts              # Analytics tracking — never used
-    │   ├── 🔴 useAutoSave.ts               # Auto-save — never used
-    │   ├── 🔴 useCommandPalette.tsx         # Ctrl+K palette — never used
-    │   ├── 🔴 useConfirm.tsx               # Confirmation dialog — never used
-    │   ├── 🔴 useConnectionStatus.tsx       # Network monitor — never used
-    │   ├── 🔴 useDraftMessage.ts           # Draft auto-save — never used
-    │   ├── 🔴 useFeatureFlags.tsx           # Feature flags — never used
-    │   ├── 🔴 useIntersectionObserver.ts    # Visibility/scroll — never used
-    │   ├── 🔴 useKeyboardShortcuts.tsx      # Configurable shortcuts — never used
-    │   ├── 🔴 useLoadingManager.tsx         # Loading state — never used
-    │   ├── 🔴 useMessageSearch.tsx          # Message search — never used
-    │   ├── 🔴 useOptimisticUpdate.ts        # Optimistic updates — never used
-    │   ├── 🔴 usePolling.ts                # Polling with backoff — never used
-    │   ├── 🔴 useResponsive.ts             # Responsive breakpoints — never used
-    │   ├── 🔴 useTheme.tsx                 # Theme system — never used
-    │   ├── 🔴 useToast.tsx                 # Toast system — never used
-    │   ├── 🔴 useUndoRedo.ts              # Undo/redo stack — never used
-    │   ├── 🔴 useVirtualList.tsx           # Virtualized lists — never used
-    │   │
+    │   ├── 🟢 index.ts                     # Barrel export (utility hooks)
     │   └── chat/
-    │       ├── 🔴 useMessages.ts           # Message management — dead (context uses services directly)
-    │       ├── 🔴 useSessions.ts           # Session CRUD — dead
-    │       ├── 🔴 useStreaming.ts           # Streaming state — dead
-    │       └── 🟢 index.ts                # Barrel export
+    │       └── 🟢 index.ts                # Type re-exports from services/chat/types
     │
-    ├── lib/                                 # ── Shared Libraries (23 files) ──
-    │   ├── 🟢 apiClient.ts                # Type-safe HTTP client (434 lines)
+    ├── lib/                                 # ── Shared Libraries (18 files) ──
+    │   ├── 🟢 apiClient.ts                # Type-safe HTTP client
     │   ├── 🟢 apiError.ts                 # Error class with static factories
     │   ├── 🟢 capabilities.ts             # Model capability matrix (14+ models)
     │   ├── 🟢 clientCache.ts              # localStorage cache with TTL + LRU
     │   ├── 🟢 constants.ts                # KB_DRIVE_FOLDER_ID
-    │   ├── 🟢 errorLogger.ts              # Structured error logging (359 lines)
+    │   ├── 🟢 errorLogger.ts              # Structured error logging
     │   ├── 🟢 firebase.ts                 # Client-side Firebase init
     │   ├── 🟢 firebaseAdmin.ts            # Server-side Firebase Admin init
-    │   ├── 🟢 googleDrive.ts              # Google Drive API v3 client (368 lines)
+    │   ├── 🟢 googleDrive.ts              # Google Drive API v3 client
     │   ├── 🟢 index.ts                    # Barrel export
     │   ├── 🟢 qaCheck.ts                  # QA rules (PII, tone, fact-check)
     │   ├── 🟢 rateLimiter.ts              # In-memory sliding window rate limiter
-    │   ├── 🟢 semanticCache.ts            # Jaccard similarity response cache (434 lines)
+    │   ├── 🟢 semanticCache.ts            # Jaccard similarity response cache
     │   ├── 🟢 systemPrompt.ts             # System prompts (Billing CX + Enhanced)
-    │   ├── 🟢 usageManager.ts             # Token/cost tracking (529 lines)
+    │   ├── 🟢 usageManager.ts             # Token/cost tracking
     │   ├── 🟢 validation.ts               # Zod schemas for API requests
     │   │
     │   ├── agents/
-    │   │   ├── 🟢 BaseAgent.ts            # Abstract agent with tool loop (170 lines)
+    │   │   ├── 🟢 BaseAgent.ts            # Abstract agent with tool loop
     │   │   ├── 🟢 CoderAgent.ts           # Code generation agent
-    │   │   ├── 🟢 Executor.ts             # Agent registry + execution (55 lines)
+    │   │   ├── 🟢 Executor.ts             # Agent registry + execution
     │   │   ├── 🟡 Executor.test.ts        # Agent executor tests
-    │   │   ├── 🟢 PlannerAgent.ts         # Task planning + delegation (35 lines)
-    │   │   └── 🟢 ResearcherAgent.ts      # Multi-source research agent (60 lines)
+    │   │   ├── 🟢 PlannerAgent.ts         # Task planning + delegation
+    │   │   └── 🟢 ResearcherAgent.ts      # Multi-source research agent
     │   │
     │   └── studio/
     │       └── 🟢 gemini-service.ts       # Gemini API wrapper for studio
     │
-    ├── services/                            # ── Business Logic (33 files) ──
+    ├── services/                            # ── Business Logic ──
     │   ├── ai/
-    │   │   ├── 🟢 agentSystem.ts          # Agent singleton + re-exports (16 lines)
-    │   │   ├── 🟢 KnowledgeBaseIndexer.ts # Client-side IndexedDB KB index (601 lines)
-    │   │   ├── 🟢 knowledgeContext.ts      # Legacy Drive folder-map KB (803 lines)
-    │   │   ├── 🟢 memory.ts               # User memory storage + retrieval (130 lines)
-    │   │   ├── 🟢 modelGateway.ts         # Client-side model API facade (135 lines)
-    │   │   ├── 🟢 rag.ts                  # Old project-specific RAG (160 lines)
-    │   │   ├── 🟢 router.ts               # MagicRouter — complexity detection (261 lines)
-    │   │   ├── 🟢 SearchOrchestrator.ts   # Client-side KB+web search (727 lines)
+    │   │   ├── 🟢 agentSystem.ts          # Agent singleton + re-exports
+    │   │   ├── 🟢 KnowledgeBaseIndexer.ts # Client-side IndexedDB KB index
+    │   │   ├── 🟢 knowledgeContext.ts      # Legacy Drive folder-map KB
+    │   │   ├── 🟢 memory.ts               # User memory storage + retrieval
+    │   │   ├── 🟢 modelGateway.ts         # Client-side model API facade
+    │   │   ├── 🟢 rag.ts                  # Project-specific RAG
+    │   │   ├── 🟢 router.ts               # MagicRouter — complexity detection
+    │   │   ├── 🟢 SearchOrchestrator.ts   # Client-side KB+web search
     │   │   ├── 🟢 tools.ts               # Server-side tool definitions (patient/billing)
     │   │   └── tools/
     │   │       ├── 🟢 DelegateTool.ts     # Agent delegation tool
@@ -288,28 +251,28 @@ amble-ai/
     │   │       └── 🟢 SearchTool.ts       # Web search tool
     │   │
     │   ├── auth/
-    │   │   ├── 🟢 AuthService.ts          # Full auth service (968 lines)
-    │   │   ├── 🟢 SessionService.ts       # JWT session management (446 lines)
+    │   │   ├── 🟢 AuthService.ts          # Full auth service
+    │   │   ├── 🟢 SessionService.ts       # JWT session management
     │   │   └── 🟢 index.ts               # Barrel export
     │   │
     │   ├── chat/
     │   │   ├── 🟢 index.ts               # Barrel export
-    │   │   ├── 🟢 RetryQueue.ts           # Exponential backoff retry (347 lines)
-    │   │   ├── 🟢 SearchService.ts        # Search intent + KB/web search (442 lines)
+    │   │   ├── 🟢 RetryQueue.ts           # Exponential backoff retry
+    │   │   ├── 🟢 SearchService.ts        # Search intent + KB/web search
     │   │   ├── 🟢 SessionService.ts       # Chat session CRUD with Firestore
-    │   │   ├── 🟢 SmartSearchQueryBuilder.ts # Context-aware query builder (440 lines)
-    │   │   ├── 🟢 StreamingService.ts     # SSE streaming with batching (309 lines)
-    │   │   └── 🟢 types.ts               # Chat service type definitions (239 lines)
+    │   │   ├── 🟢 SmartSearchQueryBuilder.ts # Context-aware query builder
+    │   │   ├── 🟢 StreamingService.ts     # SSE streaming with batching
+    │   │   └── 🟢 types.ts               # Chat service type definitions
     │   │
     │   ├── knowledge/
-    │   │   ├── 🟢 DocumentProcessor.ts    # Content extraction + chunking (741 lines)
-    │   │   ├── 🟢 DriveSearchService.ts   # Google Drive real-time search (595 lines)
-    │   │   ├── 🟢 DriveSync.ts            # Drive→Firestore sync pipeline (620 lines)
-    │   │   ├── 🟢 EmbeddingService.ts     # Hybrid vector+keyword search (686 lines)
+    │   │   ├── 🟢 DocumentProcessor.ts    # Content extraction + chunking
+    │   │   ├── 🟢 DriveSearchService.ts   # Google Drive real-time search
+    │   │   ├── 🟢 DriveSync.ts            # Drive→Firestore sync pipeline
+    │   │   ├── 🟢 EmbeddingService.ts     # Hybrid vector+keyword search
     │   │   ├── 🟢 ImageProcessor.ts       # Image→text via GPT-4o vision
     │   │   ├── 🟢 index.ts               # Barrel export
-    │   │   ├── 🟢 KnowledgeBaseManager.ts # KB orchestrator (476 lines)
-    │   │   ├── 🟢 RAGPipeline.ts          # Full RAG pipeline (462 lines)
+    │   │   ├── 🟢 KnowledgeBaseManager.ts # KB orchestrator
+    │   │   ├── 🟢 RAGPipeline.ts          # Full RAG pipeline
     │   │   └── 🟢 types.ts               # Knowledge type definitions
     │   │
     │   └── ui/
@@ -333,13 +296,13 @@ amble-ai/
     └── __tests__/
         ├── 🟡 chat.services.test.ts       # Chat service tests
         ├── hooks/
-        │   ├── 🟡 useClipboard.test.ts    # Clipboard hook tests
-        │   ├── 🟡 useDebounce.test.ts     # Debounce hook tests
-        │   ├── 🟡 useLocalStorage.test.ts # LocalStorage hook tests
-        │   └── 🟡 useMutation.test.ts     # Mutation hook tests
+        │   ├── 🟡 useClipboard.test.ts
+        │   ├── 🟡 useDebounce.test.ts
+        │   ├── 🟡 useLocalStorage.test.ts
+        │   └── 🟡 useMutation.test.ts
         ├── integration/
-        │   └── 🟡 chat.integration.test.ts # Chat integration tests
+        │   └── 🟡 chat.integration.test.ts
         └── services/auth/
-            ├── 🟡 AuthService.test.ts      # Auth service tests
-            └── 🟡 SessionService.test.ts   # Session service tests
+            ├── 🟡 AuthService.test.ts
+            └── 🟡 SessionService.test.ts
 ```

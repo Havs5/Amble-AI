@@ -106,9 +106,9 @@ const DEPARTMENT_KEYWORDS: Record<string, string[]> = {
   // Maps to "1. Departments" folder
   billing: ['billing', 'disputes', 'invoice', 'payment', 'charge', 'refund', 'credit', 'fee', 'price', 'cost', 'debit', 'balance', 'account', 'chargeback'],
   patientExperience: ['patient', 'experience', 'customer', 'support', 'help', 'service', 'care', 'inquiry', 'satisfaction', 'call', 'contact'],
-  pharmacyCoordination: ['pharmacy coordination', 'rx coordination', 'prescription'],
-  sendBlue: ['send blue', 'sendblue', 'sms', 'text message', 'messaging'],
-  systemProvider: ['system', 'provider', 'provider coordination', 'system coordination', 'integration'],
+  pharmacyCoordination: ['pharmacy coordination', 'rx coordination', 'prescription', 'compounding'],
+  sendblue: ['send blue', 'sendblue', 'sms', 'text message', 'messaging', 'text communication', 'patient outreach'],
+  systemErrorsProviderCoordination: ['system error', 'system errors', 'provider', 'provider coordination', 'system coordination', 'integration', 'troubleshooting', 'bug', 'technical'],
   
   // Maps to "2. Pharmacies" folder
   pharmacy: [...Object.values(PHARMACY_ALIASES).flat()],

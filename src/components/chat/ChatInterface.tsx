@@ -98,7 +98,7 @@ interface ChatInterfaceProps {
   model?: string;
   mode?: ReasoningMode;
   onModeChange?: (mode: ReasoningMode) => void;
-  config?: { temperature: number; maxTokens: number };
+  config?: { temperature: number; maxTokens: number; systemPrompt?: string; policies?: string[] };
   projectId?: string | null; 
   dictationEnabled?: boolean;
 }

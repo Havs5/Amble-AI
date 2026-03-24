@@ -32,6 +32,18 @@ const DEFAULT_CONFIG: RAGPipelineConfig = {
   responseFormat: 'markdown',
 };
 
+// Query classification cache to avoid redundant API calls
+const classificationCache = new Map<string, { result: any; timestamp: number }>();
+const CLASSIFICATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Timeout helper
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
+  ]);
+}
+
 // Query classification prompts
 const QUERY_CLASSIFICATION_PROMPT = `Analyze the following query and classify it. Respond with JSON only.
 
@@ -183,32 +195,48 @@ export class RAGPipeline {
     department?: string;
     product?: string;
   }> {
+    // Check cache first
+    const cacheKey = query.toLowerCase().substring(0, 200).trim();
+    const cached = classificationCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CLASSIFICATION_CACHE_TTL) {
+      console.log('[RAGPipeline] Using cached classification');
+      return cached.result;
+    }
+
     try {
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'user',
-            content: QUERY_CLASSIFICATION_PROMPT.replace('{query}', query),
-          },
-        ],
-        temperature: 0,
-        max_tokens: 200,
-      });
+      const response = await withTimeout(
+        this.openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'user',
+              content: QUERY_CLASSIFICATION_PROMPT.replace('{query}', query),
+            },
+          ],
+          temperature: 0,
+          max_tokens: 200,
+        }),
+        8000,
+        'Query classification'
+      );
       
       const content = response.choices[0]?.message?.content || '{}';
       
       // Parse JSON response
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const result = JSON.parse(jsonMatch[0]);
+        classificationCache.set(cacheKey, { result, timestamp: Date.now() });
+        return result;
       }
       
       // Default to hybrid if parsing fails
-      return {
-        category: 'hybrid',
+      const fallback = {
+        category: 'hybrid' as const,
         keywords: query.split(' ').filter(w => w.length > 3),
       };
+      classificationCache.set(cacheKey, { result: fallback, timestamp: Date.now() });
+      return fallback;
       
     } catch (error: any) {
       console.error('[RAGPipeline] Classification error:', error.message);
@@ -240,17 +268,23 @@ export class RAGPipeline {
       const serperKey = process.env.SERPER_API_KEY;
       
       if (serperKey) {
-        const response = await fetch('https://google.serper.dev/search', {
-          method: 'POST',
-          headers: {
-            'X-API-KEY': serperKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            q: query,
-            num: this.config.maxWebResults,
-          }),
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        try {
+          const response = await fetch('https://google.serper.dev/search', {
+            method: 'POST',
+            headers: {
+              'X-API-KEY': serperKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              q: query,
+              num: this.config.maxWebResults,
+            }),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
         
         if (response.ok) {
           const data = await response.json();
@@ -263,12 +297,21 @@ export class RAGPipeline {
             source: 'serper',
           }));
         }
+        } finally {
+          clearTimeout(timeoutId);
+        }
       }
       
       // Fallback: Use DuckDuckGo instant answer API (limited but free)
+      const duckController = new AbortController();
+      const duckTimeout = setTimeout(() => duckController.abort(), 5000);
+      
+      try {
       const duckResponse = await fetch(
-        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`,
+        { signal: duckController.signal }
       );
+      clearTimeout(duckTimeout);
       
       if (duckResponse.ok) {
         const data = await duckResponse.json();
@@ -300,6 +343,9 @@ export class RAGPipeline {
       }
       
       return [];
+      } finally {
+        clearTimeout(duckTimeout);
+      }
       
     } catch (error: any) {
       console.error('[RAGPipeline] Web search error:', error.message);

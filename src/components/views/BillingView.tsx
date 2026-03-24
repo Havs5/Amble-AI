@@ -15,6 +15,7 @@ interface BillingViewProps {
   user: any;
   selectedModel: any; // Type Model
   systemPrompt: string;
+  policies?: string[];
   setToast: (toast: { message: string, type: 'success' | 'error' | 'info' } | null) => void;
   onHelp?: () => void;
 }
@@ -42,7 +43,7 @@ const redactPII = (text: string): string => {
   return redacted;
 };
 
-export function BillingView({ user, selectedModel, systemPrompt, setToast }: BillingViewProps) {
+export function BillingView({ user, selectedModel, systemPrompt, policies, setToast }: BillingViewProps) {
   // --- State ---
   const [patientChat, setPatientChat] = useState('');
   const [verifiedNotes, setVerifiedNotes] = useState('');
@@ -228,15 +229,20 @@ export function BillingView({ user, selectedModel, systemPrompt, setToast }: Bil
     setReply(''); // Clear previous
 
     try {
+      // Build user message with policy reinforcement so the model respects CX config
+      let policyReminder = '';
+      if (policies && policies.length > 0) {
+        policyReminder = `\n\nIMPORTANT — You MUST follow these rules when writing your reply:\n${policies.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nDo NOT deviate from any of the above rules.`;
+      }
+
       let messages: any[] = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `PATIENT CHAT:\n${patientChat}\n\nCASE NOTES:\n${verifiedNotes}\n\nDraft a reply.` }
+        { role: 'user', content: `DISPUTE DETAILS (what the patient said):\n${patientChat}\n\nCASE NOTES (source of truth — base your reply on this):\n${verifiedNotes}\n\nUsing the information above, draft a reply directly addressed to the patient.${policyReminder}` }
       ];
 
       // Attach images to user message if any (for LLM analysis)
       if (attachedImages.length > 0) {
-        messages[1].content = [
-          { type: 'text', text: messages[1].content },
+        messages[0].content = [
+          { type: 'text', text: messages[0].content },
           ...attachedImages.map(img => ({ type: 'image_url', image_url: { url: img } }))
         ];
       }
@@ -249,7 +255,8 @@ export function BillingView({ user, selectedModel, systemPrompt, setToast }: Bil
           model: selectedModel.id || selectedModel, // Handle object or string
           temperature: 0.7,
           stream: true,
-          // Phase 2: Context Injection
+          systemPrompt,
+          policies,
           context: {
              view: 'BillingView',
              feature: 'Dispute Resolution',
@@ -259,7 +266,14 @@ export function BillingView({ user, selectedModel, systemPrompt, setToast }: Bil
         })
       });
 
-      if (!response.ok) throw new Error(await response.text());
+      if (!response.ok) {
+        const errorText = await response.text();
+        // Detect HTML error pages (e.g., Cloud Run 502) and show clean message
+        if (errorText.includes('<!DOCTYPE') || errorText.includes('<html')) {
+          throw new Error(`Server error (${response.status}). Please try again.`);
+        }
+        throw new Error(errorText);
+      }
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -275,7 +289,14 @@ export function BillingView({ user, selectedModel, systemPrompt, setToast }: Bil
         const { done, value } = await reader.read();
         if (done) break;
         
-        buffer += decoder.decode(value, { stream: true });
+        const chunk = decoder.decode(value, { stream: true });
+        
+        // Detect HTML error pages in stream (e.g., mid-stream Cloud Run crash)
+        if (!accumulatedReply && (chunk.includes('<!DOCTYPE') || chunk.includes('<html'))) {
+          throw new Error('Server error during response. Please try again.');
+        }
+        
+        buffer += chunk;
         const lines = buffer.split('\n');
         buffer = lines.pop() || ''; // Keep incomplete line in buffer
         
@@ -354,14 +375,41 @@ export function BillingView({ user, selectedModel, systemPrompt, setToast }: Bil
     if (!reply) return;
     setIsLoading(true);
     try {
-      const res = await fetch('/api/rewrite', {
+      // Build policy-aware rewrite instruction
+      let policyReminder = '';
+      if (policies && policies.length > 0) {
+        policyReminder = `\n\nYou MUST also continue to follow these rules:\n${policies.map((p, i) => `${i + 1}. ${p}`).join('\n')}`;
+      }
+
+      const instruction = mode === 'Shorter'
+        ? `Rewrite the following reply to be more concise and shorter while keeping the same meaning and tone. Do not add any new information.${policyReminder}`
+        : `Rewrite the following reply to be firmer and more assertive while remaining professional and empathetic. Do not add any new information.${policyReminder}`;
+
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ replyText: reply, rewriteMode: mode })
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: `${instruction}\n\nORIGINAL REPLY:\n${reply}` }],
+          model: selectedModel.id || selectedModel,
+          temperature: 0.5,
+          stream: false,
+          systemPrompt,
+          policies,
+          context: {
+            view: 'BillingView',
+            feature: 'Dispute Resolution Rewrite',
+            rewriteMode: mode
+          }
+        })
       });
-      const data = await res.json();
+      const data = await response.json();
+      // Non-streaming response: Gemini returns 'reply', OpenAI returns 'choices'
       if (data.reply) {
         setReply(data.reply);
+      } else if (data.content) {
+        setReply(data.content);
+      } else if (data.choices?.[0]?.message?.content) {
+        setReply(data.choices[0].message.content);
       }
     } catch (e) {
       console.error(e);

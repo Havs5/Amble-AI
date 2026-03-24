@@ -23,6 +23,8 @@ export const ChatRequestSchema = z.object({
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().positive().optional(),
+  systemPrompt: z.string().max(10000).optional(),
+  policies: z.array(z.string().max(1000)).max(50).optional(),
   stream: z.boolean().optional(),
   useRAG: z.boolean().optional(),
   tools: z.array(z.any()).optional(),

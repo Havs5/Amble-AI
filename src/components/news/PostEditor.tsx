@@ -59,7 +59,7 @@ export function PostEditor({ post, authorId, authorName, onSave, onPublish, onCl
   const [title, setTitle] = useState(post?.title ?? '');
   const [body, setBody] = useState(post?.body ?? '');
   const [summary, setSummary] = useState(post?.summary ?? '');
-  const [departmentId, setDepartmentId] = useState(post?.departmentId ?? 'general');
+  const [departmentId, setDepartmentId] = useState(post?.departmentId ?? 'billing');
   const [tags, setTags] = useState<string[]>(post?.tags ?? []);
   const [priority, setPriority] = useState<NewsPriority>(post?.priority ?? 'NORMAL');
   const [pinned, setPinned] = useState(post?.pinned ?? false);

@@ -216,6 +216,16 @@ exports.ssrambleai = onRequest(
         return handleAdminResetPassword(req, res, context);
       }
 
+      // Special: Admin - Create User
+      if (method === 'POST' && (path === '/api/admin/create-user' || path === '/admin/create-user')) {
+        return handleAdminCreateUser(req, res, context);
+      }
+
+      // Special: Admin - Delete User
+      if (method === 'POST' && (path === '/api/admin/delete-user' || path === '/admin/delete-user')) {
+        return handleAdminDeleteUser(req, res, context);
+      }
+
       // Special: Video content proxy (dynamic path)
       const videoContentMatch = path.match(/^\/(?:api\/)?videos\/([^/]+)\/content$/);
       if (method === 'GET' && videoContentMatch) {
@@ -519,8 +529,254 @@ async function handleVideoContentProxy(req, res, videoId) {
 }
 
 // ============================================================================
+// Admin: Delete User
+// ============================================================================
+
+async function handleAdminDeleteUser(req, res, { adminDb, writeJson }) {
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+    const { userId } = body;
+
+    // Verify authorization
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return writeJson(res, 401, { success: false, error: 'Unauthorized' });
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+
+    let callerUid;
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      callerUid = decodedToken.uid;
+    } catch (err) {
+      return writeJson(res, 401, { success: false, error: 'Invalid token' });
+    }
+
+    // Check if caller is an admin
+    const callerSnapshot = await adminDb.collection('users')
+      .where('uid', '==', callerUid)
+      .limit(1)
+      .get();
+
+    if (callerSnapshot.empty) {
+      return writeJson(res, 404, { success: false, error: 'Caller user not found' });
+    }
+
+    const callerData = callerSnapshot.docs[0].data();
+    if (callerData.role !== 'admin' && callerData.role !== 'superadmin') {
+      return writeJson(res, 403, { success: false, error: 'Admin access required' });
+    }
+
+    if (!userId) {
+      return writeJson(res, 400, { success: false, error: 'userId is required' });
+    }
+
+    // Get the user document
+    const userDoc = await adminDb.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return writeJson(res, 404, { success: false, error: 'User not found' });
+    }
+
+    const userData = userDoc.data();
+    const firebaseUid = userData.uid;
+
+    // Prevent self-deletion
+    if (firebaseUid === callerUid) {
+      return writeJson(res, 400, { success: false, error: 'You cannot delete your own account' });
+    }
+
+    // Delete Firebase Auth user
+    if (firebaseUid) {
+      try {
+        await admin.auth().deleteUser(firebaseUid);
+      } catch (authError) {
+        if (authError.code !== 'auth/user-not-found') {
+          throw authError;
+        }
+      }
+
+      // Delete UID mapping
+      try {
+        await adminDb.collection('users_by_uid').doc(firebaseUid).delete();
+      } catch (e) {
+        // Non-critical
+      }
+    }
+
+    // Delete Firestore user document
+    await adminDb.collection('users').doc(userId).delete();
+
+    console.log(`[Admin] Deleted user ${userData.email} (doc: ${userId}, uid: ${firebaseUid})`);
+
+    return writeJson(res, 200, {
+      success: true,
+      message: `User ${userData.email} deleted successfully`,
+    });
+  } catch (e) {
+    console.error('[Admin] Error deleting user:', e);
+    return writeJson(res, 500, { success: false, error: e.message || 'Failed to delete user' });
+  }
+}
+
+// ============================================================================
 // Admin: Reset User Password & Send Email
 // ============================================================================
+
+async function handleAdminCreateUser(req, res, { adminDb, writeJson }) {
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+    const { email, password, name, role, permissions, capabilities, department } = body;
+
+    // Get the authorization header to verify the caller is an admin
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return writeJson(res, 401, { success: false, error: 'Unauthorized' });
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+
+    // Verify the caller's token
+    let callerUid;
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      callerUid = decodedToken.uid;
+    } catch (err) {
+      return writeJson(res, 401, { success: false, error: 'Invalid token' });
+    }
+
+    // Check if caller is an admin
+    const callerSnapshot = await adminDb.collection('users')
+      .where('uid', '==', callerUid)
+      .limit(1)
+      .get();
+
+    if (callerSnapshot.empty) {
+      return writeJson(res, 404, { success: false, error: 'Caller user not found' });
+    }
+
+    const callerData = callerSnapshot.docs[0].data();
+    if (callerData.role !== 'admin' && callerData.role !== 'superadmin') {
+      return writeJson(res, 403, { success: false, error: 'Admin access required' });
+    }
+
+    if (!email || !name) {
+      return writeJson(res, 400, { success: false, error: 'Email and name are required' });
+    }
+
+    // Generate a random password (required by Firebase Auth, but users sign in via Google)
+    const crypto = require('crypto');
+    const generatedPassword = password || crypto.randomBytes(24).toString('base64url');
+
+    // Check if user already exists in Firestore
+    const existingUserSnapshot = await adminDb.collection('users')
+      .where('email', '==', email)
+      .limit(1)
+      .get();
+
+    if (!existingUserSnapshot.empty) {
+      return writeJson(res, 409, { success: false, error: 'A user with this email already exists' });
+    }
+
+    // Create Firebase Auth user using Admin SDK
+    let firebaseUser;
+    try {
+      firebaseUser = await admin.auth().createUser({
+        email,
+        password: generatedPassword,
+        displayName: name,
+        emailVerified: false,
+      });
+    } catch (authError) {
+      if (authError.code === 'auth/email-already-exists') {
+        return writeJson(res, 409, { success: false, error: 'An account with this email already exists in Firebase Auth' });
+      }
+      if (authError.code === 'auth/invalid-email') {
+        return writeJson(res, 400, { success: false, error: 'Invalid email address' });
+      }
+      if (authError.code === 'auth/weak-password') {
+        return writeJson(res, 400, { success: false, error: 'Password should be at least 6 characters' });
+      }
+      throw authError;
+    }
+
+    // Default permissions and capabilities
+    const DEFAULT_PERMISSIONS = {
+      accessAmble: true,
+      accessBilling: true,
+      accessStudio: false,
+      accessKnowledge: false,
+      accessPharmacy: false,
+    };
+    const DEFAULT_CAPABILITIES = {
+      webBrowse: true,
+      imageGen: true,
+      codeInterpreter: false,
+      realtimeVoice: false,
+      vision: true,
+      videoIn: false,
+      longContext: false,
+      aiDictation: false,
+      dictationMode: 'auto',
+      skipCorrection: false,
+    };
+    const DEFAULT_AI_CONFIG = {
+      systemPrompt: 'You are Amble AI, a helpful general assistant.',
+      policies: [],
+      temperature: 0.7,
+      maxTokens: 8192,
+    };
+
+    // Create Firestore user document
+    const now = new Date();
+    const userRef = adminDb.collection('users').doc();
+    const userData = {
+      uid: firebaseUser.uid,
+      email,
+      name,
+      role: role || 'user',
+      permissions: { ...DEFAULT_PERMISSIONS, ...permissions },
+      capabilities: { ...DEFAULT_CAPABILITIES, ...capabilities },
+      ambleConfig: DEFAULT_AI_CONFIG,
+      cxConfig: { ...DEFAULT_AI_CONFIG, systemPrompt: 'You are an expert billing and dispute specialist assistant.' },
+      department: department || '',
+      authProvider: 'google',
+      emailVerified: false,
+      createdAt: now,
+      lastLoginAt: now,
+    };
+
+    await userRef.set(userData);
+
+    // Create UID mapping for fast lookups
+    await adminDb.collection('users_by_uid').doc(firebaseUser.uid).set({
+      userId: userRef.id,
+    });
+
+    console.log(`[Admin] Created user ${email} (uid: ${firebaseUser.uid}, doc: ${userRef.id})`);
+
+    return writeJson(res, 200, {
+      success: true,
+      user: {
+        id: userRef.id,
+        uid: firebaseUser.uid,
+        email,
+        name,
+        role: role || 'user',
+        permissions: userData.permissions,
+        capabilities: userData.capabilities,
+        department: userData.department,
+        authProvider: 'google',
+        emailVerified: false,
+        createdAt: now.toISOString(),
+        lastLoginAt: now.toISOString(),
+      },
+    });
+  } catch (e) {
+    console.error('[Admin] Error creating user:', e);
+    return writeJson(res, 500, { success: false, error: e.message || 'Failed to create user' });
+  }
+}
 
 async function handleAdminResetPassword(req, res, { adminDb, writeJson }) {
   try {

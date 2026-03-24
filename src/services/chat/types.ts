@@ -168,6 +168,8 @@ export interface ChatAPIRequest {
   context?: Record<string, any>;
   temperature?: number;
   maxTokens?: number;
+  systemPrompt?: string;
+  policies?: string[];
   knowledgeBase?: Record<string, unknown>; // Legacy — no longer sent
 }
 

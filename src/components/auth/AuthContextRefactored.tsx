@@ -54,14 +54,17 @@ interface AuthContextType {
     name: string, 
     role: 'admin' | 'user', 
     permissions?: UserPermissions, 
-    capabilities?: UserCapabilities
+    capabilities?: UserCapabilities,
+    department?: string
   ) => Promise<boolean>;
   resetPassword: (newPassword: string) => Promise<boolean>;
   updateProfile: (name: string, email: string) => Promise<boolean>;
-  updateUserPermissions: (userId: string, permissions: UserPermissions) => Promise<void>;
-  updateUserCapabilities: (userId: string, capabilities: UserCapabilities) => Promise<void>;
-  updateUserConfig: (userId: string, type: 'amble' | 'cx', config: AIConfig) => Promise<void>;
+  updateUserPermissions: (userId: string, permissions: UserPermissions, skipRefresh?: boolean) => Promise<void>;
+  updateUserCapabilities: (userId: string, capabilities: UserCapabilities, skipRefresh?: boolean) => Promise<void>;
+  updateUserConfig: (userId: string, type: 'amble' | 'cx', config: AIConfig, skipRefresh?: boolean) => Promise<void>;
+  updateUserDepartment: (userId: string, department: string, skipRefresh?: boolean) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
+  refreshUsers: () => Promise<void>;
   
   // New methods
   sendPasswordResetEmail: (email: string) => Promise<void>;
@@ -100,7 +103,9 @@ const defaultContextValue: AuthContextType = {
   updateUserPermissions: async () => {},
   updateUserCapabilities: async () => {},
   updateUserConfig: async () => {},
+  updateUserDepartment: async () => {},
   deleteUser: async () => {},
+  refreshUsers: async () => {},
   sendPasswordResetEmail: async () => {},
   preRegisterUser: async () => '',
   getIdToken: async () => null,
@@ -172,14 +177,16 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     name: string,
     role: 'admin' | 'user',
     permissions?: UserPermissions,
-    capabilities?: UserCapabilities
+    capabilities?: UserCapabilities,
+    department?: string
   ): Promise<boolean> => {
     try {
-      await admin.createUser(email, password, name, role, permissions, capabilities);
+      await admin.createUser(email, password, name, role, permissions, capabilities, department);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('[AuthContext] Add user error:', error);
-      return false;
+      // Re-throw the error so the caller can access the actual error message
+      throw error;
     }
   };
 
@@ -206,18 +213,23 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   };
 
   // Legacy-compatible permission update
-  const updateUserPermissions = async (userId: string, permissions: UserPermissions): Promise<void> => {
-    await admin.updateUserPermissions(userId, permissions);
+  const updateUserPermissions = async (userId: string, permissions: UserPermissions, skipRefresh?: boolean): Promise<void> => {
+    await admin.updateUserPermissions(userId, permissions, skipRefresh);
   };
 
   // Legacy-compatible capability update
-  const updateUserCapabilities = async (userId: string, capabilities: UserCapabilities): Promise<void> => {
-    await admin.updateUserCapabilities(userId, capabilities);
+  const updateUserCapabilities = async (userId: string, capabilities: UserCapabilities, skipRefresh?: boolean): Promise<void> => {
+    await admin.updateUserCapabilities(userId, capabilities, skipRefresh);
   };
 
   // Config update - now properly implemented
-  const updateUserConfig = async (userId: string, type: 'amble' | 'cx', config: AIConfig): Promise<void> => {
-    await admin.updateUserConfig(userId, type, config);
+  const updateUserConfig = async (userId: string, type: 'amble' | 'cx', config: AIConfig, skipRefresh?: boolean): Promise<void> => {
+    await admin.updateUserConfig(userId, type, config, skipRefresh);
+  };
+
+  // Department update
+  const updateUserDepartment = async (userId: string, department: string, skipRefresh?: boolean): Promise<void> => {
+    await admin.updateUserDepartment(userId, department, skipRefresh);
   };
 
   // Legacy-compatible delete
@@ -259,7 +271,9 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     updateUserPermissions,
     updateUserCapabilities,
     updateUserConfig,
+    updateUserDepartment,
     deleteUser,
+    refreshUsers: admin.refreshUsers,
     sendPasswordResetEmail,
     preRegisterUser,
     getIdToken,
@@ -301,7 +315,9 @@ export function useAuth() {
       updateUserPermissions: async () => {},
       updateUserCapabilities: async () => {},
       updateUserConfig: async () => {},
+      updateUserDepartment: async () => {},
       deleteUser: async () => {},
+      refreshUsers: async () => {},
       sendPasswordResetEmail: async () => {},
       preRegisterUser: async () => '',
       getIdToken: async () => null,

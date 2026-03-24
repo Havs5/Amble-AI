@@ -101,7 +101,7 @@ interface ChatProviderProps {
   model?: string;
   mode?: ReasoningMode;
   onSessionDelete?: (id: string) => void;
-  config?: { temperature: number; maxTokens: number };
+  config?: { temperature: number; maxTokens: number; systemPrompt?: string; policies?: string[] };
   projectId?: string | null;
 }
 
@@ -733,6 +733,8 @@ export function ChatProvider({
           context,
           temperature: config?.temperature,
           maxTokens: config?.maxTokens,
+          systemPrompt: config?.systemPrompt,
+          policies: config?.policies,
         },
         {
           batchMs: 50, // Batched updates - only update UI every 50ms

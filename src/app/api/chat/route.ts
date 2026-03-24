@@ -34,7 +34,7 @@ const getOpenaiClient = () => {
 };
 
 // Enhanced system prompt for superior AI responses with Knowledge Base integration
-const ENHANCED_SYSTEM_PROMPT = `You are Amble AI, an intelligent assistant for company specialists working in billing, disputes, customer care, sales, errors/technical support, and compliance departments.
+const ENHANCED_SYSTEM_PROMPT = `You are Amble AI, an intelligent assistant for company specialists working in billing & disputes, patient experience, pharmacy coordination, system errors / provider coordination, sendblue, sales, and compliance departments.
 
 ═══════════════════════════════════════════════════════════════
 🎯 KNOWLEDGE BASE PRIORITY SYSTEM - CRITICAL
@@ -67,14 +67,13 @@ INFORMATION SOURCE PRIORITY (Use in this order):
 ═══════════════════════════════════════════════════════════════
 
 You assist specialists from these departments:
-🏦 BILLING: Invoices, payments, charges, refunds, credits, pricing
-📝 DISPUTES: Chargebacks, complaints, escalations, resolutions
-💬 CUSTOMER CARE: Support inquiries, satisfaction, service
+🏦 BILLING & DISPUTES: Invoices, payments, charges, refunds, credits, pricing, chargebacks, complaints, escalations
+💬 PATIENT EXPERIENCE: Patient inquiries, support, satisfaction, service quality, care coordination
+💊 PHARMACY COORDINATION: Prescription handling, pharmacy partners, rx coordination, compounding
+🔧 SYSTEM ERRORS / PROVIDER COORDINATION: Bug reports, troubleshooting, system issues, provider integration
+📱 SENDBLUE: SMS messaging, text communication, patient outreach, messaging campaigns
 📊 SALES: Orders, subscriptions, promotions, quotes
-🔧 ERRORS/TECHNICAL: Bug reports, troubleshooting, system issues
-📦 SHIPPING: Delivery tracking, shipment status, courier issues
 ⚖️ COMPLIANCE: HIPAA, regulations, legal, policies, audits
-
 ═══════════════════════════════════════════════════════════════
 💊 PRODUCT KNOWLEDGE
 ═══════════════════════════════════════════════════════════════
@@ -123,29 +122,159 @@ const safetySettings = [
 ];
 
 // ============================================
-// COST OPTIMIZATION: Limit Conversation History
+// SMART CONVERSATION HISTORY MANAGEMENT
 // ============================================
-const MAX_HISTORY_MESSAGES = 10; // Keep last 10 messages to reduce token costs
+const MAX_HISTORY_MESSAGES = 10;
 
-function limitMessageHistory(messages: any[]): any[] {
+async function limitMessageHistory(messages: any[]): Promise<any[]> {
   if (messages.length <= MAX_HISTORY_MESSAGES) {
     return messages;
   }
   
-  // Always keep the last message (current user query)
   const lastMessage = messages[messages.length - 1];
-  
-  // Get recent history (excluding last)
   const recentMessages = messages.slice(-(MAX_HISTORY_MESSAGES - 1), -1);
+  const olderMessages = messages.slice(0, messages.length - MAX_HISTORY_MESSAGES);
   
-  // Add a summary message for older context
-  const olderCount = messages.length - MAX_HISTORY_MESSAGES;
+  // Summarize older messages using a fast model instead of discarding them
+  let summary = '';
+  try {
+    const olderText = olderMessages.map((m: any) => {
+      const text = typeof m.content === 'string' ? m.content : '[multimodal]';
+      return `${m.role}: ${text.substring(0, 200)}`;
+    }).join('\n');
+    
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'dummy', timeout: 10000 });
+    const result = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Summarize this conversation history in 2-3 sentences. Capture key topics, decisions, and any patient/case details mentioned. Be concise.' },
+        { role: 'user', content: olderText.substring(0, 3000) }
+      ],
+      temperature: 0,
+      max_tokens: 200
+    });
+    summary = result.choices[0].message.content || '';
+  } catch (e) {
+    summary = `[${olderMessages.length} earlier messages covered: ${olderMessages.filter((m: any) => m.role === 'user').map((m: any) => (typeof m.content === 'string' ? m.content : '').substring(0, 50)).join('; ')}]`;
+  }
+  
   const summaryMessage = {
     role: 'system',
-    content: `[Note: ${olderCount} earlier messages in this conversation have been summarized to optimize performance. The conversation continues from here with full context of recent exchanges.]`
+    content: `--- CONVERSATION HISTORY SUMMARY ---\n${summary}\n--- END SUMMARY (${olderMessages.length} messages) ---`
   };
   
   return [summaryMessage, ...recentMessages, lastMessage];
+}
+
+// ============================================
+// POLICY COMPLIANCE CHECKER
+// ============================================
+async function checkPolicyCompliance(
+  responseText: string,
+  policies: string[],
+  maxRetries: number = 1
+): Promise<{ compliant: boolean; violations: string[]; suggestion?: string }> {
+  if (!policies || policies.length === 0 || !responseText.trim()) {
+    return { compliant: true, violations: [] };
+  }
+  
+  try {
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'dummy', timeout: 15000 });
+    const result = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: `You are a compliance checker. Check if the AI response complies with ALL of the following policies. Return JSON only.\n\nPolicies:\n${policies.map((p, i) => `${i+1}. ${p}`).join('\n')}\n\nReturn: {"compliant": true/false, "violations": ["description of each violation"], "suggestion": "how to fix if non-compliant"}` },
+        { role: 'user', content: `Check this response:\n\n${responseText.substring(0, 3000)}` }
+      ],
+      temperature: 0,
+      max_tokens: 500,
+      response_format: { type: 'json_object' }
+    });
+    
+    const check = JSON.parse(result.choices[0].message.content || '{"compliant":true,"violations":[]}');
+    return {
+      compliant: !!check.compliant,
+      violations: Array.isArray(check.violations) ? check.violations : [],
+      suggestion: check.suggestion
+    };
+  } catch (e) {
+    console.error('[PolicyCheck] Failed:', e);
+    return { compliant: true, violations: [] }; // Fail open
+  }
+}
+
+// ============================================
+// CONFIDENCE & GROUNDING SCORER
+// ============================================
+function scoreResponseConfidence(responseText: string, kbContext: string, kbSources: any[]): {
+  confidenceScore: number;
+  grounded: boolean;
+  groundingDetails: string;
+} {
+  if (!responseText) return { confidenceScore: 0, grounded: false, groundingDetails: 'No response' };
+  
+  let score = 0.5; // Base confidence
+  let groundingSignals = 0;
+  let totalSignals = 0;
+  
+  // Signal 1: KB sources were found
+  if (kbSources.length > 0) {
+    score += 0.15;
+    groundingSignals++;
+  }
+  totalSignals++;
+  
+  // Signal 2: Response cites sources
+  const citationPattern = /\[Source:.*?\]/gi;
+  const citations = responseText.match(citationPattern) || [];
+  if (citations.length > 0) {
+    score += 0.15;
+    groundingSignals++;
+  }
+  totalSignals++;
+  
+  // Signal 3: Response contains hedging for non-KB info
+  const hedgingPhrases = ['not in the knowledge base', 'generally', 'based on general knowledge', 'I\'m not certain'];
+  const hasHedging = hedgingPhrases.some(p => responseText.toLowerCase().includes(p));
+  
+  // Signal 4: Check for fabrication indicators
+  const fabricationIndicators = [
+    /\$\d+\.\d{2}/g,  // Specific dollar amounts
+    /\d{3}-\d{3}-\d{4}/g,  // Phone numbers
+    /\d+%/g,  // Specific percentages
+  ];
+  let hasSuspiciousClaims = false;
+  for (const pattern of fabricationIndicators) {
+    const matches = responseText.match(pattern) || [];
+    if (matches.length > 0 && kbContext) {
+      // Check if these numbers exist in KB context
+      for (const match of matches) {
+        if (!kbContext.includes(match)) {
+          hasSuspiciousClaims = true;
+          score -= 0.1;
+          break;
+        }
+      }
+    }
+  }
+  totalSignals++;
+  if (!hasSuspiciousClaims) groundingSignals++;
+  
+  // Signal 5: Response length vs KB context length ratio
+  if (kbContext && responseText.length > kbContext.length * 2) {
+    score -= 0.05; // Response is much longer than available context = potential fabrication
+  }
+  
+  const grounded = groundingSignals >= Math.ceil(totalSignals * 0.6);
+  const finalScore = Math.max(0, Math.min(1, score));
+  
+  return {
+    confidenceScore: Math.round(finalScore * 100) / 100,
+    grounded,
+    groundingDetails: hasSuspiciousClaims 
+      ? 'Response may contain figures not found in Knowledge Base'
+      : grounded ? 'Response is grounded in provided sources' : 'Limited source material available'
+  };
 }
 
 // ============================================
@@ -159,13 +288,6 @@ async function fetchContextParallel(
   knowledgeBaseData?: { folderMap?: any[]; accessToken?: string }
 ): Promise<{ userMemory: string; ragContext: string; knowledgeContext: string; kbSources: any[]; usedVectorKB: boolean }> {
   
-  // Log KB data status
-  console.log('[API fetchContext] KB data received:', {
-    hasFolderMap: !!knowledgeBaseData?.folderMap,
-    folderMapLength: knowledgeBaseData?.folderMap?.length || 0,
-    hasAccessToken: !!knowledgeBaseData?.accessToken
-  });
-  
   // Check if new vector KB system is available
   let vectorKBAvailable = false;
   let vectorKBDocCount = 0;
@@ -174,9 +296,8 @@ async function fetchContextParallel(
     const status = await kbManager.getSyncStatus();
     vectorKBAvailable = status.configured && status.documentsCount > 0;
     vectorKBDocCount = status.documentsCount;
-    console.log('[API fetchContext] Vector KB available:', vectorKBAvailable, 'docs:', status.documentsCount);
   } catch (e) {
-    console.log('[API fetchContext] Vector KB check failed:', e);
+    // Vector KB not available
   }
   
   // Check if legacy KB is available
@@ -219,9 +340,6 @@ async function fetchContextParallel(
   let combinedKbSources: any[] = [];
   let usedVectorKB = false;
   
-  console.log('[API fetchContext] Vector KB results count:', vectorKBResults.length);
-  console.log('[API fetchContext] Legacy KB has content:', legacyKbResult.hasRelevantContent);
-  
   if (vectorKBResults.length > 0) {
     // Use new vector KB system
     usedVectorKB = true;
@@ -238,29 +356,19 @@ ${ragContext.context}
 ═══════════════════════════════════════════════════════════════
 `;
     combinedKbSources = ragContext.sources.map(s => ({ title: s, type: 'vector_kb' }));
-    console.log('[API fetchContext] Using Vector KB context, sources:', combinedKbSources.length);
-    console.log('[API fetchContext] Context preview:', combinedKbContext.substring(0, 200));
   } else if (legacyKbResult.hasRelevantContent && legacyKbResult.context) {
     // Fall back to legacy KB (Google Drive with folderMap)
     combinedKbContext = legacyKbResult.context;
     combinedKbSources = legacyKbResult.sources || [];
-    console.log('[API fetchContext] Using legacy KB context, sources:', combinedKbSources.length);
-    console.log('[API fetchContext] Context preview:', combinedKbContext.substring(0, 200));
   } else {
     // No KB results from Vector KB or Legacy KB — try Direct Google Drive Search as last resort
-    console.log('[API fetchContext] WARNING: No KB context from Vector/Legacy — trying Direct Drive Search...');
-    
     let driveResults: Array<{ title: string; content: string; documentId?: string; metadata?: { department?: string; modifiedTime?: string; [key: string]: unknown } }> = [];
 
     // === Attempt 1: Service Account Drive Search (no user token needed) ===
     try {
-      console.log('[API fetchContext] Trying Service Account Drive search...');
       const saResults = await searchDriveWithServiceAccount(query, 5);
       if (saResults.length > 0) {
         driveResults = saResults;
-        console.log('[API fetchContext] ✅ Service Account Drive Search found', saResults.length, 'results!');
-      } else {
-        console.log('[API fetchContext] Service Account Drive Search returned 0 results');
       }
     } catch (e) {
       console.error('[API fetchContext] Service Account Drive Search failed:', e);
@@ -272,9 +380,8 @@ ${ragContext.context}
       if (!driveToken && userId) {
         try {
           driveToken = await getDriveAccessToken(userId);
-          console.log('[API fetchContext] Got Drive token from Firestore:', !!driveToken);
         } catch (e) {
-          console.log('[API fetchContext] Failed to get Drive token from Firestore:', e);
+          // Drive token not available
         }
       }
       
@@ -283,15 +390,10 @@ ${ragContext.context}
           const oauthResults = await searchDriveWithContent(driveToken, query, 5);
           if (oauthResults.length > 0) {
             driveResults = oauthResults;
-            console.log('[API fetchContext] ✅ User OAuth Drive Search found', oauthResults.length, 'results!');
-          } else {
-            console.log('[API fetchContext] User OAuth Drive Search also returned 0 results');
           }
         } catch (e) {
           console.error('[API fetchContext] User OAuth Drive Search failed:', e);
         }
-      } else {
-        console.log('[API fetchContext] No Drive token available for OAuth search');
       }
     }
 
@@ -363,21 +465,13 @@ export async function POST(req: NextRequest) {
       context, // NEW: Context Injection
       temperature,
       maxTokens,
+      systemPrompt: userSystemPrompt, // User's custom system prompt from settings
+      policies: userPolicies, // User's policy rules from settings
       knowledgeBase // Knowledge Base: folder map and access token
     } = validationResult.data;
     
-    // COST OPTIMIZATION: Limit conversation history to reduce token costs
-    const messages = limitMessageHistory(rawMessages);
-    console.log(`[API] Message history limited: ${rawMessages.length} -> ${messages.length} messages`);
-    
-    // Log KB data for debugging
-    console.log('[API] ====== CHAT REQUEST ======');
-    console.log('[API] Knowledge Base data:', {
-      received: !!knowledgeBase,
-      hasFolderMap: !!knowledgeBase?.folderMap,
-      folderMapLength: knowledgeBase?.folderMap?.length || 0,
-      hasAccessToken: !!knowledgeBase?.accessToken
-    });
+    // SMART HISTORY: Summarize older messages instead of discarding
+    const messages = await limitMessageHistory(rawMessages);
 
     // --- HELPER: Extract text from potentially multimodal content ---
     const getTextFromContent = (content: string | any[]): string => {
@@ -408,7 +502,6 @@ export async function POST(req: NextRequest) {
       if (agentMode === 'auto') agentName = 'PlannerAgent';
 
       try {
-        console.log(`[API] Delegating to Agent: ${agentName}`);
         const result = await globalExecutor.execute(agentName, query, { 
           projectId: projectId ?? undefined,
           useRAG: useRAG,
@@ -439,7 +532,6 @@ export async function POST(req: NextRequest) {
         const route = MagicRouter.getRecommendedModel(complexityTier, 'google');
         finalModel = route.modelId;
         isReasoning = route.reasoning || false;
-        console.log(`[MagicRouter] Auto-routed to: ${finalModel} (Tier: ${complexityTier})`);
     }
 
     // --- PHASE 4: Compute active user & provider abstraction ---
@@ -494,7 +586,18 @@ export async function POST(req: NextRequest) {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
         hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
       });
-      let sysCtx = `${ENHANCED_SYSTEM_PROMPT}\n\nCurrent date and time: ${currentDate}`;
+      // Use user's custom system prompt if provided, otherwise use the default
+      const basePrompt = userSystemPrompt?.trim() ? userSystemPrompt : ENHANCED_SYSTEM_PROMPT;
+      let sysCtx = `${basePrompt}\n\nCurrent date and time: ${currentDate}`;
+      
+      // POLICIES: Inject early so the model sees constraints before any context
+      if (userPolicies && userPolicies.length > 0) {
+        sysCtx += `\n\n[RESPONSE RULES — apply to EVERY reply you write]\n`;
+        userPolicies.forEach((policy, i) => {
+          sysCtx += `- ${policy}\n`;
+        });
+      }
+      
       if (params.knowledgeContext) {
         sysCtx += `\n\n${params.knowledgeContext}`;
       }
@@ -512,6 +615,24 @@ export async function POST(req: NextRequest) {
       } else if (complexityTier === 'simple') {
         sysCtx += '\n\n[Keep the response concise and direct.]';
       }
+      
+      // POLICIES: Injected LAST as well so they are the final instruction the AI reads.
+      // Double-injection (top + bottom) proven to increase compliance with long-context models.
+      if (userPolicies && userPolicies.length > 0) {
+        sysCtx += `\n\n═══════════════════════════════════════════════════════════════`;
+        sysCtx += `\n🚨 CRITICAL: MANDATORY POLICIES & GUIDELINES 🚨`;
+        sysCtx += `\n═══════════════════════════════════════════════════════════════`;
+        sysCtx += `\nBEFORE you write ANY response, you MUST verify it complies with ALL of the following rules.`;
+        sysCtx += `\nIf your response would violate ANY rule, you MUST rewrite it until it complies.`;
+        sysCtx += `\nThese rules OVERRIDE all other instructions:\n`;
+        userPolicies.forEach((policy, i) => {
+          sysCtx += `  ${i + 1}. ${policy}\n`;
+        });
+        sysCtx += `\nREMINDER: Violating even ONE of the above policies is NOT acceptable.`;
+        sysCtx += `\nDouble-check your response formatting and content against every rule above before finalizing.`;
+        sysCtx += `\n═══════════════════════════════════════════════════════════════`;
+      }
+      
       return sysCtx;
     };
 
@@ -575,6 +696,10 @@ export async function POST(req: NextRequest) {
 
       // Execute streaming in "background" relative to the return statement
       const processStream = async () => {
+        // Accumulate response text for post-generation checks (policy, confidence, memory)
+        let fullResponseText = '';
+        let openaiFullResponse = '';
+        
         try {
             // =====================================================
             // PHASE 1: TRACE-ENABLED PARALLEL CONTEXT FETCHING
@@ -596,7 +721,7 @@ export async function POST(req: NextRequest) {
               vectorKBAvailable = kbStatus.configured && kbStatus.documentsCount > 0;
               vectorKBDocCount = kbStatus.documentsCount;
             } catch (e) {
-              console.log('[API Trace] Vector KB check failed:', e);
+              // Vector KB check not available
             }
             const hasLegacyKB = knowledgeBase?.folderMap && knowledgeBase.folderMap.length > 0;
 
@@ -741,8 +866,6 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            console.log(`[API] Context fetched in ${Date.now() - contextStartTime}ms (with traces)`);
-
             // =====================================================
             // PHASE 2: WEB SEARCH & SYSTEM PROMPT
             // =====================================================
@@ -830,10 +953,7 @@ export async function POST(req: NextRequest) {
                     // Append search context to user message for Gemini
                     const searchContext = systemMsgs.map((m: any) => getTextFromContent(m.content)).join('\n\n');
                     lastUserContent = `${searchContext}\n\n---\nUser Question: ${lastUserContent}`;
-                    console.log('[Chat API] Injected search context into user message for Gemini');
                 }
-
-                console.log(`[Chat API] Streaming Google: ${finalModel} -> API model: ${apiModel}, Content length: ${String(lastUserContent).length}`);
                 
                 try {
                   // Add timeout wrapper for Gemini - 45 seconds max
@@ -857,6 +977,7 @@ export async function POST(req: NextRequest) {
 
                   let hasContent = false;
                   let chunkCount = 0;
+                  fullResponseText = ''; // Reset accumulator for this generation
                   
                   // Stream timeout - if no chunks received in 30 seconds, throw
                   let lastChunkTime = Date.now();
@@ -871,15 +992,13 @@ export async function POST(req: NextRequest) {
                               throw new Error('502 Server Error - received HTML error page');
                           }
                           hasContent = true;
+                          fullResponseText += text;
                           await sendData({ content: text });
                       }
                   }
                   
-                  console.log(`[Chat API] Gemini stream completed: ${chunkCount} chunks, hasContent: ${hasContent}`);
-                  
                   // If no content was received, send an error message
                   if (!hasContent) {
-                      console.warn('[Chat API] Gemini returned empty response');
                       await sendData({ content: '⚠️ The AI returned an empty response. Please try again.' });
                   }
                   
@@ -897,15 +1016,10 @@ export async function POST(req: NextRequest) {
                           },
                         model: apiModel
                     });
-                    console.log(`[Chat API] Gemini usage: ${usageMetadata.promptTokenCount} in, ${usageMetadata.candidatesTokenCount} out`);
                   }
                 } catch (geminiError: any) {
                   console.error('[Chat API] Gemini streaming error, falling back to GPT:', geminiError);
                   const errorMsg = String(geminiError.message || geminiError || 'Unknown error');
-                  
-                  // ALWAYS fallback to GPT on ANY Gemini error
-                  // This ensures users always get a response even when Gemini is down
-                  console.log('[Chat API] Auto-fallback to GPT due to Gemini error:', errorMsg);
                   await sendData({ meta: { status: '⚡ Switching to GPT (Gemini unavailable)...' } });
                   
                   try {
@@ -944,7 +1058,6 @@ export async function POST(req: NextRequest) {
                 }
             } else {
                 // OpenAI - Agentic Loop
-                console.log(`[Chat API] Streaming OpenAI: ${finalModel} with Agentic Tools`);
                 const openai = getOpenaiClient(); // Instantiate here to ensure secrets are loaded
                 const currentMessages = getOpenAIMessages(systemContext) as any[];
                 
@@ -974,6 +1087,8 @@ export async function POST(req: NextRequest) {
                     let toolCalls: Record<number, any> = {};
                     let isFunction = false;
 
+                    openaiFullResponse = ''; // Reset accumulator for this turn
+                    
                     for await (const chunk of stream) {
                         // Check for usage data in the final chunk
                         if (chunk.usage) {
@@ -997,6 +1112,7 @@ export async function POST(req: NextRequest) {
                         // Stream Content
                         const content = delta?.content || '';
                         if (content) {
+                            openaiFullResponse += content;
                             await sendData({ content });
                         }
                     }
@@ -1020,7 +1136,6 @@ export async function POST(req: NextRequest) {
                             const isServerTool = TOOLS_DEFINITION.some(t => t.function.name === tc.function.name);
                             
                             if (isServerTool) {
-                                console.log(`[Agent] Running Server Tool: ${tc.function.name}`);
                                 const args = JSON.parse(tc.function.arguments);
                                 const result = await ToolExecutor.execute(tc.function.name, args);
                                 
@@ -1065,7 +1180,6 @@ export async function POST(req: NextRequest) {
                         },
                         model: apiModel
                     });
-                    console.log(`[Chat API] OpenAI usage: ${totalPromptTokens} in, ${totalCompletionTokens} out`);
                 }
             }
 
@@ -1080,20 +1194,57 @@ export async function POST(req: NextRequest) {
                   }))
                 }
               });
-              console.log('[API] KB sources sent to client:', kbSources.length);
+            }
+
+            // 4. CONFIDENCE SCORING & GROUNDING CHECK
+            // Score how well the response is grounded in KB sources
+            const responseText = isGoogle ? (typeof fullResponseText === 'string' ? fullResponseText : '') : (typeof openaiFullResponse === 'string' ? openaiFullResponse : '');
+            const confidence = scoreResponseConfidence(responseText, knowledgeContext, kbSources);
+            await sendData({
+              meta: {
+                confidence: {
+                  score: confidence.confidenceScore,
+                  grounded: confidence.grounded,
+                  details: confidence.groundingDetails
+                }
+              }
+            });
+            // 5. POLICY COMPLIANCE CHECK (post-generation)
+            if (userPolicies && userPolicies.length > 0 && responseText.length > 0) {
+              try {
+                const compliance = await checkPolicyCompliance(responseText, userPolicies);
+                
+                if (!compliance.compliant && compliance.violations.length > 0) {
+                  // Stream a policy warning to the user
+                  await sendData({
+                    meta: {
+                      policyCheck: {
+                        compliant: false,
+                        violations: compliance.violations,
+                        suggestion: compliance.suggestion
+                      }
+                    }
+                  });
+                  console.warn('[API] ⚠️ Policy violations detected:', compliance.violations);
+                } else {
+                  await sendData({ meta: { policyCheck: { compliant: true } } });
+                }
+              } catch (policyError) {
+                console.error('[API] Policy check error:', policyError);
+              }
             }
             
-            // 4. Send Done Signal
+            // 6. Send Done Signal
             await writer.write(encoder.encode(`data: [DONE]\n\n`));
 
-            // --- PHASE 4: ASYNC MEMORY EXTRACTION ---
-            // We do this AFTER the response is sent to not slow down the chat
-            if (activeUserId) {
-                // Get the final full response text (we'd need to accumulate it in stream loop, which we didn't do fully here for efficiency)
-                // For simplicity, we just fire-and-forget logic if we had the full text.
-                // In a production serverless environment, this might be cut off. Ideally use a queue.
-                // Since this is a simple demo, we skip automatic extraction to save tokens/time for now,
-                // or we could implement a separate trigger.
+            // --- PHASE 5: ASYNC MEMORY EXTRACTION ---
+            if (activeUserId && responseText.length > 0) {
+              // Fire-and-forget memory extraction
+              MemoryService.extractAndSaveMemories(
+                activeUserId,
+                lastUserMessageText,
+                responseText
+              ).catch(e => console.error('[API] Memory extraction failed:', e));
             }
 
         } catch (error: any) {

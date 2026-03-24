@@ -2,9 +2,7 @@
  * LoginRefactored - Enhanced login component with Firebase Auth
  * 
  * Features:
- * - Email/password login
- * - Google Sign-In
- * - Password reset flow
+ * - Google Sign-In (primary authentication)
  * - Better error handling
  * - Loading states
  */
@@ -13,7 +11,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from './AuthContextRefactored';
-import { Lock, Mail, Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 // ============================================================================
 // Google Icon Component
@@ -69,41 +67,17 @@ function getErrorMessage(error: any): string {
 // Login Component
 // ============================================================================
 
-type LoginView = 'login' | 'reset-password' | 'reset-sent';
-
 export function LoginRefactored() {
   // State
-  const [view, setView] = useState<LoginView>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   
   // Auth context
-  const { login, loginWithGoogle, sendPasswordResetEmail } = useAuth();
+  const { loginWithGoogle } = useAuth();
 
   // --------------------------------------------------------------------------
   // Handlers
   // --------------------------------------------------------------------------
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    try {
-      const success = await login(email, password);
-      if (!success) {
-        setError('Invalid email or password');
-      }
-    } catch (err: any) {
-      console.error('[Login] Email sign-in error:', err);
-      setError(getErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleGoogleSignIn = async () => {
     setError('');
@@ -122,137 +96,8 @@ export function LoginRefactored() {
     }
   };
 
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    try {
-      await sendPasswordResetEmail(email);
-      setView('reset-sent');
-    } catch (err: any) {
-      console.error('[Login] Password reset error:', err);
-      setError(getErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const goToLogin = () => {
-    setView('login');
-    setError('');
-  };
-
-  const goToResetPassword = () => {
-    setView('reset-password');
-    setError('');
-  };
-
   // --------------------------------------------------------------------------
-  // Render: Password Reset Sent
-  // --------------------------------------------------------------------------
-
-  if (view === 'reset-sent') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
-        <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 p-7 animate-in zoom-in-95 duration-300">
-          <div className="text-center">
-            <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-green-500/20 mx-auto mb-3">
-              ✓
-            </div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-1.5">
-              Check Your Email
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 mb-4 text-sm">
-              We've sent password reset instructions to:
-            </p>
-            <p className="text-indigo-600 dark:text-indigo-400 font-medium mb-6 text-sm">
-              {email}
-            </p>
-            <button
-              onClick={goToLogin}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg shadow-md shadow-indigo-500/15 transition-all transform active:scale-[0.98] text-sm"
-            >
-              Back to Sign In
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // Render: Password Reset Form
-  // --------------------------------------------------------------------------
-
-  if (view === 'reset-password') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
-        <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 p-7 animate-in zoom-in-95 duration-300">
-          <button
-            onClick={goToLogin}
-            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-5 transition-colors text-sm"
-          >
-            <ArrowLeft size={15} />
-            Back to Sign In
-          </button>
-
-          <div className="text-center mb-6">
-            <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-indigo-500/20 mx-auto mb-3">
-              <Lock size={22} />
-            </div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-              Reset Password
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-1.5 text-sm">
-              Enter your email and we'll send you reset instructions
-            </p>
-          </div>
-
-          <form onSubmit={handleResetPassword} className="space-y-4">
-            {error && (
-              <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-xs text-center">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-900 dark:text-slate-100 text-sm"
-                  placeholder="you@example.com"
-                  required
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg shadow-md shadow-indigo-500/15 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed text-sm"
-            >
-              {isLoading ? (
-                <Loader2 className="animate-spin" size={16} />
-              ) : (
-                'Send Reset Instructions'
-              )}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // Render: Login Form
+  // Render: Login
   // --------------------------------------------------------------------------
 
   return (
@@ -352,7 +197,7 @@ export function LoginRefactored() {
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            disabled={isGoogleLoading || isLoading}
+            disabled={isGoogleLoading}
             className="w-full bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow transition-all transform active:scale-[0.98] flex items-center justify-center gap-2.5 disabled:opacity-70 disabled:cursor-not-allowed text-sm"
           >
             {isGoogleLoading ? (
@@ -365,89 +210,21 @@ export function LoginRefactored() {
             )}
           </button>
 
-          {/* Divider */}
-          <div className="relative my-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
+          {/* Error display */}
+          {error && (
+            <div className="mt-4 flex items-center gap-2 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-xs">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              {error}
             </div>
-            <div className="relative flex justify-center text-[11px]">
-              <span className="px-3 bg-slate-50 dark:bg-slate-950 text-slate-400 font-medium uppercase tracking-wider">
-                or
-              </span>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-3.5">
-            {error && (
-              <div className="flex items-center gap-2 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-xs">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
-                  <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                Email address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input-enhanced pl-9 !py-2.5 !text-sm !rounded-lg"
-                  placeholder="name@company.com"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                  Password
-                </label>
-                <button
-                  type="button"
-                  onClick={goToResetPassword}
-                  className="text-[11px] text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium transition-colors"
-                >
-                  Forgot password?
-                </button>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input-enhanced pl-9 !py-2.5 !text-sm !rounded-lg"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading || isGoogleLoading}
-              className="w-full btn-futuristic py-2.5 rounded-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed text-sm mt-1"
-            >
-              {isLoading ? (
-                <Loader2 className="animate-spin relative z-10" size={16} />
-              ) : (
-                <span className="relative z-10 font-semibold">Sign In</span>
-              )}
-            </button>
-          </form>
+          )}
 
           {/* Footer info */}
           <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800">
             <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center leading-relaxed">
-              Sign in with Google for Knowledge Base access.<br />
+              Sign in with your organization Google account.<br />
               Protected by Firebase Authentication.
             </p>
           </div>

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Shield, Zap, Activity, Edit2, Trash2, UserPlus, XCircle, ArrowLeft, BarChart2, Plus, Bot, FileText, AlertTriangle, DollarSign, Calendar, TrendingUp, Hash, Cpu, Loader2, Mic, RefreshCw, Users, KeyRound, Copy, Check, Mail } from 'lucide-react';
+import { X, Search, Shield, Zap, Activity, Edit2, Trash2, UserPlus, XCircle, ArrowLeft, BarChart2, Plus, Bot, FileText, AlertTriangle, DollarSign, Calendar, TrendingUp, Hash, Cpu, Loader2, Mic, RefreshCw, Users, Check } from 'lucide-react';
 import { useAuth, AIConfig } from '../auth/AuthContextRefactored';
 import { UsageManager, DetailedUsageStats, ModelUsageBreakdown } from '../../lib/usageManager';
 import { UsageReport } from '../admin/UsageReport';
 import { Toast } from '../ui/Toast';
+import { NEWS_DEPARTMENTS } from '../../types/news';
 
 interface UserManagementModalProps {
   isOpen: boolean;
@@ -12,7 +13,7 @@ interface UserManagementModalProps {
 }
 
 export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementModalProps) {
-  const { users, addUser, user: currentUser, updateUserPermissions, updateUserCapabilities, updateUserConfig, deleteUser, isLoading: authLoading } = useAuth();
+  const { users, addUser, user: currentUser, updateUserPermissions, updateUserCapabilities, updateUserConfig, updateUserDepartment, deleteUser, refreshUsers, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'users' | 'usage'>('users');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
@@ -22,7 +23,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   // Add User State
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserDepartment, setNewUserDepartment] = useState('');
+
   const [newUserRole, setNewUserRole] = useState<'admin' | 'user'>('user');
   const [newUserPermissions, setNewUserPermissions] = useState({ accessAmble: true, accessBilling: true, accessStudio: false, accessPharmacy: false, accessKnowledge: false });
   const [addUserError, setAddUserError] = useState('');
@@ -34,6 +36,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   const [editCapabilities, setEditCapabilities] = useState<any>({});
   const [editLimits, setEditLimits] = useState<any>({});
   const [editPermissions, setEditPermissions] = useState({ accessAmble: true, accessBilling: true, accessStudio: false, accessPharmacy: false, accessKnowledge: false });
+  const [editDepartment, setEditDepartment] = useState('');
   const [userUsageStats, setUserUsageStats] = useState<DetailedUsageStats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [statsDateRange, setStatsDateRange] = useState<'last30' | 'last7' | 'thisMonth' | 'all'>('last30');
@@ -47,7 +50,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
     maxTokens: 8192 
   });
   const [editCxConfig, setEditCxConfig] = useState<AIConfig>({ 
-    systemPrompt: 'You an expert billing and dispute specialist assistant.', 
+    systemPrompt: 'You are an expert billing and dispute specialist assistant.', 
     policies: [], 
     temperature: 0.7, 
     maxTokens: 8192 
@@ -56,11 +59,9 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   const [policyError, setPolicyError] = useState('');
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
-  // Reset Password State
-  const [showResetPasswordConfirm, setShowResetPasswordConfirm] = useState(false);
-  const [isResettingPassword, setIsResettingPassword] = useState(false);
-  const [resetPasswordResult, setResetPasswordResult] = useState<{ password: string; emailSent: boolean } | null>(null);
-  const [copiedPassword, setCopiedPassword] = useState(false);
+  // Track original AI configs to avoid overwriting unchanged data
+  const [originalAmbleConfig, setOriginalAmbleConfig] = useState<AIConfig | null>(null);
+  const [originalCxConfig, setOriginalCxConfig] = useState<AIConfig | null>(null);
 
 
 
@@ -113,20 +114,25 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
     // Permissions and Configs - include defaults for new fields
     const basePermissions = { accessAmble: true, accessBilling: true, accessStudio: false, accessPharmacy: false, accessKnowledge: false };
     setEditPermissions({ ...basePermissions, ...user.permissions });
+    setEditDepartment(user.department || '');
 
     // Set AI Configs
-    setEditAmbleConfig(user.ambleConfig || { 
+    const ambleCfg = user.ambleConfig || { 
       systemPrompt: 'You are Amble AI, a helpful general assistant.', 
       policies: [], 
       temperature: 0.7, 
       maxTokens: 8192 
-    });
-    setEditCxConfig(user.cxConfig || { 
-      systemPrompt: 'You an expert billing and dispute specialist assistant.', 
+    };
+    const cxCfg = user.cxConfig || { 
+      systemPrompt: 'You are an expert billing and dispute specialist assistant.', 
       policies: [], 
       temperature: 0.7, 
       maxTokens: 8192 
-    });
+    };
+    setEditAmbleConfig(ambleCfg);
+    setEditCxConfig(cxCfg);
+    setOriginalAmbleConfig(ambleCfg);
+    setOriginalCxConfig(cxCfg);
 
     // Capabilities - Fetch from Firestore or fallback to local (migration support)
     setEditCapabilities(user.capabilities || {});
@@ -137,20 +143,22 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
     
     setIsSavingUser(true);
     try {
-      // Save limits to Firestore
+      // Save all data without refreshing user list each time
       await UsageManager.saveLimits(editLimits, selectedUser.id);
-      
-      // Save permissions
-      await updateUserPermissions(selectedUser.id, editPermissions);
+      await updateUserPermissions(selectedUser.id, editPermissions, true);
+      await updateUserDepartment(selectedUser.id, editDepartment, true);
+      await updateUserCapabilities(selectedUser.id, editCapabilities, true);
 
-      // Save Capabilities to Firestore
-      await updateUserCapabilities(selectedUser.id, editCapabilities);
-
-      // Save AI Configs
       if (updateUserConfig) {
-        await updateUserConfig(selectedUser.id, 'amble', editAmbleConfig);
-        await updateUserConfig(selectedUser.id, 'cx', editCxConfig);
+        // Only save AI configs if they were actually modified
+        const ambleChanged = JSON.stringify(editAmbleConfig) !== JSON.stringify(originalAmbleConfig);
+        const cxChanged = JSON.stringify(editCxConfig) !== JSON.stringify(originalCxConfig);
+        if (ambleChanged) await updateUserConfig(selectedUser.id, 'amble', editAmbleConfig, true);
+        if (cxChanged) await updateUserConfig(selectedUser.id, 'cx', editCxConfig, true);
       }
+
+      // Refresh user list once after all saves complete
+      await refreshUsers();
       
       setToast({ message: 'User settings saved successfully', type: 'success' });
       
@@ -167,7 +175,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
   const handleAddUser = async () => {
     setAddUserError('');
-    if (!newUserName || !newUserEmail || !newUserPassword) {
+    if (!newUserName || !newUserEmail) {
       setAddUserError('Please fill in all fields');
       setToast({ message: 'Please fill in all required fields', type: 'error' });
       return;
@@ -175,7 +183,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
     setIsCreatingUser(true);
     try {
-      const success = await addUser(newUserEmail, newUserPassword, newUserName, newUserRole, newUserPermissions);
+      const success = await addUser(newUserEmail, '', newUserName, newUserRole, newUserPermissions, undefined, newUserDepartment);
       
       if (success) {
         // Build access summary for toast
@@ -187,22 +195,18 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
         const accessSummary = accessList.length > 0 ? accessList.join(', ') : 'No modules';
         
         setToast({ 
-          message: `✓ User "${newUserName}" created as ${newUserRole}. Access: ${accessSummary}. They can now log in with their credentials.`, 
+          message: `✓ User "${newUserName}" created as ${newUserRole}. Access: ${accessSummary}. They can now sign in with Google.`, 
           type: 'success' 
         });
         setIsAddingUser(false);
         setNewUserName('');
         setNewUserEmail('');
-        setNewUserPassword('');
+        setNewUserDepartment('');
         setNewUserRole('user');
         setNewUserPermissions({ accessAmble: true, accessBilling: true, accessStudio: false, accessPharmacy: false, accessKnowledge: false });
-      } else {
-        const errorMsg = 'Failed to create user. Email already exists in the system.';
-        setAddUserError(errorMsg);
-        setToast({ message: errorMsg, type: 'error' });
       }
     } catch (error: any) {
-      const errorMsg = error.message || 'Failed to add user';
+      const errorMsg = error.message || 'Failed to create user';
       setAddUserError(errorMsg);
       setToast({ message: errorMsg, type: 'error' });
     } finally {
@@ -227,51 +231,6 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
       setShowDeleteConfirmation(false);
     } catch (error: any) {
       setToast({ message: 'Failed to delete user', type: 'error' });
-    }
-  };
-
-  const handleResetPassword = async (sendEmail: boolean) => {
-    if (!selectedUser || !currentUser) return;
-    setIsResettingPassword(true);
-    setResetPasswordResult(null);
-    setCopiedPassword(false);
-    try {
-      const res = await fetch('/api/admin/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: selectedUser.id,
-          callerUid: currentUser.uid,
-          sendEmail,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to reset password');
-      setResetPasswordResult({ password: data.newPassword, emailSent: data.emailSent });
-      setToast({ message: data.message, type: 'success' });
-    } catch (err: any) {
-      setToast({ message: err.message || 'Failed to reset password', type: 'error' });
-      setShowResetPasswordConfirm(false);
-    } finally {
-      setIsResettingPassword(false);
-    }
-  };
-
-  const copyPasswordToClipboard = async (password: string) => {
-    try {
-      await navigator.clipboard.writeText(password);
-      setCopiedPassword(true);
-      setTimeout(() => setCopiedPassword(false), 2000);
-    } catch {
-      // Fallback
-      const el = document.createElement('textarea');
-      el.value = password;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
-      setCopiedPassword(true);
-      setTimeout(() => setCopiedPassword(false), 2000);
     }
   };
 
@@ -453,6 +412,9 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-900 dark:text-white">{user.name}</div>
                         <div className="text-xs text-slate-500">{user.email}</div>
+                        {user.department && NEWS_DEPARTMENTS[user.department] && (
+                          <div className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">{NEWS_DEPARTMENTS[user.department]}</div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
@@ -520,17 +482,6 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Password</label>
-                    <input 
-                      type="password" 
-                      value={newUserPassword}
-                      onChange={(e) => setNewUserPassword(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                      placeholder="••••••••"
-                    />
-                  </div>
-
-                  <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Role</label>
                     <div className="flex gap-4">
                       <label className={`flex-1 p-4 rounded-lg border cursor-pointer transition-all ${newUserRole === 'user' ? 'bg-indigo-50 border-indigo-500 dark:bg-indigo-900/20' : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'}`}>
@@ -558,6 +509,20 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         <div className="text-xs text-slate-500">Full control over users and settings.</div>
                       </label>
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Department</label>
+                    <select
+                      value={newUserDepartment}
+                      onChange={(e) => setNewUserDepartment(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      <option value="">Select a department...</option>
+                      {Object.entries(NEWS_DEPARTMENTS).map(([key, label]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
@@ -894,6 +859,25 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   )}
                 </div>
                 )}
+
+                {/* Department Section */}
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                  <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Users size={20} className="text-blue-500" />
+                    Department
+                  </h4>
+                  <select
+                    value={editDepartment}
+                    onChange={(e) => setEditDepartment(e.target.value)}
+                    disabled={currentUser?.role !== 'admin'}
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <option value="">No department assigned</option>
+                    {Object.entries(NEWS_DEPARTMENTS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
 
                 {/* Permissions Section */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
@@ -1342,24 +1326,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                     Danger Zone
                   </h4>
                   <div className="space-y-4">
-                    {/* Reset Password */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-slate-900 dark:text-white text-sm flex items-center gap-1.5">
-                          <KeyRound size={14} className="text-amber-500" />
-                          Reset Password
-                        </div>
-                        <div className="text-xs text-slate-500">Generate a random password and optionally email it to the user.</div>
-                      </div>
-                      <button 
-                        onClick={() => { setShowResetPasswordConfirm(true); setResetPasswordResult(null); setCopiedPassword(false); }}
-                        className="px-3 py-2 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-amber-600 rounded-lg text-sm font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
-                      >
-                        Reset Password
-                      </button>
-                    </div>
                     {/* Delete User */}
-                    <div className="flex items-center justify-between pt-4 border-t border-red-100 dark:border-red-900/30">
+                    <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium text-slate-900 dark:text-white text-sm">Delete User</div>
                         <div className="text-xs text-slate-500">Permanently remove this user and all their data.</div>
@@ -1418,99 +1386,6 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                 Delete Account
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reset Password Confirmation / Result Modal */}
-      {showResetPasswordConfirm && (
-        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 animate-in zoom-in-95 duration-200 mx-4">
-            {!resetPasswordResult ? (
-              /* Confirmation step */
-              <>
-                <div className="flex flex-col items-center text-center mb-6">
-                  <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mb-4">
-                    <KeyRound size={32} className="text-amber-600 dark:text-amber-500" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Reset Password</h3>
-                  <p className="text-slate-500 dark:text-slate-400">
-                    Generate a new random password for <span className="font-semibold text-slate-900 dark:text-white">"{selectedUser?.name}"</span>?
-                  </p>
-                  <p className="text-xs text-slate-400 mt-2">Their current password will be immediately replaced.</p>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => handleResetPassword(true)}
-                    disabled={isResettingPassword}
-                    className="w-full py-2.5 px-4 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isResettingPassword ? (
-                      <><Loader2 className="animate-spin" size={16} /> Resetting...</>
-                    ) : (
-                      <><Mail size={16} /> Reset &amp; Send Email</>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => handleResetPassword(false)}
-                    disabled={isResettingPassword}
-                    className="w-full py-2.5 px-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isResettingPassword ? (
-                      <><Loader2 className="animate-spin" size={16} /> Resetting...</>
-                    ) : (
-                      <><KeyRound size={16} /> Reset Only (No Email)</>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setShowResetPasswordConfirm(false)}
-                    disabled={isResettingPassword}
-                    className="w-full py-2 px-4 text-slate-400 text-sm hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            ) : (
-              /* Result step — show generated password */
-              <>
-                <div className="flex flex-col items-center text-center mb-6">
-                  <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
-                    <Check size={32} className="text-green-600 dark:text-green-500" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Password Reset</h3>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm">
-                    New password for <span className="font-semibold text-slate-900 dark:text-white">{selectedUser?.name}</span>
-                    {resetPasswordResult.emailSent && (
-                      <span className="block text-green-600 dark:text-green-400 mt-1 text-xs">Email sent to {selectedUser?.email}</span>
-                    )}
-                  </p>
-                </div>
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
-                    <code className="flex-1 text-center text-lg font-mono font-semibold tracking-wider text-slate-900 dark:text-white select-all">
-                      {resetPasswordResult.password}
-                    </code>
-                    <button
-                      onClick={() => copyPasswordToClipboard(resetPasswordResult.password)}
-                      className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500"
-                      title="Copy password"
-                    >
-                      {copiedPassword ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
-                    </button>
-                  </div>
-                  {!resetPasswordResult.emailSent && (
-                    <p className="text-xs text-amber-500 mt-2 text-center">Email not sent — share this password manually.</p>
-                  )}
-                </div>
-                <button
-                  onClick={() => { setShowResetPasswordConfirm(false); setResetPasswordResult(null); }}
-                  className="w-full py-2.5 px-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                >
-                  Done
-                </button>
-              </>
-            )}
           </div>
         </div>
       )}

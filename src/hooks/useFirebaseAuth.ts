@@ -337,7 +337,8 @@ export interface UseAuthAdminResult {
     name: string,
     role?: 'admin' | 'user',
     permissions?: Partial<AppUser['permissions']>,
-    capabilities?: Partial<AppUser['capabilities']>
+    capabilities?: Partial<AppUser['capabilities']>,
+    department?: string
   ) => Promise<AppUser>;
   
   preRegisterUser: (
@@ -348,9 +349,10 @@ export interface UseAuthAdminResult {
     capabilities?: Partial<AppUser['capabilities']>
   ) => Promise<string>;
   
-  updateUserPermissions: (userId: string, permissions: AppUser['permissions']) => Promise<void>;
-  updateUserCapabilities: (userId: string, capabilities: AppUser['capabilities']) => Promise<void>;
-  updateUserConfig: (userId: string, type: 'amble' | 'cx', config: any) => Promise<void>;
+  updateUserPermissions: (userId: string, permissions: AppUser['permissions'], skipRefresh?: boolean) => Promise<void>;
+  updateUserCapabilities: (userId: string, capabilities: AppUser['capabilities'], skipRefresh?: boolean) => Promise<void>;
+  updateUserConfig: (userId: string, type: 'amble' | 'cx', config: any, skipRefresh?: boolean) => Promise<void>;
+  updateUserDepartment: (userId: string, department: string, skipRefresh?: boolean) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
   refreshUsers: () => Promise<void>;
 }
@@ -406,14 +408,19 @@ export function useAuthAdmin(currentUser?: AppUser | null): UseAuthAdminResult {
   const refreshUsers = useCallback(async () => {
     if (!authServiceRef.current) return;
     
-    setIsLoading(true);
+    // Only show loading spinner on initial fetch, not on background refreshes
+    if (!hasFetchedRef.current) {
+      setIsLoading(true);
+    }
     try {
       const allUsers = await authServiceRef.current.getAllUsers();
       setUsers(allUsers);
     } catch (err: any) {
       setError(err);
     } finally {
-      setIsLoading(false);
+      if (!hasFetchedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -423,14 +430,15 @@ export function useAuthAdmin(currentUser?: AppUser | null): UseAuthAdminResult {
     name: string,
     role: 'admin' | 'user' = 'user',
     permissions?: Partial<AppUser['permissions']>,
-    capabilities?: Partial<AppUser['capabilities']>
+    capabilities?: Partial<AppUser['capabilities']>,
+    department?: string
   ): Promise<AppUser> => {
     if (!authServiceRef.current) {
       throw { code: 'NOT_INITIALIZED', message: 'Auth service not initialized' };
     }
 
     const newUser = await authServiceRef.current.createUser(
-      email, password, name, role, permissions, capabilities
+      email, password, name, role, permissions, capabilities, department
     );
     await refreshUsers();
     return newUser;
@@ -456,39 +464,42 @@ export function useAuthAdmin(currentUser?: AppUser | null): UseAuthAdminResult {
 
   const updateUserPermissions = useCallback(async (
     userId: string,
-    permissions: AppUser['permissions']
+    permissions: AppUser['permissions'],
+    skipRefresh = false
   ): Promise<void> => {
     if (!authServiceRef.current) {
       throw { code: 'NOT_INITIALIZED', message: 'Auth service not initialized' };
     }
 
     await authServiceRef.current.updateUserPermissions(userId, permissions);
-    await refreshUsers();
+    if (!skipRefresh) await refreshUsers();
   }, [refreshUsers]);
 
   const updateUserCapabilities = useCallback(async (
     userId: string,
-    capabilities: AppUser['capabilities']
+    capabilities: AppUser['capabilities'],
+    skipRefresh = false
   ): Promise<void> => {
     if (!authServiceRef.current) {
       throw { code: 'NOT_INITIALIZED', message: 'Auth service not initialized' };
     }
 
     await authServiceRef.current.updateUserCapabilities(userId, capabilities);
-    await refreshUsers();
+    if (!skipRefresh) await refreshUsers();
   }, [refreshUsers]);
 
   const updateUserConfig = useCallback(async (
     userId: string,
     type: 'amble' | 'cx',
-    config: any
+    config: any,
+    skipRefresh = false
   ): Promise<void> => {
     if (!authServiceRef.current) {
       throw { code: 'NOT_INITIALIZED', message: 'Auth service not initialized' };
     }
 
     await authServiceRef.current.updateUserConfig(userId, type, config);
-    await refreshUsers();
+    if (!skipRefresh) await refreshUsers();
   }, [refreshUsers]);
 
   const deleteUser = useCallback(async (userId: string): Promise<void> => {
@@ -500,6 +511,15 @@ export function useAuthAdmin(currentUser?: AppUser | null): UseAuthAdminResult {
     await refreshUsers();
   }, [refreshUsers]);
 
+  const updateUserDepartment = useCallback(async (userId: string, department: string, skipRefresh = false): Promise<void> => {
+    if (!authServiceRef.current) {
+      throw { code: 'NOT_INITIALIZED', message: 'Auth service not initialized' };
+    }
+
+    await authServiceRef.current.updateUserDepartment(userId, department);
+    if (!skipRefresh) await refreshUsers();
+  }, [refreshUsers]);
+
   return {
     users,
     isLoading,
@@ -509,6 +529,7 @@ export function useAuthAdmin(currentUser?: AppUser | null): UseAuthAdminResult {
     updateUserPermissions,
     updateUserCapabilities,
     updateUserConfig,
+    updateUserDepartment,
     deleteUser,
     refreshUsers,
   };

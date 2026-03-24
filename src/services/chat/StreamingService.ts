@@ -83,9 +83,18 @@ export class StreamingService implements IStreamingService {
       });
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.details || errorData.error || response.statusText;
-        const errorTip = errorData.tip ? ` (Tip: ${errorData.tip})` : '';
+        const errorText = await response.text().catch(() => '');
+        // Detect HTML error pages (e.g., Cloud Run 502) and show clean message
+        if (errorText.includes('<!DOCTYPE') || errorText.includes('<html')) {
+          throw new Error(`Server error (${response.status}). Please try again.`);
+        }
+        let errorMsg = response.statusText;
+        let errorTip = '';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMsg = errorData.details || errorData.error || errorMsg;
+          errorTip = errorData.tip ? ` (Tip: ${errorData.tip})` : '';
+        } catch {}
         throw new Error(`[SERVER ERROR] ${errorMsg}${errorTip}`);
       }
       
@@ -95,12 +104,19 @@ export class StreamingService implements IStreamingService {
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let firstChunk = true;
       
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         
         const chunk = decoder.decode(value, { stream: true });
+        
+        // Detect HTML error pages in stream (e.g., mid-stream Cloud Run crash)
+        if (firstChunk && (chunk.includes('<!DOCTYPE') || chunk.includes('<html'))) {
+          throw new Error('Server error during response. Please try again.');
+        }
+        firstChunk = false;
         
         for (const line of chunk.split('\n')) {
           if (!line.startsWith('data: ')) continue;

@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
-import { RAGPipeline } from '@/services/knowledge';
+import { RAGPipeline, KnowledgeBaseManager } from '@/services/knowledge';
 import { searchDriveWithContent, getDriveAccessToken, searchDriveWithServiceAccount } from '@/services/knowledge/DriveSearchService';
 
 // Force dynamic to avoid caching issues
@@ -197,6 +197,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         success: true,
         results,
         count: results.length,
+        ...(results.length === 0 ? await (async () => {
+          try {
+            const kbManager = KnowledgeBaseManager.getInstance();
+            const health = await kbManager.healthCheck();
+            if (!health.healthy) {
+              return { warning: 'Knowledge Base may need attention', issues: health.issues };
+            }
+          } catch { /* ignore */ }
+          return {};
+        })() : {}),
       });
     }
 

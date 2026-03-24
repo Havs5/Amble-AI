@@ -87,6 +87,7 @@ export interface AppUser {
   capabilities: UserCapabilities;
   ambleConfig?: AIConfig;
   cxConfig?: AIConfig;
+  department?: string;
   photoURL?: string;
   authProvider: 'email' | 'google';
   emailVerified: boolean;
@@ -294,6 +295,7 @@ export class AuthService {
 
   /**
    * Create a new user account (admin function)
+   * Uses server-side API to create users with Firebase Admin SDK
    */
   async createUser(
     email: string,
@@ -301,28 +303,58 @@ export class AuthService {
     name: string,
     role: 'admin' | 'user' = 'user',
     permissions?: Partial<UserPermissions>,
-    capabilities?: Partial<UserCapabilities>
+    capabilities?: Partial<UserCapabilities>,
+    department?: string
   ): Promise<AppUser> {
     try {
-      // Create Firebase Auth user
-      const credential = await createUserWithEmailAndPassword(this.auth, email, password);
-      
-      // Update display name
-      await updateProfile(credential.user, { displayName: name });
-      
-      // Create Firestore user document
-      const appUser = await this.createUserDocument(credential.user, {
-        name,
-        role,
-        permissions: { ...DEFAULT_PERMISSIONS, ...permissions },
-        capabilities: { ...DEFAULT_CAPABILITIES, ...capabilities },
-        authProvider: 'email',
+      // Get the current user's ID token for authentication
+      const idToken = await this.getIdToken();
+      if (!idToken) {
+        throw { code: 'NOT_AUTHENTICATED', message: 'You must be logged in to create users' };
+      }
+
+      // Call the server-side API to create the user
+      const response = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          name,
+          role,
+          permissions,
+          capabilities,
+          department,
+        }),
       });
-      
-      // Sign out the newly created user (admin creating users shouldn't auto-login as them)
-      await signOut(this.auth);
-      
-      return appUser;
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw { 
+          code: response.status === 409 ? 'auth/email-already-in-use' : 'CREATE_USER_FAILED',
+          message: data.error || 'Failed to create user' 
+        };
+      }
+
+      // Convert the response to AppUser format
+      return {
+        id: data.user.id,
+        uid: data.user.uid,
+        email: data.user.email,
+        name: data.user.name,
+        role: data.user.role,
+        permissions: data.user.permissions,
+        capabilities: data.user.capabilities,
+        department: data.user.department,
+        authProvider: 'email',
+        emailVerified: false,
+        createdAt: new Date(data.user.createdAt),
+        lastLoginAt: new Date(data.user.lastLoginAt),
+      };
     } catch (error: any) {
       throw this.normalizeError(error);
     }
@@ -560,6 +592,25 @@ export class AuthService {
   }
 
   /**
+   * Update user department (admin function)
+   */
+  async updateUserDepartment(userId: string, department: string): Promise<void> {
+    try {
+      const userRef = doc(this.db, 'users', userId);
+      await updateDoc(userRef, { department, updatedAt: Timestamp.now() });
+
+      // Update session if it's the current user
+      if (this.currentSession?.user.id === userId) {
+        this.currentSession.user.department = department;
+        this.saveSessionToStorage();
+        this.notifyListeners(this.currentSession.user);
+      }
+    } catch (error: any) {
+      throw this.normalizeError(error);
+    }
+  }
+
+  /**
    * Update user capabilities (admin function)
    */
   async updateUserCapabilities(userId: string, capabilities: UserCapabilities): Promise<void> {
@@ -604,12 +655,32 @@ export class AuthService {
 
   /**
    * Delete a user (admin function)
+   * Uses server-side API to delete from both Firebase Auth and Firestore
    */
   async deleteUser(userId: string): Promise<void> {
     try {
-      // Note: This only deletes the Firestore document
-      // The Firebase Auth user would need to be deleted via Admin SDK
-      await deleteDoc(doc(this.db, 'users', userId));
+      const idToken = await this.getIdToken();
+      if (!idToken) {
+        throw { code: 'NOT_AUTHENTICATED', message: 'You must be logged in to delete users' };
+      }
+
+      const response = await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw {
+          code: 'DELETE_USER_FAILED',
+          message: data.error || 'Failed to delete user',
+        };
+      }
     } catch (error: any) {
       throw this.normalizeError(error);
     }
@@ -959,6 +1030,7 @@ export class AuthService {
       capabilities: { ...DEFAULT_CAPABILITIES, ...data.capabilities },
       ambleConfig: data.ambleConfig,
       cxConfig: data.cxConfig,
+      department: data.department,
       photoURL: data.photoURL,
       authProvider: data.authProvider || 'email',
       emailVerified: data.emailVerified ?? false,

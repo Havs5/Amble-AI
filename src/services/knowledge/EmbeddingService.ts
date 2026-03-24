@@ -505,6 +505,7 @@ export class EmbeddingService {
       // Paginate through chunks to handle large collections
       const CHUNK_PAGE_SIZE = 500;
       const MAX_PAGES = 10; // Up to 5000 chunks
+      const EARLY_STOP_THRESHOLD = 0.85; // Stop if we find very high quality results
       const results: VectorSearchResult[] = [];
       let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | undefined;
       
@@ -559,6 +560,16 @@ export class EmbeddingService {
             },
           });
         });
+        
+        // Early stopping: if we already have enough high-quality results, stop paginating
+        if (results.length >= request.limit * 2) {
+          const sorted = results.sort((a, b) => b.score - a.score);
+          const topScore = sorted[0]?.score || 0;
+          if (topScore >= EARLY_STOP_THRESHOLD && sorted.slice(0, request.limit).every(r => r.score >= 0.5)) {
+            console.log(`[EmbeddingService] Early stopping at page ${page + 1}: top score ${topScore.toFixed(3)} with ${results.length} candidates`);
+            break;
+          }
+        }
         
         if (snapshot.size < CHUNK_PAGE_SIZE) break;
       }

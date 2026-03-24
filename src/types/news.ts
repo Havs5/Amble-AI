@@ -46,14 +46,13 @@ export interface NewsAuditEntry {
 
 // Departments configuration – extend as needed
 export const NEWS_DEPARTMENTS: Record<string, string> = {
-  general: 'General',
-  engineering: 'Engineering',
+  billing: 'Billing/Disputes',
+  patientExperience: 'Patient Experience',
+  pharmacyCoordination: 'Pharmacy Coordination',
+  trainingDevelopment: 'Training & Development',
+  systemErrorsProviderCoordination: 'System Errors / Provider Coordination',
+  sendblue: 'Sendblue',
   operations: 'Operations',
-  clinical: 'Clinical',
-  billing: 'Billing',
-  hr: 'Human Resources',
-  marketing: 'Marketing',
-  leadership: 'Leadership',
 };
 
 export const NEWS_TAGS = [

@@ -64,6 +64,7 @@ interface FeatureRouterProps {
     resetKey: number;
     user: any;
     systemPrompt: string;
+    policies?: string[];
     setToast: (data: { type: 'success' | 'error' | 'info'; message: string } | null) => void;
     onHelp: () => void;
   };
@@ -135,6 +136,7 @@ export function FeatureRouter({
           user={billingProps.user}
           selectedModel={chatProps.model} // Billing often uses the selected model too
           systemPrompt={billingProps.systemPrompt}
+          policies={billingProps.policies}
           setToast={billingProps.setToast}
           onHelp={billingProps.onHelp}
         />

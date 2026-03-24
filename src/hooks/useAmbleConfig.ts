@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth/AuthContextRefactored';
-import { AMBLE_SYSTEM_PROMPT } from '@/lib/systemPrompt';
-import { QA_RULES } from '@/lib/qaCheck';
 import { UserCapabilityKey } from '@/lib/capabilities';
 
 export function useAmbleConfig() {
@@ -23,8 +21,8 @@ export function useAmbleConfig() {
   });
 
   // AI Configuration State
-  const [billingSystemPrompt, setBillingSystemPrompt] = useState(AMBLE_SYSTEM_PROMPT);
-  const [billingPolicies, setBillingPolicies] = useState<string[]>(QA_RULES.map(r => r.description));
+  const [billingSystemPrompt, setBillingSystemPrompt] = useState('You are an expert billing and dispute specialist assistant.');
+  const [billingPolicies, setBillingPolicies] = useState<string[]>([]);
   const [billingConfig, setBillingConfig] = useState({ temperature: 0.7, maxTokens: 8192 });
   
   const [ambleSystemPrompt, setAmbleSystemPrompt] = useState('You are Amble AI, a helpful general assistant.');

@@ -122,11 +122,15 @@ async function searchDriveFiles(
     url.searchParams.set('includeItemsFromAllDrives', 'true');
     url.searchParams.set('corpora', 'allDrives');
     
-    console.log(`[DriveSearch] Searching Drive: "${query}" (${queryWords.length} terms)`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     
+    try {
     const response = await fetch(url.toString(), {
       headers: { 'Authorization': `Bearer ${accessToken}` },
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       const err = await response.text();
@@ -136,9 +140,10 @@ async function searchDriveFiles(
     
     const data = await response.json();
     const files = data.files || [];
-    console.log(`[DriveSearch] Found ${files.length} files matching query`);
-    
     return files;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   } catch (error) {
     console.error('[DriveSearch] Search failed:', error);
     return [];
@@ -228,14 +233,21 @@ async function extractWithGemini(
 ): Promise<string | null> {
   try {
     const url = `${DRIVE_API}/files/${fileId}?alt=media`;
-    const response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+    const dlController = new AbortController();
+    const dlTimeout = setTimeout(() => dlController.abort(), 15000);
+    
+    let response: Response;
+    try {
+      response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` }, signal: dlController.signal });
+    } finally {
+      clearTimeout(dlTimeout);
+    }
     
     if (!response.ok) return null;
     
     const arrayBuffer = await response.arrayBuffer();
     // Skip files larger than 10MB
     if (arrayBuffer.byteLength > 10 * 1024 * 1024) {
-      console.log(`[DriveSearch] File too large for extraction: ${Math.round(arrayBuffer.byteLength / 1024)}KB`);
       return null;
     }
     
@@ -250,26 +262,34 @@ async function extractWithGemini(
     
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
     
-    const geminiRes = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: base64Data } }
-          ]
-        }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
-      })
-    });
+    const geminiController = new AbortController();
+    const geminiTimeout = setTimeout(() => geminiController.abort(), 20000);
+    
+    let geminiRes: Response;
+    try {
+      geminiRes = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: base64Data } }
+            ]
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+        }),
+        signal: geminiController.signal,
+      });
+    } finally {
+      clearTimeout(geminiTimeout);
+    }
     
     if (!geminiRes.ok) return null;
     
     const result = await geminiRes.json();
     const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
     if (text) {
-      console.log(`[DriveSearch] ✅ Gemini extracted ${text.length} chars from ${fileName || fileId}`);
       return text.substring(0, 10000);
     }
     return null;
@@ -284,9 +304,11 @@ async function extractWithGemini(
  */
 function inferDepartment(name: string, parents?: string[]): string | undefined {
   const lower = name.toLowerCase();
-  if (lower.includes('billing') || lower.includes('dispute')) return 'Billing & Disputes';
-  if (lower.includes('patient') || lower.includes('experience')) return 'Patient Experience';
-  if (lower.includes('pharmacy') || lower.includes('rx')) return 'Pharmacies';
+  if (lower.includes('billing') || lower.includes('dispute') || lower.includes('chargeback')) return 'Billing & Disputes';
+  if (lower.includes('patient') || lower.includes('experience') || lower.includes('customer')) return 'Patient Experience';
+  if (lower.includes('pharmacy') || lower.includes('rx') || lower.includes('compounding')) return 'Pharmacy Coordination';
+  if (lower.includes('sendblue') || lower.includes('sms') || lower.includes('text message')) return 'Sendblue';
+  if (lower.includes('system') || lower.includes('provider') || lower.includes('error') || lower.includes('technical')) return 'System Errors / Provider Coordination';
   if (lower.includes('product') || lower.includes('medication')) return 'Products';
   if (lower.includes('training')) return 'Training';
   if (lower.includes('resource')) return 'Resources';
@@ -330,14 +352,11 @@ export async function searchDriveWithContent(
   limit: number = 5
 ): Promise<DriveSearchResult[]> {
   const startTime = Date.now();
-  console.log(`[DriveSearch] ====== DRIVE SEARCH ======`);
-  console.log(`[DriveSearch] Query: "${query}", limit: ${limit}`);
   
   // 1. Search Drive for matching files
   const files = await searchDriveFiles(accessToken, query, limit * 2); // Fetch extra to account for extraction failures
   
   if (files.length === 0) {
-    console.log('[DriveSearch] No files found');
     return [];
   }
   
@@ -346,8 +365,6 @@ export async function searchDriveWithContent(
     f.mimeType !== 'application/vnd.google-apps.folder' &&
     f.mimeType !== 'application/vnd.google-apps.shortcut'
   );
-  
-  console.log(`[DriveSearch] Processing ${processableFiles.length} files...`);
   
   // 3. Extract content from top files in parallel (limit concurrency)
   const topFiles = processableFiles.slice(0, limit);
@@ -382,7 +399,6 @@ export async function searchDriveWithContent(
   // Sort by score
   results.sort((a, b) => b.score - a.score);
   
-  console.log(`[DriveSearch] ✅ ${results.length} results with content (${Date.now() - startTime}ms)`);
   return results.slice(0, limit);
 }
 
@@ -401,7 +417,6 @@ function getServiceAccountDrive(): any {
   
   const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   if (!credentials) {
-    console.log('[DriveSearch] No GOOGLE_SERVICE_ACCOUNT_KEY — service account search unavailable');
     return null;
   }
   
@@ -413,7 +428,6 @@ function getServiceAccountDrive(): any {
     });
     
     serviceAccountDrive = google.drive({ version: 'v3', auth });
-    console.log('[DriveSearch] Service account Drive client initialized');
     return serviceAccountDrive;
   } catch (e) {
     console.error('[DriveSearch] Failed to init service account:', e);
@@ -435,12 +449,8 @@ export async function searchDriveWithServiceAccount(
   const drive = getServiceAccountDrive();
   
   if (!drive) {
-    console.log('[DriveSearch] Service account not available');
     return [];
   }
-  
-  console.log(`[DriveSearch] ====== SA DRIVE SEARCH ======`);
-  console.log(`[DriveSearch] Query: "${query}", root: ${ROOT_FOLDER_ID}`);
   
   try {
     // Build search query
@@ -451,8 +461,6 @@ export async function searchDriveWithServiceAccount(
     
     // Search within the KB folder tree
     const driveQuery = `(${searchTerms}) and trashed = false`;
-    
-    console.log(`[DriveSearch] SA query: ${driveQuery.substring(0, 200)}`);
     
     const response = await drive.files.list({
       q: driveQuery,
@@ -465,8 +473,6 @@ export async function searchDriveWithServiceAccount(
       f.mimeType !== 'application/vnd.google-apps.folder' &&
       f.mimeType !== 'application/vnd.google-apps.shortcut'
     );
-    
-    console.log(`[DriveSearch] SA found ${files.length} files`);
     
     if (files.length === 0) return [];
     
@@ -535,7 +541,6 @@ export async function searchDriveWithServiceAccount(
     }
     
     results.sort((a, b) => b.score - a.score);
-    console.log(`[DriveSearch] SA ✅ ${results.length} results with content (${Date.now() - startTime}ms)`);
     return results.slice(0, limit);
     
   } catch (error: any) {
@@ -564,26 +569,34 @@ async function extractBinaryWithGemini(
     
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
     
-    const geminiRes = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: base64Data } }
-          ]
-        }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
-      })
-    });
+    const geminiCtrl = new AbortController();
+    const gemTimeout = setTimeout(() => geminiCtrl.abort(), 20000);
+    
+    let geminiRes: Response;
+    try {
+      geminiRes = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: base64Data } }
+            ]
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+        }),
+        signal: geminiCtrl.signal,
+      });
+    } finally {
+      clearTimeout(gemTimeout);
+    }
     
     if (!geminiRes.ok) return null;
     
     const result = await geminiRes.json();
     const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
     if (text) {
-      console.log(`[DriveSearch] ✅ Gemini extracted ${text.length} chars from ${fileName || 'unknown'}`);
       return text.substring(0, 10000);
     }
     return null;

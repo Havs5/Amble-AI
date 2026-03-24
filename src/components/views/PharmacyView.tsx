@@ -24,6 +24,19 @@ export function PharmacyView({ activePharmacy, mountedPharmacies }: PharmacyView
     align: null
   });
 
+  // Listen for clipboard-copy messages from pharmacy iframes
+  useEffect(() => {
+    const allowedOrigins = PHARMACIES.map(p => new URL(p.url).origin);
+    const handleMessage = (e: MessageEvent) => {
+      if (!allowedOrigins.includes(e.origin)) return;
+      if (e.data && e.data.type === 'clipboard-copy' && typeof e.data.text === 'string') {
+        navigator.clipboard.writeText(e.data.text).catch(() => {});
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   const handleLoad = (pharmacyId: PharmacyType) => {
     setLoadingStates(prev => ({ ...prev, [pharmacyId]: false }));
     setErrorStates(prev => ({ ...prev, [pharmacyId]: false }));

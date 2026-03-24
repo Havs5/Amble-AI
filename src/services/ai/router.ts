@@ -26,24 +26,30 @@ export class MagicRouter {
     const wordCount = query.split(/\s+/).length;
 
     // TIER 4: REASONING (Deep Thinking)
-    // Triggers: Complex coding, planning, logic puzzles, "think step by step"
     const reasoningTriggers = [
       'plan', 'strategy', 'architecture', 'design pattern', 
       'solve', 'optimize', 'debug complex', 'proof', 
       'step by step', 'chain of thought', 'reasoning',
       'analyze data', 'medical diagnosis', 'legal appeal',
-      'compare and contrast', 'evaluate', 'critique', 'review'
+      'compare and contrast', 'evaluate', 'critique', 'review',
+      // Healthcare-specific reasoning
+      'appeal letter', 'denial appeal', 'audit response', 'compliance review',
+      'coverage determination', 'medical necessity', 'peer-to-peer review'
     ];
     if (reasoningTriggers.some(t => lowerQuery.includes(t)) || wordCount > 100) {
       return 'reasoning';
     }
 
     // TIER 3: COMPLEX (Standard Intelligence)
-    // Triggers: Analysis, detailed explanation, medical queries
     const complexTriggers = [
       'analyze', 'compare', 'explain in detail', 'comprehensive',
       'implications', 'pros and cons', 'relationship between',
-      'billing code', 'cpt', 'icd-10', 'denial reason'
+      'billing code', 'cpt', 'icd-10', 'denial reason',
+      // Healthcare/billing domain
+      'dispute', 'chargeback', 'refund policy', 'prior authorization',
+      'claim denial', 'eob', 'explanation of benefits', 'coordination of benefits',
+      'draft response', 'draft reply', 'generate response', 'patient complaint',
+      'escalation', 'grievance', 'pricing discrepancy', 'insurance verification'
     ];
     if (complexTriggers.some(t => lowerQuery.includes(t)) || wordCount > 30) {
       return 'complex';

@@ -421,9 +421,9 @@ export const PHARMACY_KEYWORDS: Record<string, string[]> = {
 };
 
 export const DEPARTMENT_KEYWORDS: Record<string, string[]> = {
-  billing: ['billing', 'disputes', 'invoice', 'payment', 'charge', 'refund'],
-  'patient experience': ['patient', 'customer', 'support', 'service', 'care'],
-  'pharmacy coordination': ['pharmacy coordination', 'rx coordination'],
-  'send blue': ['send blue', 'sendblue', 'sms', 'text message'],
-  'system provider': ['system', 'provider', 'integration'],
+  billing: ['billing', 'disputes', 'invoice', 'payment', 'charge', 'refund', 'chargeback'],
+  'patient experience': ['patient', 'experience', 'customer', 'support', 'service', 'care', 'inquiry', 'satisfaction'],
+  'pharmacy coordination': ['pharmacy coordination', 'rx coordination', 'prescription', 'compounding'],
+  'sendblue': ['send blue', 'sendblue', 'sms', 'text message', 'messaging', 'text communication'],
+  'system errors / provider coordination': ['system error', 'system errors', 'provider coordination', 'provider', 'integration', 'troubleshooting', 'bug'],
 };

@@ -30,6 +30,11 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Deploy artifacts
+deploy_*.txt
+build_output.log
+functions/.build_timestamp
+
 # Coverage
 coverage/
 

@@ -449,7 +449,7 @@ function AmbleAppContent() {
              model: modelSel.selectedModel,
              mode: modelSel.selectedReasoningMode,
              onModeChange: modelSel.setSelectedReasoningMode,
-             config: config.ambleConfig,
+             config: { ...config.ambleConfig, systemPrompt: config.ambleSystemPrompt, policies: config.amblePolicies },
              onChatDeleted: handleChatDeleted,
              onSessionChange: (id) => {
                  if (id && id !== projState.activeChatId) projState.setActiveChatId(id);
@@ -460,6 +460,7 @@ function AmbleAppContent() {
              resetKey,
              user,
              systemPrompt: config.billingSystemPrompt,
+             policies: config.billingPolicies,
              setToast,
              onHelp: () => nav.setShowHelpModal(true)
            }}

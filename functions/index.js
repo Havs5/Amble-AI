@@ -852,7 +852,7 @@ async function handleAdminResetPassword(req, res, { adminDb, writeJson }) {
                 <p style="color: #475569; font-size: 13px; margin: 0 0 4px 0;">Your new temporary password:</p>
                 <p style="color: #1e293b; font-size: 18px; font-weight: 600; font-family: monospace; letter-spacing: 1px; margin: 0; background: #f1f5f9; padding: 12px; border-radius: 6px; text-align: center;">${newPassword}</p>
               </div>
-              <p style="color: #94a3b8; font-size: 12px; text-align: center;">Please sign in at <a href="https://rotceh-bc5fe.web.app" style="color: #6366f1;">rotceh-bc5fe.web.app</a> and change your password at your earliest convenience.</p>
+              <p style="color: #94a3b8; font-size: 12px; text-align: center;">Please sign in at <a href="https://rotceh-2.web.app" style="color: #6366f1;">rotceh-2.web.app</a> and change your password at your earliest convenience.</p>
               <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
               <p style="color: #cbd5e1; font-size: 11px; text-align: center;">Amble AI &bull; Healthcare Intelligence Platform</p>
             </div>

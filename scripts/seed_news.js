@@ -6,7 +6,7 @@
  * 
  * Prerequisites:
  *   - GOOGLE_APPLICATION_CREDENTIALS env var set to a service account key
- *     OR run: npx firebase login && npx firebase use amble-ai
+ *     OR run: npx firebase login && npx firebase use rotceh-bc5fe
  *   - firebase-admin installed (already in functions/package.json)
  * 
  * This creates 6 sample news posts in the `news_posts` collection.
@@ -17,7 +17,7 @@ const admin = require('firebase-admin');
 // Initialize with default credentials (uses GOOGLE_APPLICATION_CREDENTIALS or gcloud default)
 if (!admin.apps.length) {
   admin.initializeApp({
-    projectId: 'amble-ai',
+    projectId: 'rotceh-bc5fe',
   });
 }
 

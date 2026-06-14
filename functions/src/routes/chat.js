@@ -17,7 +17,8 @@ const { searchDriveWithServiceAccount } = require('../services/driveSearchServic
 // Vertex AI — authenticated via ADC (the Cloud Function's runtime service
 // account, which has roles/aiplatform.user). No API key needed.
 const VERTEX_PROJECT = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'amble-ai';
-const VERTEX_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+// Latest Gemini (3.x) is served on the Vertex "global" endpoint, not regional.
+const VERTEX_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'global';
 
 // ============================================================================
 // Model Mapping
@@ -29,14 +30,13 @@ function normalizeModel(model) {
   if (model === 'gpt-5-2') return 'gpt-5.2';
   if (model === 'o1-mini') return 'gpt-5-mini';
   if (model === 'o1' || model === 'o1-preview') return 'gpt-5.2';
-  if (model === 'auto') return 'gemini-2.5-flash';
+  if (model === 'auto') return 'gemini-3-flash-preview';
 
-  // Gemini → Vertex GA models. Only gemini-2.5-flash (fast) and gemini-2.5-pro
-  // (pro/reasoning) are available on Vertex in us-central1, so collapse every
-  // Gemini selection (incl. legacy gemini-3-* display names) to those two.
+  // Gemini → latest Vertex (global endpoint) models: 3.1 Pro (pro/reasoning)
+  // and 3 Flash (fast). Collapse every Gemini selection to these two.
   if (typeof model === 'string' && model.startsWith('gemini')) {
-    if (model.includes('pro') || model.includes('thinking')) return 'gemini-2.5-pro';
-    return 'gemini-2.5-flash';
+    if (model.includes('pro') || model.includes('thinking')) return 'gemini-3.1-pro-preview';
+    return 'gemini-3-flash-preview';
   }
 
   return model;
@@ -601,6 +601,12 @@ async function handleChat(req, res, { adminDb, writeJson, readJsonBody }) {
     
     if (isProbablyGeminiModel(model)) {
       result = await handleGeminiChat(req, res, { adminDb, messages, model, stream, userId, useDeepThinking, disableWebTools });
+      // Resilience: if Vertex/Gemini errors (e.g. a preview model rotated out or
+      // a transient Vertex issue), fall back to OpenAI so chat never hard-fails.
+      if (result.status && result.error) {
+        console.warn(`[Chat] Gemini path failed (${result.error}) — falling back to OpenAI`);
+        result = await handleOpenAIChat(req, res, { adminDb, messages, model: 'gpt-5-mini', stream, userId, disableWebTools });
+      }
     } else {
       result = await handleOpenAIChat(req, res, { adminDb, messages, model, stream, userId, disableWebTools });
     }

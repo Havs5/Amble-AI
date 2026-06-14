@@ -55,6 +55,7 @@ export interface UserPermissions {
   accessStudio?: boolean;
   accessKnowledge?: boolean;
   accessPharmacy?: boolean;
+  accessClock?: boolean;
 }
 
 export interface UserCapabilities {

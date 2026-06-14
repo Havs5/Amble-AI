@@ -104,7 +104,7 @@ The single React shell (`app/page.tsx` → `FeatureRouter`) switches between sur
 | Billing CX | `accessBilling` | `BillingView` |
 | Knowledge Base | `accessKnowledge` | `KnowledgeBaseView` |
 | RxConnect (sidebar item, `pharmacies` view id) | `accessPharmacy` | `PharmacyView` (embeds `rxconnect.tweaking.agency`) |
-| Clock In/Out (`clock` view id) | all authenticated users (Manage tab = admin) | `TimeClockView` + `TimeClockService` |
+| Clock In/Out (`clock` view id) | `accessClock` (default **true**); Manage tab = admin | `TimeClockView` + `TimeClockService` |
 | Media Studio | `enableStudio` (capability) | `studio/` + `veo/` |
 | Admin tools (user mgmt, news CRUD, KB admin) | `role === 'admin'` | `modals/`, `admin/`, `news/PostEditor` |
 
@@ -205,7 +205,7 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - ✅ **Keep-alive view router** — `FeatureRouter` mounts each surface once and hides inactive ones (`display:none`) instead of unmounting; instant tab switches + per-tab state persistence (scroll, open KB doc, drafts, RxConnect session)
 
 ### AI provider
-- ✅ **Chat runs on Vertex AI** (`@google/genai`, ADC) with **gemini-2.5-flash** (fast) + **gemini-2.5-pro** (pro) — GA on Vertex `us-central1`; Gemini 3 not available there. OpenAI remains as auto-fallback.
+- ✅ **Chat runs on Vertex AI** (`@google/genai`, ADC, **global** endpoint) with **gemini-3-flash-preview** (fast) + **gemini-3.1-pro-preview** (pro) — latest Gemini on Vertex. Preview IDs can rotate, so the prod handler **falls back to OpenAI (`gpt-5-mini`) on any Gemini error**.
 - ✅ Live Studio (browser Gemini Live) **removed**
 - 🔜 Image (Imagen), video (Veo), video-analysis, and the dev chat route still on the **Gemini Developer API** — queued to move to Vertex next (§8)
 
@@ -242,6 +242,11 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-14 — Gemini 3 (Vertex global) + Clock In/Out permission
+- **Upgraded chat to Gemini 3** — probed the Vertex **global** endpoint and found the latest models there: **`gemini-3-flash-preview`** (fast) + **`gemini-3.1-pro-preview`** (pro). Switched the chat Vertex client to `location: global` and these IDs; picker now shows Gemini 3. (Earlier probe used `us-central1` which doesn't serve Gemini 3.)
+- Added a **Gemini→OpenAI fallback** in the prod chat handler — preview IDs can rotate (e.g. `gemini-3-pro-preview` was retired), so chat degrades to `gpt-5-mini` instead of erroring.
+- **Clock In/Out is now a permission** — `accessClock` (default **true**) with a toggle in User Management → Access Permissions (and the Add-User form); sidebar item gated on it. Added to `UserPermissions` type + new-user defaults.
 
 ### 2026-06-14 — Vertex AI: chat migrated + Live Studio removed
 - **Chat now runs on Vertex AI** (`functions/src/routes/chat.js` → `@google/genai` `vertexai:true`, ADC auth). Enabled `aiplatform.googleapis.com` + granted the function SA `roles/aiplatform.user`.
@@ -297,8 +302,8 @@ Move Gemini usage from the **Gemini Developer API** (API-key) to **Vertex AI** (
 
 **✅ Done (2026-06-14):**
 - GCP: `aiplatform.googleapis.com` **enabled** on amble-ai; runtime SA `1064927104823-compute@developer.gserviceaccount.com` granted **`roles/aiplatform.user`**.
-- Confirmed Vertex models in `us-central1` by probing: **only `gemini-2.5-flash` + `gemini-2.5-pro` are live** (Gemini 3 → 404). So "latest fast/pro" on Vertex = 2.5 Flash / 2.5 Pro.
-- **PROD chat migrated** — `functions/src/routes/chat.js` now uses `@google/genai` Vertex mode (`vertexai:true`, ADC); `normalizeModel` collapses any Gemini selection to `gemini-2.5-flash` (fast) / `gemini-2.5-pro` (pro/thinking). `modelConstants.ts` updated; picker no longer advertises Gemini 3. OpenAI auto-fallback intact.
+- Probed both endpoints: **Gemini 3 is on the `global` endpoint** (not `us-central1` — that's why the first probe 404'd). Live for amble-ai: **`gemini-3-flash-preview`** (fast) + **`gemini-3.1-pro-preview`** (pro); `gemini-3-pro-preview` is retired (404).
+- **PROD chat migrated** — `functions/src/routes/chat.js` uses `@google/genai` Vertex mode (`vertexai:true`, ADC, **`global`** endpoint); `normalizeModel` collapses any Gemini selection to `gemini-3-flash-preview` (fast) / `gemini-3.1-pro-preview` (pro/thinking). `modelConstants.ts` + picker updated to Gemini 3. Added a **Gemini→OpenAI (`gpt-5-mini`) fallback** in the prod handler since preview model IDs can rotate.
 - **Live Studio deleted** (`LiveStudio.tsx` + MediaStudio "Audio" tab) — the browser-side blocker is gone.
 
 **🔜 Remaining (next session) — move the rest off the Gemini Developer API onto Vertex:**

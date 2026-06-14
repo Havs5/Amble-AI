@@ -9,6 +9,7 @@ const DEFAULT_PERMISSIONS = {
   accessStudio: false,
   accessKnowledge: false,
   accessPharmacy: false,
+  accessClock: true,
 };
 
 // Default capabilities for new users

@@ -10,8 +10,7 @@ export const MODEL_CATEGORIES = [
     models: [
       { id: 'gpt-5-nano', name: 'GPT-5 Nano ⚡' },
       { id: 'gpt-5-mini', name: 'GPT-5 Mini' },
-      { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite ⚡' },
-      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+      { id: 'gemini-3-flash', name: 'Gemini 3 Flash ⚡ NEW' },
     ]
   },
   {
@@ -19,7 +18,7 @@ export const MODEL_CATEGORIES = [
     models: [
       { id: 'gpt-5.2', name: 'GPT-5.2 🔥 NEW' },
       { id: 'gpt-5', name: 'GPT-5' },
-      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro 🧠' },
+      { id: 'gemini-3-pro', name: 'Gemini 3.1 Pro 🧠 NEW' },
     ]
   },
   {
@@ -28,7 +27,7 @@ export const MODEL_CATEGORIES = [
       { id: 'o4-mini', name: 'o4 Mini (Fast Reasoning)' },
       { id: 'o3', name: 'o3 (Reasoning)' },
       { id: 'o3-pro', name: 'o3 Pro 🧠' },
-      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Deep Think)' },
+      { id: 'gemini-3-pro', name: 'Gemini 3.1 Pro (Deep Think)' },
     ]
   }
 ];
@@ -50,14 +49,14 @@ export const MODEL_MAPPING: Record<Provider, Record<string, string>> = {
     'agent-researcher': 'gpt-5.2',
     'agent-coder': 'o3'
   },
-  // Vertex AI GA models (us-central1): only gemini-2.5-flash / gemini-2.5-pro.
+  // Vertex AI (global endpoint) latest Gemini: 3 Flash (fast) + 3.1 Pro.
   google: {
     auto: 'auto',
-    instant: 'gemini-2.5-flash',
-    thinking: 'gemini-2.5-pro', // Uses thinking budget
-    'agent-planner': 'gemini-2.5-pro',
-    'agent-researcher': 'gemini-2.5-pro',
-    'agent-coder': 'gemini-2.5-pro'
+    instant: 'gemini-3-flash-preview',
+    thinking: 'gemini-3.1-pro-preview',
+    'agent-planner': 'gemini-3.1-pro-preview',
+    'agent-researcher': 'gemini-3.1-pro-preview',
+    'agent-coder': 'gemini-3.1-pro-preview'
   },
 };
 

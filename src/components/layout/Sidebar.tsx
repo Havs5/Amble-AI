@@ -72,6 +72,7 @@ export function Sidebar({
     accessPharmacy: user?.permissions?.accessPharmacy ?? false,
     accessStudio: user?.permissions?.accessStudio ?? false,
     accessKnowledge: user?.permissions?.accessKnowledge ?? (user?.role === 'admin'),
+    accessClock: user?.permissions?.accessClock ?? true,
   };
 
   // Click Outside to Close Settings
@@ -196,7 +197,7 @@ export function Sidebar({
         />
         )}
 
-        {/* Time clock — available to everyone */}
+        {permissions.accessClock && (
         <NavItem
           icon={Clock}
           label="Clock In/Out"
@@ -204,6 +205,7 @@ export function Sidebar({
           isExpanded={isExpanded}
           onClick={() => { onViewChange('clock'); onCloseMobile?.(); }}
         />
+        )}
 
         {enableStudio && (
         <NavItem

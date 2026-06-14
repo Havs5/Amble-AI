@@ -219,7 +219,7 @@ sequenceDiagram
 
 ## 7. AI Pipeline
 
-> **Provider note (2026-06-14):** **Chat now runs on Vertex AI** — `functions/src/routes/chat.js` uses `@google/genai` in Vertex mode (`vertexai:true`, **ADC** auth via the function's runtime service account, which has `roles/aiplatform.user`). Models: **`gemini-2.5-flash`** (fast) and **`gemini-2.5-pro`** (pro/reasoning) — the GA Gemini models available on Vertex in `us-central1` (Gemini 3 is **not** there yet; `normalizeModel` collapses any Gemini selection to these two). Gemini failures still auto-fall back to OpenAI. **Still on the Gemini Developer API (API key), queued to move to Vertex next:** image (Imagen, `image.js`), video (Veo, `video.js` + `veo/route.ts`), video-analysis (`videoAnalyze.js`), and the dev-only `src/app/api/chat/route.ts`. The browser **Live Studio was removed** (it couldn't use Vertex). See [SOURCE_OF_TRUTH.md §8](./SOURCE_OF_TRUTH.md#8-open-items--next-session).
+> **Provider note (2026-06-14):** **Chat runs on Vertex AI** — `functions/src/routes/chat.js` uses `@google/genai` in Vertex mode (`vertexai:true`, **ADC** auth via the runtime service account with `roles/aiplatform.user`) on the **`global`** endpoint. Models: **`gemini-3-flash-preview`** (fast) and **`gemini-3.1-pro-preview`** (pro/reasoning) — the latest Gemini on Vertex (`normalizeModel` collapses any Gemini selection to these two). These are *preview* IDs that can rotate (e.g. `gemini-3-pro-preview` was retired), so the handler **falls back to OpenAI (`gpt-5-mini`) on any Gemini error** — chat never hard-fails. ⚠️ Gemini 3 is on the **global** endpoint, not regional `us-central1`. **Still on the Gemini Developer API (API key), queued to move to Vertex next:** image (Imagen, `image.js`), video (Veo, `video.js` + `veo/route.ts`), video-analysis (`videoAnalyze.js`), and the dev-only `src/app/api/chat/route.ts`. The browser **Live Studio was removed**. See [SOURCE_OF_TRUTH.md §8](./SOURCE_OF_TRUTH.md#8-open-items--next-session).
 
 ### 7.1 Model routing (MagicRouter)
 
@@ -316,7 +316,7 @@ flowchart TD
     CTX --> GATE["FeatureRouter + Sidebar gating"]
 ```
 
-**Permissions** gate whole surfaces: `accessAmble`, `accessBilling`, `accessKnowledge`, `accessPharmacy`. **Capabilities** gate features: `enableStudio`, `dictation`, `webBrowse`, `imageGen`, etc. **Admin-only** (`role==='admin'`): user management, pre-registration, KB admin, news CRUD (also enforced by Firestore rules).
+**Permissions** gate whole surfaces: `accessAmble`, `accessBilling`, `accessKnowledge`, `accessPharmacy`, `accessClock` (time clock — defaults to `true`). **Capabilities** gate features: `enableStudio`, `dictation`, `webBrowse`, `imageGen`, etc. All editable per-user in the User Management modal's Access Permissions panel. **Admin-only** (`role==='admin'`): user management, pre-registration, KB admin, news CRUD (also enforced by Firestore rules).
 
 > ⚠️ **Security note:** most API routes trust a `userId` in the body without verifying the Firebase ID token, and the inline `/api/admin/*` Functions handlers have **no auth**. Firestore rules are the real security boundary. Tracked in the [SOT](./SOURCE_OF_TRUTH.md#known-issues--risks).
 

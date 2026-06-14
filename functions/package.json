@@ -1,6 +1,6 @@
 {
-  "name": "rotceh-functions",
-  "description": "Cloud Functions for Rotceh AI",
+  "name": "amble-ai-functions",
+  "description": "Cloud Functions for Amble AI",
   "scripts": {
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",

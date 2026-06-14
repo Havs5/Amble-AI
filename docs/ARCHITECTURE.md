@@ -219,7 +219,7 @@ sequenceDiagram
 
 ## 7. AI Pipeline
 
-> **Provider note (2026-06):** Gemini is currently called via the **Gemini Developer API** (API-key auth) through `@google/generative-ai` (chat) and `@google/genai` (image/video/live). A migration to **Vertex AI** (ADC/service-account auth, latest models) is planned — see the step-by-step plan in [SOURCE_OF_TRUTH.md §6/§8](./SOURCE_OF_TRUTH.md#roadmap--backlog). It is staged separately because it touches the live chat across two SDKs and needs GCP-side enablement + IAM.
+> **Provider note (2026-06-14):** **Chat now runs on Vertex AI** — `functions/src/routes/chat.js` uses `@google/genai` in Vertex mode (`vertexai:true`, **ADC** auth via the function's runtime service account, which has `roles/aiplatform.user`). Models: **`gemini-2.5-flash`** (fast) and **`gemini-2.5-pro`** (pro/reasoning) — the GA Gemini models available on Vertex in `us-central1` (Gemini 3 is **not** there yet; `normalizeModel` collapses any Gemini selection to these two). Gemini failures still auto-fall back to OpenAI. **Still on the Gemini Developer API (API key), queued to move to Vertex next:** image (Imagen, `image.js`), video (Veo, `video.js` + `veo/route.ts`), video-analysis (`videoAnalyze.js`), and the dev-only `src/app/api/chat/route.ts`. The browser **Live Studio was removed** (it couldn't use Vertex). See [SOURCE_OF_TRUTH.md §8](./SOURCE_OF_TRUTH.md#8-open-items--next-session).
 
 ### 7.1 Model routing (MagicRouter)
 

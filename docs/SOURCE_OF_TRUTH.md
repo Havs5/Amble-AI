@@ -205,8 +205,9 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - ✅ **Keep-alive view router** — `FeatureRouter` mounts each surface once and hides inactive ones (`display:none`) instead of unmounting; instant tab switches + per-tab state persistence (scroll, open KB doc, drafts, RxConnect session)
 
 ### AI provider
-- ✅ Chat/vision/media run on **Gemini Developer API** (API key) + OpenAI; MagicRouter auto-routes
-- 🔜 **Vertex AI migration planned** (latest models, ADC auth) — see Roadmap §6 + Open Items §8
+- ✅ **Chat runs on Vertex AI** (`@google/genai`, ADC) with **gemini-2.5-flash** (fast) + **gemini-2.5-pro** (pro) — GA on Vertex `us-central1`; Gemini 3 not available there. OpenAI remains as auto-fallback.
+- ✅ Live Studio (browser Gemini Live) **removed**
+- 🔜 Image (Imagen), video (Veo), video-analysis, and the dev chat route still on the **Gemini Developer API** — queued to move to Vertex next (§8)
 
 ---
 
@@ -216,7 +217,7 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 | Item | Scope | Acceptance | Status |
 |------|-------|-----------|--------|
 | **Revert to amble-ai** | §2 checklist | App builds + signs in + deploys on amble-ai | ✅ done (login verified) |
-| **Vertex AI migration** | Move Gemini calls Developer API → Vertex (latest models) | Chat/image/video work via Vertex on amble-ai; no regressions | 🔜 planned — full step plan in §8 |
+| **Vertex AI migration** | Gemini → Vertex | Chat on Vertex (2.5 flash/pro) ✅; image/video/analyze remaining | 🔧 chat shipped — rest queued (§8) |
 
 ### Near-term (tech debt — from prior audits, still open)
 - [ ] **Consolidate system prompt** — `lib/systemPrompt.ts` vs inline `ENHANCED_SYSTEM_PROMPT` in `route.ts` (drift risk).
@@ -241,6 +242,12 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-14 — Vertex AI: chat migrated + Live Studio removed
+- **Chat now runs on Vertex AI** (`functions/src/routes/chat.js` → `@google/genai` `vertexai:true`, ADC auth). Enabled `aiplatform.googleapis.com` + granted the function SA `roles/aiplatform.user`.
+- Probed Vertex `us-central1`: only **gemini-2.5-flash** + **gemini-2.5-pro** available (Gemini 3 = 404). `normalizeModel` + `modelConstants.ts` updated to those two; picker no longer shows Gemini 3. OpenAI fallback unchanged.
+- **Removed Live Studio** (`LiveStudio.tsx` + MediaStudio Audio tab) — not used, and couldn't run on Vertex (browser-side).
+- Build clean; deployed. **Remaining Vertex work (image/video/video-analysis/dev route) documented in §8** for next session.
 
 ### 2026-06-14 — Clock In/Out (time clock) feature
 - New **Clock In/Out** surface (`clock` view, sidebar item for all users): employee punch in/out with live clock + status, **My Timecard** weekly view (daily/week totals), and an admin **Manage** panel to adjust/add/delete any employee's entries.
@@ -288,25 +295,19 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ### 1. 🚧 Vertex AI migration (primary next task)
 Move Gemini usage from the **Gemini Developer API** (API-key) to **Vertex AI** (ADC/service-account, latest models). Scoped but not yet implemented — it touches the live chat across two SDKs, so do it as a focused, tested change.
 
-**GCP prerequisites (do first):**
-1. Enable `aiplatform.googleapis.com` on `amble-ai` (`gcloud services enable aiplatform.googleapis.com --project amble-ai`).
-2. Grant the Cloud Function runtime service account (default `1064927104823-compute@developer.gserviceaccount.com`, or the function's configured SA) **`roles/aiplatform.user`**.
-3. Pick a region — `us-central1` (matches the function) — and confirm the target models are available there on Vertex.
+**✅ Done (2026-06-14):**
+- GCP: `aiplatform.googleapis.com` **enabled** on amble-ai; runtime SA `1064927104823-compute@developer.gserviceaccount.com` granted **`roles/aiplatform.user`**.
+- Confirmed Vertex models in `us-central1` by probing: **only `gemini-2.5-flash` + `gemini-2.5-pro` are live** (Gemini 3 → 404). So "latest fast/pro" on Vertex = 2.5 Flash / 2.5 Pro.
+- **PROD chat migrated** — `functions/src/routes/chat.js` now uses `@google/genai` Vertex mode (`vertexai:true`, ADC); `normalizeModel` collapses any Gemini selection to `gemini-2.5-flash` (fast) / `gemini-2.5-pro` (pro/thinking). `modelConstants.ts` updated; picker no longer advertises Gemini 3. OpenAI auto-fallback intact.
+- **Live Studio deleted** (`LiveStudio.tsx` + MediaStudio "Audio" tab) — the browser-side blocker is gone.
 
-**Code changes (all server-side):**
-- Prefer the **new `@google/genai`** SDK in Vertex mode: `new GoogleGenAI({ vertexai: true, project: 'amble-ai', location: 'us-central1' })` (uses ADC — no API key). Drop `GEMINI_API_KEY` for these paths.
-- **Rewrite the legacy `@google/generative-ai` call-sites** (they don't support Vertex) to `@google/genai`:
-  - `functions/src/routes/chat.js` (**PROD chat** — highest risk; test hard)
-  - `src/app/api/chat/route.ts` (dev chat)
-  - `functions/src/routes/videoAnalyze.js` (uses `GoogleAIFileManager` — needs Vertex-compatible file handling / GCS)
-- Already on `@google/genai` (switch the constructor to Vertex): `functions/src/routes/image.js` (Imagen), `functions/src/routes/video.js` (Veo), `src/app/api/veo/route.ts`.
-- **Model-name remap** (`src/utils/modelConstants.ts` + chat routes): Vertex model IDs differ (e.g. `gemini-2.0-flash-001`, `gemini-2.5-pro`, latest `gemini-3-*` as available). Verify each is enabled on Vertex in the chosen region.
-- `driveSearchService.js` binary extraction (`GEMINI_API_KEY`) → Vertex or leave on Developer API short-term.
-
-**Cannot move to Vertex as-is:**
-- `src/components/studio/LiveStudio.tsx` runs in the **browser** with `NEXT_PUBLIC_GEMINI_API_KEY`. Vertex needs server creds, so the Live API must stay on the Developer API **or** be proxied through a server endpoint. Decide per appetite.
-
-**Rollout:** implement on a branch → test chat + image + video locally → deploy → smoke test all three on amble-ai → keep `GEMINI_API_KEY` until verified, then retire from Vertex paths. Acceptance: chat/image/video all work via Vertex with no regressions.
+**🔜 Remaining (next session) — move the rest off the Gemini Developer API onto Vertex:**
+- `functions/src/routes/image.js` (Imagen) — switch constructor to Vertex; **find the Vertex Imagen model id** (current `imagen-2.0-generate-001` is a Developer-API id; Vertex uses e.g. `imagen-3.0-generate-002` / `imagen-3.0-fast-generate-001` — probe first).
+- `functions/src/routes/video.js` + `src/app/api/veo/route.ts` (Veo) — Veo on Vertex is a **long-running operation** API and differs from the Developer-API `generateVideos`; needs a careful rewrite + a Vertex Veo model id.
+- `functions/src/routes/videoAnalyze.js` — replace `GoogleAIFileManager` (Developer-API file upload) with Vertex-compatible input (inline bytes or a GCS URI).
+- `src/app/api/chat/route.ts` (dev-only chat) — mirror the chat.js change; needs local ADC (`gcloud auth application-default login`) for `next dev`.
+- `functions/src/services/driveSearchService.js` binary OCR (`GEMINI_API_KEY`) — optional move.
+- Once all paths are off it, retire `GEMINI_API_KEY`. **Probe each Vertex model id (`…:generateContent`/`:predict`) before wiring** — these features have no fallback, unlike chat.
 
 ### 2. Near-term tech debt (from §6)
 System-prompt consolidation, route de-dup (Functions vs Next), auth on admin endpoints, prune `functions/package.json`.

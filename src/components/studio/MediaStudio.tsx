@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { Sparkles, Film, Image, Radio } from 'lucide-react';
+import { Sparkles, Film, Image } from 'lucide-react';
 import { ImageStudio } from './ImageStudio';
 import { VideoStudio } from './VideoStudio';
-import { LiveStudio } from './LiveStudio';
 
 export const MediaStudio: React.FC = () => {
-  const [studioTab, setStudioTab] = useState<'video' | 'media' | 'live'>('media');
+  const [studioTab, setStudioTab] = useState<'video' | 'media'>('media');
 
   return (
     <div className="flex h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
@@ -25,19 +24,12 @@ export const MediaStudio: React.FC = () => {
                 <Image size={18} />
                 Image Studio
             </button>
-            <button 
+            <button
                 onClick={() => setStudioTab('video')}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${studioTab === 'video' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
             >
                 <Film size={18} />
                 Video Generation
-            </button>
-            <button 
-                onClick={() => setStudioTab('live')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${studioTab === 'live' ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-            >
-                <Radio size={18} />
-                Audio Studio
             </button>
         </nav>
         <div className="p-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 text-center">
@@ -51,8 +43,6 @@ export const MediaStudio: React.FC = () => {
             <VideoStudio />
         ) : studioTab === 'media' ? (
             <ImageStudio />
-        ) : studioTab === 'live' ? (
-            <LiveStudio />
         ) : null}
       </div>
     </div>

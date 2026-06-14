@@ -19,8 +19,7 @@ export const MODEL_CATEGORIES = [
     models: [
       { id: 'gpt-5.2', name: 'GPT-5.2 🔥 NEW' },
       { id: 'gpt-5', name: 'GPT-5' },
-      { id: 'gemini-3-flash', name: 'Gemini 3 Flash 🔥 NEW' },
-      { id: 'gemini-3-pro', name: 'Gemini 3 Pro 🧠' },
+      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro 🧠' },
     ]
   },
   {
@@ -51,13 +50,14 @@ export const MODEL_MAPPING: Record<Provider, Record<string, string>> = {
     'agent-researcher': 'gpt-5.2',
     'agent-coder': 'o3'
   },
+  // Vertex AI GA models (us-central1): only gemini-2.5-flash / gemini-2.5-pro.
   google: {
     auto: 'auto',
     instant: 'gemini-2.5-flash',
     thinking: 'gemini-2.5-pro', // Uses thinking budget
-    'agent-planner': 'gemini-3-pro-preview',
-    'agent-researcher': 'gemini-3-pro-preview',
-    'agent-coder': 'gemini-3-pro-preview'
+    'agent-planner': 'gemini-2.5-pro',
+    'agent-researcher': 'gemini-2.5-pro',
+    'agent-coder': 'gemini-2.5-pro'
   },
 };
 

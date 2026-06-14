@@ -7,12 +7,17 @@
  */
 
 const OpenAI = require('openai');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const { logUsageToFirestore } = require('../services/usageService');
 const { searchKnowledgeBase } = require('../services/knowledgeService');
 const { searchTavily, extractTavily } = require('../services/searchService');
 const { analyzeSearchIntent, intelligentSearch, formatSearchContext } = require('../services/intelligentSearch');
 const { searchDriveWithServiceAccount } = require('../services/driveSearchService');
+
+// Vertex AI — authenticated via ADC (the Cloud Function's runtime service
+// account, which has roles/aiplatform.user). No API key needed.
+const VERTEX_PROJECT = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'amble-ai';
+const VERTEX_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
 
 // ============================================================================
 // Model Mapping
@@ -24,16 +29,16 @@ function normalizeModel(model) {
   if (model === 'gpt-5-2') return 'gpt-5.2';
   if (model === 'o1-mini') return 'gpt-5-mini';
   if (model === 'o1' || model === 'o1-preview') return 'gpt-5.2';
-  if (model === 'auto') return 'gemini-3-flash-preview';
-  
-  // Gemini 3 series
-  if (model === 'gemini-3-flash') return 'gemini-3-flash-preview';
-  if (model === 'gemini-3-pro') return 'gemini-3-pro-preview';
-  if (model === 'gemini-3-thinking') return 'gemini-3-pro-preview';
-  if (model === 'gemini-2.5-pro') return 'gemini-2.5-pro';
-  if (model === 'gemini-2.5-flash') return 'gemini-2.5-flash';
-  if (model.includes('gemini-2.0')) return 'gemini-2.0-flash';
-  
+  if (model === 'auto') return 'gemini-2.5-flash';
+
+  // Gemini → Vertex GA models. Only gemini-2.5-flash (fast) and gemini-2.5-pro
+  // (pro/reasoning) are available on Vertex in us-central1, so collapse every
+  // Gemini selection (incl. legacy gemini-3-* display names) to those two.
+  if (typeof model === 'string' && model.startsWith('gemini')) {
+    if (model.includes('pro') || model.includes('thinking')) return 'gemini-2.5-pro';
+    return 'gemini-2.5-flash';
+  }
+
   return model;
 }
 
@@ -194,68 +199,52 @@ async function executeToolCall(toolName, args) {
 // ============================================================================
 
 async function handleGeminiChat(req, res, { adminDb, messages, model, stream, userId, useDeepThinking, disableWebTools }) {
-  if (!process.env.GEMINI_API_KEY) {
-    return { status: 500, error: 'GEMINI_API_KEY is missing' };
-  }
+  // Vertex AI client (ADC auth via the function's runtime service account).
+  const ai = new GoogleGenAI({ vertexai: true, project: VERTEX_PROJECT, location: VERTEX_LOCATION });
 
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  
-  const generationConfig = {
-    temperature: 1.0,
-    maxOutputTokens: 8192,
-  };
-  
-  if (useDeepThinking && model.includes('gemini-3')) {
-    generationConfig.thinkingConfig = { thinkingLevel: 'high' };
-  }
-  
   // Combine ALL system messages so KB context injected as a later system msg isn't lost
   const allSystemMsgs = messages.filter(m => m?.role === 'system');
   const combinedSystemContent = allSystemMsgs.map(m => m.content).join('\n\n');
-  
-  const geminiModel = genAI.getGenerativeModel({ 
-    model,
-    systemInstruction: combinedSystemContent || undefined,
-    tools: disableWebTools ? undefined : GEMINI_TOOLS,
-    generationConfig
-  });
 
-  const history = messages
+  const config = {
+    temperature: 1.0,
+    maxOutputTokens: 8192,
+  };
+  if (combinedSystemContent) config.systemInstruction = combinedSystemContent;
+  if (!disableWebTools) config.tools = GEMINI_TOOLS;
+
+  // Build the conversation as `contents` (system goes in config, not contents).
+  let contents = messages
     .filter(m => m?.role !== 'system')
-    .slice(0, -1)
     .map(m => ({
       role: m.role === 'user' ? 'user' : 'model',
       parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }],
     }));
-    
-  const chat = geminiModel.startChat({ history });
-  const lastMsg = messages[messages.length - 1];
-  const userMessage = typeof lastMsg.content === 'string' ? lastMsg.content : JSON.stringify(lastMsg.content);
 
-  let result, response, functionCalls;
-
+  let response;
   try {
-    result = await chat.sendMessage(userMessage);
-    response = await result.response;
-    functionCalls = response.functionCalls();
+    response = await ai.models.generateContent({ model, contents, config });
   } catch (err) {
-    console.error(`[Gemini API Error] Model: ${model}, Message: ${err.message}`);
-    return { 
-      status: 400, 
-      error: `Gemini API Error (${model})`, 
-      details: err.message 
+    console.error(`[Gemini/Vertex Error] Model: ${model}, Message: ${err.message}`);
+    return {
+      status: 400,
+      error: `Gemini API Error (${model})`,
+      details: err.message,
     };
   }
 
-  // Handle Tool Calls
+  // Handle Tool Calls (manual multi-turn loop — generateContent is stateless)
   let executedToolCalls = [];
-  while (functionCalls?.length > 0) {
+  let functionCalls = response.functionCalls; // getter → array | undefined
+  while (functionCalls && functionCalls.length > 0) {
+    // Append the model's function-call turn, then our function responses.
+    const modelTurn = response.candidates?.[0]?.content;
+    if (modelTurn) contents.push(modelTurn);
+
     const toolParts = [];
-    
     for (const call of functionCalls) {
-      console.log(`[Chat-Gemini] Tool Call: ${call.name}`);
-      let functionResponse = { result: "No result" };
-      
+      console.log(`[Chat-Gemini/Vertex] Tool Call: ${call.name}`);
+      let functionResponse = { result: 'No result' };
       try {
         const toolResult = await executeToolCall(call.name, call.args);
         executedToolCalls.push(toolResult);
@@ -263,27 +252,27 @@ async function handleGeminiChat(req, res, { adminDb, messages, model, stream, us
       } catch (err) {
         functionResponse = { error: err.message };
       }
-      
       toolParts.push({
         functionResponse: {
           name: call.name,
-          response: { name: call.name, content: functionResponse }
-        }
+          response: { name: call.name, content: functionResponse },
+        },
       });
     }
-    
-    result = await chat.sendMessage(toolParts);
-    response = await result.response;
-    functionCalls = response.functionCalls();
+    contents.push({ role: 'user', parts: toolParts });
+
+    response = await ai.models.generateContent({ model, contents, config });
+    functionCalls = response.functionCalls;
   }
 
-  const text = response.text();
-  const usage = { 
-    total_tokens: response.usageMetadata?.totalTokenCount || 0,
-    input_tokens: response.usageMetadata?.promptTokenCount || 0,
-    output_tokens: response.usageMetadata?.candidatesTokenCount || 0
+  const text = response.text || '';
+  const um = response.usageMetadata || {};
+  const usage = {
+    total_tokens: um.totalTokenCount || 0,
+    input_tokens: um.promptTokenCount || 0,
+    output_tokens: um.candidatesTokenCount || 0,
   };
-  
+
   await logUsageToFirestore(adminDb, userId, model, usage);
 
   return { text, usage, toolCalls: executedToolCalls };

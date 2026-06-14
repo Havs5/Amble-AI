@@ -463,8 +463,10 @@ flowchart TD
         AW --> AD["addManualEntry() for any employee"]
         AW --> DL["deleteEntry()"]
     end
-    CI & CO & WK & ED & AD & DL --> FS[("Firestore time_entries<br/>idx: userId+clockIn · userId+clockOut")]
+    CI & CO & WK & ED & AD & DL --> FS[("Firestore time_entries<br/>user views query by userId, week-filtered client-side")]
 ```
+
+> Employee views (`subscribeOpenEntry`, `subscribeUserWeek`) query by `userId` equality only (single auto index) and filter the week/open-state in the client — so they work without waiting on composite-index builds. The admin `subscribeAllWeek` uses a `clockIn` range (single-field index).
 
 **Service:** `services/timeclock/TimeClockService.ts` (Firestore ops + Mon–Sun week/duration utils). **View:** `components/views/TimeClockView.tsx` (tabs: Punch · My Timecard · Manage[admin]). Sidebar item **Clock In/Out** (`clock` view id) is visible to all authenticated users; the **Manage** tab is admin-only and additionally enforced by rules.
 

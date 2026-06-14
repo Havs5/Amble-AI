@@ -96,15 +96,21 @@ function mapDoc(d: any): TimeEntry {
 
 // ─── Realtime subscriptions ────────────────────────────────────────────────
 
+// NOTE: user-scoped subscriptions query by `userId` equality only (a single
+// auto-created index) and then filter/sort in the client. This avoids any
+// dependency on composite indexes being built and works the instant the
+// feature ships. A user's entry count is small (a few punches per day).
+
 /** Current open (un-punched-out) entry for a user, or null. */
 export function subscribeOpenEntry(userId: string, cb: (entry: TimeEntry | null) => void): () => void {
   if (!db || !userId) return () => {};
-  const q = query(collection(db, COL), where('userId', '==', userId), where('clockOut', '==', null));
+  const q = query(collection(db, COL), where('userId', '==', userId));
   return onSnapshot(
     q,
     (snap) => {
       const open = snap.docs
         .map(mapDoc)
+        .filter((e) => e.clockOut == null)
         .sort((a, b) => b.clockIn.toMillis() - a.clockIn.toMillis())[0] || null;
       cb(open);
     },
@@ -118,16 +124,21 @@ export function subscribeOpenEntry(userId: string, cb: (entry: TimeEntry | null)
 /** All of one user's entries for the week containing `weekStart`. */
 export function subscribeUserWeek(userId: string, weekStart: Date, cb: (entries: TimeEntry[]) => void): () => void {
   if (!db || !userId) return () => {};
-  const q = query(
-    collection(db, COL),
-    where('userId', '==', userId),
-    where('clockIn', '>=', Timestamp.fromDate(startOfWeek(weekStart))),
-    where('clockIn', '<=', Timestamp.fromDate(endOfWeek(weekStart))),
-    orderBy('clockIn', 'asc')
-  );
+  const s = startOfWeek(weekStart).getTime();
+  const e = endOfWeek(weekStart).getTime();
+  const q = query(collection(db, COL), where('userId', '==', userId));
   return onSnapshot(
     q,
-    (snap) => cb(snap.docs.map(mapDoc)),
+    (snap) => {
+      const entries = snap.docs
+        .map(mapDoc)
+        .filter((en) => {
+          const t = en.clockIn.toMillis();
+          return t >= s && t <= e;
+        })
+        .sort((a, b) => a.clockIn.toMillis() - b.clockIn.toMillis());
+      cb(entries);
+    },
     (err) => {
       console.warn('[TimeClock] user-week subscription error', err);
       cb([]);

@@ -103,7 +103,7 @@ The single React shell (`app/page.tsx` → `FeatureRouter`) switches between sur
 | Amble AI (Chat) | `accessAmble` | `chat/` + `ChatContext` |
 | Billing CX | `accessBilling` | `BillingView` |
 | Knowledge Base | `accessKnowledge` | `KnowledgeBaseView` |
-| Pharmacies | `accessPharmacy` | `PharmacyView` |
+| RxConnect (sidebar item, `pharmacies` view id) | `accessPharmacy` | `PharmacyView` (embeds `rxconnect.tweaking.agency`) |
 | Media Studio | `enableStudio` (capability) | `studio/` + `veo/` |
 | Admin tools (user mgmt, news CRUD, KB admin) | `role === 'admin'` | `modals/`, `admin/`, `news/PostEditor` |
 
@@ -187,8 +187,14 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - ✅ Admin password reset with branded email notification
 - ✅ Permission/capability gating across UI + Firestore rules
 
-### Pharmacy
-- ✅ `PharmacyView` (pharmacy directory surface)
+### RxConnect (formerly Pharmacy)
+- ✅ Single embedded external portal — `https://rxconnect.tweaking.agency/login` in a full-height iframe (`PharmacyView`), with loading state, error fallback, refresh, and open-in-new-tab
+- ✅ Session persists across tab switches via keep-alive rendering
+- 🗑️ Removed the old multi-pharmacy switcher (Revive/Align), `PharmacySidebar`, and the `activePharmacy`/`mountedPharmacies` plumbing
+- ⚠️ Depends on RxConnect allowing itself to be framed (no restrictive `X-Frame-Options`/CSP `frame-ancestors`); the header's "open in new tab" is the fallback if it blocks embedding
+
+### Platform
+- ✅ **Keep-alive view router** — `FeatureRouter` mounts each surface once and hides inactive ones (`display:none`) instead of unmounting; instant tab switches + per-tab state persistence (scroll, open KB doc, drafts, RxConnect session)
 
 ---
 
@@ -223,10 +229,15 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
-### 2026-06-14 — Docs consolidation + project revert (in progress)
+### 2026-06-14 — RxConnect embed + keep-alive navigation
+- **Keep-alive view router** (`FeatureRouter`): surfaces are mounted once and hidden (`display:none`) instead of unmounted on tab switch. Fixes (a) the laggy nav/sidebar-collapse caused by heavy views remounting and (b) loss of per-tab state — you now return to the same scroll/open-doc/draft when switching tabs.
+- **Replaced the Pharmacy module with RxConnect**: `PharmacyView` now embeds `https://rxconnect.tweaking.agency/login` in a single iframe. Removed `PharmacySidebar`, the Revive/Align switcher, and the `activePharmacy`/`mountedPharmacies` plumbing in `AmbleApp`. Sidebar item renamed **Pharmacies → RxConnect** (view id stays `pharmacies`).
+- Build verified clean (24/24 pages). Deployed to amble-ai.
+
+### 2026-06-14 — Docs consolidation + project revert ✅
 - Consolidated `docs/` down to **two** living docs: `ARCHITECTURE.md` (with Mermaid flowcharts) + this `SOURCE_OF_TRUTH.md`. Deleted the legacy 00–09 + CHANGELOG split docs (content folded in here).
 - Full re-analysis of the codebase; verified architecture unchanged since the March audit (the May commits only swapped project IDs).
-- **Began reverting** the rotceh-2 migration back to `amble-ai` (see §2). OAuth credential restore outstanding.
+- **Reverted** the rotceh-2 migration back to `amble-ai` (see §2): all config + `.env.local` restored, deployed, OAuth client + secret realigned (Firebase Auth Google provider secret updated to match). **Login verified working on https://amble-ai.web.app.**
 
 ### 2026-05-25 — ⚠️ Project migration to rotceh-2 (being reverted)
 - `c2bb5ff` migrate amble-ai → rotceh-bc5fe; `fdc0b20` correct to rotceh-2; `945bd76` OAuth → rotceh-2. Re-added `storage.rules` to `firebase.json`. **These are the changes §2 reverses.**

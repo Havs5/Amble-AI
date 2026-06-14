@@ -189,7 +189,7 @@ export function Sidebar({
         {permissions.accessPharmacy && (
         <NavItem
           icon={Pill}
-          label="Pharmacies"
+          label="RxConnect"
           isActive={activeView === 'pharmacies'}
           isExpanded={isExpanded}
           onClick={() => { onViewChange('pharmacies'); onCloseMobile?.(); }}

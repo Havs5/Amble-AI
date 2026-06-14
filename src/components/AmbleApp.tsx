@@ -6,7 +6,6 @@ import { Toaster, toast as sonnerToast } from 'sonner';
 
 // Core Components (load immediately)
 import { Sidebar } from './layout/Sidebar';
-import { PharmacySidebar, PharmacyType } from './layout/PharmacySidebar';
 import { CapabilitiesDock } from './ai/CapabilitiesDock';
 import Login from './auth/LoginRefactored';
 import { SplashScreen } from './ui/SplashScreen';
@@ -80,19 +79,6 @@ function AmbleAppContent() {
   const [chatSessionToken, setChatSessionToken] = useState(0);
   const [qaEnabled, setQaEnabled] = useState(true);
   const [resetKey, setResetKey] = useState(0);
-
-  // --- PHARMACY STATE ---
-  const [activePharmacy, setActivePharmacy] = useState<PharmacyType | null>(null);
-  // Track mounted pharmacies to keep their iframes alive for session persistence
-  const [mountedPharmacies, setMountedPharmacies] = useState<Set<PharmacyType>>(new Set());
-  // Track collapsed state for pharmacy sidebar
-  const [isPharmacySidebarCollapsed, setIsPharmacySidebarCollapsed] = useState(false);
-
-  // When a pharmacy is selected, add it to mounted set so iframe persists
-  const handleSelectPharmacy = (pharmacy: PharmacyType) => {
-    setActivePharmacy(pharmacy);
-    setMountedPharmacies(prev => new Set(prev).add(pharmacy));
-  };
 
   // --- VOICE CONTROL ---
   const { isRecording, isProcessing, toggleRecording } = useAiDictation({
@@ -388,25 +374,8 @@ function AmbleAppContent() {
 
       {/* PROJECT SIDEBAR removed from amble view for cleaner UX - ChatInterface has its own sidebar */}
 
-      {/* PHARMACY SIDEBAR (Only in Pharmacies view) */}
-      {nav.activeView === 'pharmacies' && (
-        <PharmacySidebar 
-          activePharmacy={activePharmacy}
-          onSelectPharmacy={handleSelectPharmacy}
-          isCollapsed={isPharmacySidebarCollapsed}
-          onCollapsedChange={setIsPharmacySidebarCollapsed}
-        />
-      )}
-
       {/* MAIN CONTENT */}
-      <div 
-        className="flex-1 flex flex-col h-screen overflow-hidden"
-        onMouseEnter={() => {
-          if (nav.activeView === 'pharmacies') {
-            setIsPharmacySidebarCollapsed(true);
-          }
-        }}
-      >
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Mobile top bar */}
         <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
           <button
@@ -463,10 +432,6 @@ function AmbleAppContent() {
              policies: config.billingPolicies,
              setToast,
              onHelp: () => nav.setShowHelpModal(true)
-           }}
-           pharmacyProps={{
-             activePharmacy,
-             mountedPharmacies
            }}
            dashboardProps={{
              userName: user.name || 'User',

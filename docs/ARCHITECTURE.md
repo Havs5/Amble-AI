@@ -18,6 +18,7 @@ It bundles five product surfaces behind one permission-gated shell:
 | **Billing CX** | Drafts patient/billing replies that obey configurable tone/format/style policies; rewrite + PDF export |
 | **Knowledge Base** | Google Drive → Firestore sync, chunking, embeddings, hybrid vector+keyword retrieval |
 | **Media Studio** | Image generation (DALL·E / Imagen) and video generation (Sora / Veo) with a gallery |
+| **RxConnect** | Embedded external pharmacy portal (`https://rxconnect.tweaking.agency`) shown in-app via iframe |
 | **Dashboard / News** | Company news feed (editorial layout, admin CRUD) + usage dashboard |
 
 | | |
@@ -115,7 +116,9 @@ flowchart TD
     J -->|Page| L["React Server render<br/>app/page.tsx → FeatureRouter"]
 ```
 
-The single React entry (`app/page.tsx`) renders a **`FeatureRouter`** that switches between surfaces based on `useAppNavigation()` state (`dashboard | amble | billing | studio | knowledge | pharmacies`). Each surface is permission-gated (see [§8](#8-auth--permissions)).
+The single React entry (`app/page.tsx`) renders a **`FeatureRouter`** that switches between surfaces based on `useAppNavigation()` state (`dashboard | amble | billing | veo | knowledge | pharmacies`). Each surface is permission-gated (see [§8](#8-auth--permissions)).
+
+**Keep-alive views.** `FeatureRouter` does **not** unmount a surface when you navigate away. Each view is mounted the first time it becomes active and then kept mounted, with inactive views hidden via `display:none` (the `KeepAlive` wrapper). This makes tab switches instant (no remount, no re-fetch — which also stops the heavy synchronous remount that previously janked the sidebar collapse) and **preserves per-tab state**: scroll position, the open Knowledge Base document, in-progress chat/billing drafts, and the loaded RxConnect session all survive navigation. Views are still code-split via `next/dynamic`, so a surface's bundle only loads on first visit.
 
 ---
 
@@ -129,7 +132,7 @@ src/
 │   └── api/**/route.ts      20 Next.js API routes (dev + SSR-fallthrough)
 ├── components/              52 components across 14 domains
 │   ├── chat/ (10)           Composer, message list, thinking panel, artifacts
-│   ├── views/ (4)           DashboardView, BillingView, KnowledgeBaseView, PharmacyView
+│   ├── views/ (4)           DashboardView, BillingView, KnowledgeBaseView, PharmacyView (RxConnect iframe)
 │   ├── studio/ (4) veo/ (4) Image + video studio
 │   ├── news/ (5)            Editorial news feed + PostEditor
 │   ├── modals/ (6)          User mgmt, settings, etc.

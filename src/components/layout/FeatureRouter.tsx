@@ -1,7 +1,6 @@
-import React, { Suspense } from 'react';
+import React, { useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { ChatInterface } from '../chat/ChatInterface';
-import { PharmacyType } from '../layout/PharmacySidebar';
 import { ReasoningMode } from '@/utils/modelConstants';
 
 const DashboardView = dynamic(() => import('../views/DashboardView').then(m => ({ default: m.DashboardView })), {
@@ -21,7 +20,7 @@ const MediaStudio = dynamic(() => import('../studio/MediaStudio').then(m => ({ d
 });
 
 const PharmacyView = dynamic(() => import('../views/PharmacyView').then(m => ({ default: m.PharmacyView })), {
-  loading: () => <LoadingSpinner label="Loading pharmacies..." />,
+  loading: () => <LoadingSpinner label="Loading RxConnect..." />,
   ssr: false,
 });
 
@@ -42,9 +41,27 @@ function LoadingSpinner({ label }: { label: string }) {
   );
 }
 
+/**
+ * KeepAlive — renders its children persistently and only toggles visibility.
+ * Inactive views stay mounted (display:none) so their internal state — scroll
+ * position, open document, in-progress draft, loaded iframe session — survives
+ * tab switches, and switching back is instant (no remount, no re-fetch).
+ */
+function KeepAlive({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return (
+    <div
+      className="absolute inset-0 flex flex-col"
+      style={{ display: active ? 'flex' : 'none' }}
+      aria-hidden={!active}
+    >
+      {children}
+    </div>
+  );
+}
+
 interface FeatureRouterProps {
   activeView: string;
-  
+
   // Chat Props
   chatProps: {
     sessionToken: number;
@@ -67,12 +84,6 @@ interface FeatureRouterProps {
     policies?: string[];
     setToast: (data: { type: 'success' | 'error' | 'info'; message: string } | null) => void;
     onHelp: () => void;
-  };
-
-  // Pharmacy Props
-  pharmacyProps?: {
-    activePharmacy: PharmacyType | null;
-    mountedPharmacies: Set<PharmacyType>;
   };
 
   // Dashboard Props
@@ -102,54 +113,80 @@ interface FeatureRouterProps {
   };
 }
 
-export function FeatureRouter({ 
-  activeView, 
-  chatProps, 
+export function FeatureRouter({
+  activeView,
+  chatProps,
   billingProps,
-  pharmacyProps,
   dashboardProps
 }: FeatureRouterProps) {
-  
+
+  // Keep-alive: a view is mounted the first time it becomes active, then kept
+  // alive for the rest of the session. Because we only ever record the *active*
+  // view, every view's first mount happens while it is visible (so size-aware
+  // children like charts measure correctly).
+  const visited = useRef<Set<string>>(new Set());
+  visited.current.add(activeView);
+  const isVisited = (view: string) => visited.current.has(view);
+
   return (
     <main className="flex-1 overflow-hidden relative flex flex-col">
-      {activeView === 'dashboard' && dashboardProps ? (
-        <DashboardView {...dashboardProps} />
-      ) : activeView === 'amble' ? (
-        <div className="flex-1 flex flex-col h-full bg-white dark:bg-slate-900 relative">
-          <ChatInterface 
-            activeChatId={chatProps.activeChatId} 
-            onChatDeleted={chatProps.onChatDeleted}
-            onSessionChange={(id) => {
+      {dashboardProps && isVisited('dashboard') && (
+        <KeepAlive active={activeView === 'dashboard'}>
+          <DashboardView {...dashboardProps} />
+        </KeepAlive>
+      )}
+
+      {isVisited('amble') && (
+        <KeepAlive active={activeView === 'amble'}>
+          <div className="flex-1 flex flex-col h-full bg-white dark:bg-slate-900 relative">
+            <ChatInterface
+              activeChatId={chatProps.activeChatId}
+              onChatDeleted={chatProps.onChatDeleted}
+              onSessionChange={(id) => {
                 if (id && id !== chatProps.activeChatId) chatProps.onSessionChange(id);
-            }}
-            model={chatProps.model}
-            mode={chatProps.mode}
-            onModeChange={chatProps.onModeChange}
-            config={chatProps.config}
-            projectId={chatProps.activeProjectId}
-            dictationEnabled={chatProps.dictationEnabled}
+              }}
+              model={chatProps.model}
+              mode={chatProps.mode}
+              onModeChange={chatProps.onModeChange}
+              config={chatProps.config}
+              projectId={chatProps.activeProjectId}
+              dictationEnabled={chatProps.dictationEnabled}
+            />
+          </div>
+        </KeepAlive>
+      )}
+
+      {isVisited('billing') && (
+        <KeepAlive active={activeView === 'billing'}>
+          <BillingView
+            key={billingProps.resetKey}
+            user={billingProps.user}
+            selectedModel={chatProps.model} // Billing often uses the selected model too
+            systemPrompt={billingProps.systemPrompt}
+            policies={billingProps.policies}
+            setToast={billingProps.setToast}
+            onHelp={billingProps.onHelp}
           />
-        </div>
-      ) : activeView === 'billing' ? (
-        <BillingView 
-          key={billingProps.resetKey}
-          user={billingProps.user}
-          selectedModel={chatProps.model} // Billing often uses the selected model too
-          systemPrompt={billingProps.systemPrompt}
-          policies={billingProps.policies}
-          setToast={billingProps.setToast}
-          onHelp={billingProps.onHelp}
-        />
-      ) : activeView === 'veo' ? (
-        <MediaStudio />
-      ) : activeView === 'knowledge' ? (
-        <KnowledgeBaseView />
-      ) : activeView === 'pharmacies' && pharmacyProps ? (
-        <PharmacyView 
-          activePharmacy={pharmacyProps.activePharmacy}
-          mountedPharmacies={pharmacyProps.mountedPharmacies}
-        />
-      ) : null}
+        </KeepAlive>
+      )}
+
+      {isVisited('veo') && (
+        <KeepAlive active={activeView === 'veo'}>
+          <MediaStudio />
+        </KeepAlive>
+      )}
+
+      {isVisited('knowledge') && (
+        <KeepAlive active={activeView === 'knowledge'}>
+          <KnowledgeBaseView />
+        </KeepAlive>
+      )}
+
+      {isVisited('pharmacies') && (
+        <KeepAlive active={activeView === 'pharmacies'}>
+          <PharmacyView />
+        </KeepAlive>
+      )}
     </main>
   );
 }

@@ -104,6 +104,7 @@ The single React shell (`app/page.tsx` → `FeatureRouter`) switches between sur
 | Billing CX | `accessBilling` | `BillingView` |
 | Knowledge Base | `accessKnowledge` | `KnowledgeBaseView` |
 | RxConnect (sidebar item, `pharmacies` view id) | `accessPharmacy` | `PharmacyView` (embeds `rxconnect.tweaking.agency`) |
+| Clock In/Out (`clock` view id) | all authenticated users (Manage tab = admin) | `TimeClockView` + `TimeClockService` |
 | Media Studio | `enableStudio` (capability) | `studio/` + `veo/` |
 | Admin tools (user mgmt, news CRUD, KB admin) | `role === 'admin'` | `modals/`, `admin/`, `news/PostEditor` |
 
@@ -193,8 +194,19 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - 🗑️ Removed the old multi-pharmacy switcher (Revive/Align), `PharmacySidebar`, and the `activePharmacy`/`mountedPharmacies` plumbing
 - ⚠️ Depends on RxConnect allowing itself to be framed (no restrictive `X-Frame-Options`/CSP `frame-ancestors`); the header's "open in new tab" is the fallback if it blocks embedding
 
+### Clock In/Out (time clock)
+- ✅ **Employee punch in/out** — live clock, IN/OUT status, optional note; one open `time_entries` doc until punch-out
+- ✅ **My Timecard** — weekly view (Mon–Sun), entries grouped by day with daily + week totals, week navigation, running time for open entries
+- ✅ **Manager panel** (admin/superadmin) — week view of all employees grouped with totals; **adjust** clock-in/out times (datetime pickers, `edited` flag), **add** manual entries for any employee, **delete** entries; employee filter
+- ✅ Realtime via Firestore `onSnapshot`; secured by Firestore rules (own entries, or all for admins) + composite indexes `(userId+clockIn)`, `(userId+clockOut)`
+- 📌 Possible follow-ups: CSV/payroll export, approvals, overtime rules, TIP/BON/COM amount fields (per OnTheClock reference), break tracking
+
 ### Platform
 - ✅ **Keep-alive view router** — `FeatureRouter` mounts each surface once and hides inactive ones (`display:none`) instead of unmounting; instant tab switches + per-tab state persistence (scroll, open KB doc, drafts, RxConnect session)
+
+### AI provider
+- ✅ Chat/vision/media run on **Gemini Developer API** (API key) + OpenAI; MagicRouter auto-routes
+- 🔜 **Vertex AI migration planned** (latest models, ADC auth) — see Roadmap §6 + Open Items §8
 
 ---
 
@@ -203,7 +215,8 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ### Active work
 | Item | Scope | Acceptance | Status |
 |------|-------|-----------|--------|
-| **Revert to amble-ai** | §2 checklist | App builds + signs in + deploys on amble-ai | 🔧 in progress (OAuth blocked) |
+| **Revert to amble-ai** | §2 checklist | App builds + signs in + deploys on amble-ai | ✅ done (login verified) |
+| **Vertex AI migration** | Move Gemini calls Developer API → Vertex (latest models) | Chat/image/video work via Vertex on amble-ai; no regressions | 🔜 planned — full step plan in §8 |
 
 ### Near-term (tech debt — from prior audits, still open)
 - [ ] **Consolidate system prompt** — `lib/systemPrompt.ts` vs inline `ENHANCED_SYSTEM_PROMPT` in `route.ts` (drift risk).
@@ -228,6 +241,12 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-14 — Clock In/Out (time clock) feature
+- New **Clock In/Out** surface (`clock` view, sidebar item for all users): employee punch in/out with live clock + status, **My Timecard** weekly view (daily/week totals), and an admin **Manage** panel to adjust/add/delete any employee's entries.
+- New `services/timeclock/TimeClockService.ts` (+ `components/views/TimeClockView.tsx`). Firestore `time_entries` collection with rules (own entries / admin-all) and composite indexes `(userId+clockIn)`, `(userId+clockOut)`.
+- Documented in ARCHITECTURE §13a (+ data model) and here. Build clean; deployed.
+- ⏭️ Vertex AI migration scoped + documented (§6/§8) but **not** implemented this session (infra-risky on live chat).
 
 ### 2026-06-14 — RxConnect embed + keep-alive navigation
 - **Keep-alive view router** (`FeatureRouter`): surfaces are mounted once and hidden (`display:none`) instead of unmounted on tab switch. Fixes (a) the laggy nav/sidebar-collapse caused by heavy views remounting and (b) loss of per-tab state — you now return to the same scroll/open-doc/draft when switching tabs.
@@ -262,19 +281,38 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Resume here with zero context loss.
 
-1. **🔑 Restore amble-ai Google OAuth credentials (BLOCKER for full revert).**
-   - Get the **OAuth 2.0 Web Client ID + secret** from Google Cloud Console → project `amble-ai` → APIs & Services → Credentials.
-   - Put them in `.env.local` as `NEXT_PUBLIC_GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`.
-   - In that OAuth client, ensure **Authorized JavaScript origins** include `https://amble-ai.web.app` (+ `https://amble-ai.firebaseapp.com`) and **Authorized redirect URIs** include `https://amble-ai.web.app/api/auth/google/callback`.
-   - In Firebase Auth → Sign-in method, confirm **Google** + **Email/Password** providers are enabled on amble-ai, and `amble-ai.web.app` / `amble-ai.firebaseapp.com` are in **Authorized domains**.
+### ✅ Resolved (2026-06-14)
+- Revert to amble-ai complete; Google OAuth client ID + secret restored; **Firebase Auth Google provider secret realigned** to the current OAuth secret (the original mismatch caused the login 400). Login verified on https://amble-ai.web.app.
+- All 6 Cloud Function secrets confirmed present on amble-ai (incl. `SMTP_APP_PASSWORD`). Clean deploys working.
 
-2. **Verify amble-ai data parity.** Confirm Firestore (users, chats, kb_*, news_posts), Storage, and Auth users exist on amble-ai as expected. If anything important was created only on rotceh-2 during the migration window, decide whether to migrate it (note: current login cannot access rotceh-2).
+### 1. 🚧 Vertex AI migration (primary next task)
+Move Gemini usage from the **Gemini Developer API** (API-key) to **Vertex AI** (ADC/service-account, latest models). Scoped but not yet implemented — it touches the live chat across two SDKs, so do it as a focused, tested change.
 
-3. **Confirm Cloud Function secrets on amble-ai** (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `TAVILY_API_KEY`, `GOOGLE_SEARCH_API_KEY`, `GOOGLE_SEARCH_CX`) before deploying.
+**GCP prerequisites (do first):**
+1. Enable `aiplatform.googleapis.com` on `amble-ai` (`gcloud services enable aiplatform.googleapis.com --project amble-ai`).
+2. Grant the Cloud Function runtime service account (default `1064927104823-compute@developer.gserviceaccount.com`, or the function's configured SA) **`roles/aiplatform.user`**.
+3. Pick a region — `us-central1` (matches the function) — and confirm the target models are available there on Vertex.
 
-4. **First clean deploy to amble-ai** — `firebase use amble-ai` → `npm run deploy` → smoke test login + chat + a KB query on https://amble-ai.web.app.
+**Code changes (all server-side):**
+- Prefer the **new `@google/genai`** SDK in Vertex mode: `new GoogleGenAI({ vertexai: true, project: 'amble-ai', location: 'us-central1' })` (uses ADC — no API key). Drop `GEMINI_API_KEY` for these paths.
+- **Rewrite the legacy `@google/generative-ai` call-sites** (they don't support Vertex) to `@google/genai`:
+  - `functions/src/routes/chat.js` (**PROD chat** — highest risk; test hard)
+  - `src/app/api/chat/route.ts` (dev chat)
+  - `functions/src/routes/videoAnalyze.js` (uses `GoogleAIFileManager` — needs Vertex-compatible file handling / GCS)
+- Already on `@google/genai` (switch the constructor to Vertex): `functions/src/routes/image.js` (Imagen), `functions/src/routes/video.js` (Veo), `src/app/api/veo/route.ts`.
+- **Model-name remap** (`src/utils/modelConstants.ts` + chat routes): Vertex model IDs differ (e.g. `gemini-2.0-flash-001`, `gemini-2.5-pro`, latest `gemini-3-*` as available). Verify each is enabled on Vertex in the chosen region.
+- `driveSearchService.js` binary extraction (`GEMINI_API_KEY`) → Vertex or leave on Developer API short-term.
 
-5. **Then tackle the near-term tech debt** in §6 (system-prompt consolidation, route de-dup, admin auth).
+**Cannot move to Vertex as-is:**
+- `src/components/studio/LiveStudio.tsx` runs in the **browser** with `NEXT_PUBLIC_GEMINI_API_KEY`. Vertex needs server creds, so the Live API must stay on the Developer API **or** be proxied through a server endpoint. Decide per appetite.
+
+**Rollout:** implement on a branch → test chat + image + video locally → deploy → smoke test all three on amble-ai → keep `GEMINI_API_KEY` until verified, then retire from Vertex paths. Acceptance: chat/image/video all work via Vertex with no regressions.
+
+### 2. Near-term tech debt (from §6)
+System-prompt consolidation, route de-dup (Functions vs Next), auth on admin endpoints, prune `functions/package.json`.
+
+### 3. Time clock follow-ups (optional)
+CSV/payroll export, approvals, overtime rules, TIP/BON/COM amount fields, break tracking.
 
 ---
 

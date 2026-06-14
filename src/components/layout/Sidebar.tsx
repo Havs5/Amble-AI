@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, User, Settings, Moon, Sun, RefreshCw, LogOut, Shield, LayoutGrid, FileText, Folder, Image as ImageIcon, Bot, Video, Mic, ScanEye, Pill, Database, X, Keyboard, Home, Bell, ChevronDown, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, Settings, Moon, Sun, RefreshCw, LogOut, Shield, LayoutGrid, FileText, Folder, Image as ImageIcon, Bot, Video, Mic, ScanEye, Pill, Database, X, Keyboard, Home, Bell, ChevronDown, Sparkles, Clock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContextRefactored';
 import { OrgSwitcher } from '../organization/OrgSwitcher';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
-type ViewType = 'dashboard' | 'amble' | 'billing' | 'projects' | 'media' | 'veo' | 'pharmacies' | 'knowledge';
+type ViewType = 'dashboard' | 'amble' | 'billing' | 'projects' | 'media' | 'veo' | 'pharmacies' | 'knowledge' | 'clock';
 
 interface SidebarProps {
   isExpanded: boolean;
@@ -195,6 +195,15 @@ export function Sidebar({
           onClick={() => { onViewChange('pharmacies'); onCloseMobile?.(); }}
         />
         )}
+
+        {/* Time clock — available to everyone */}
+        <NavItem
+          icon={Clock}
+          label="Clock In/Out"
+          isActive={activeView === 'clock'}
+          isExpanded={isExpanded}
+          onClick={() => { onViewChange('clock'); onCloseMobile?.(); }}
+        />
 
         {enableStudio && (
         <NavItem

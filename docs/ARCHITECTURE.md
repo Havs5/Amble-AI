@@ -19,6 +19,7 @@ It bundles five product surfaces behind one permission-gated shell:
 | **Knowledge Base** | Google Drive → Firestore sync, chunking, embeddings, hybrid vector+keyword retrieval |
 | **Media Studio** | Image generation (DALL·E / Imagen) and video generation (Sora / Veo) with a gallery |
 | **RxConnect** | Embedded external pharmacy portal (`https://rxconnect.tweaking.agency`) shown in-app via iframe |
+| **Clock In/Out** | Employee time clock — punch in/out, weekly timecard, and a manager panel to adjust/add/delete entries (Firestore `time_entries`) |
 | **Dashboard / News** | Company news feed (editorial layout, admin CRUD) + usage dashboard |
 
 | | |
@@ -132,7 +133,7 @@ src/
 │   └── api/**/route.ts      20 Next.js API routes (dev + SSR-fallthrough)
 ├── components/              52 components across 14 domains
 │   ├── chat/ (10)           Composer, message list, thinking panel, artifacts
-│   ├── views/ (4)           DashboardView, BillingView, KnowledgeBaseView, PharmacyView (RxConnect iframe)
+│   ├── views/ (5)           DashboardView, BillingView, KnowledgeBaseView, PharmacyView (RxConnect iframe), TimeClockView
 │   ├── studio/ (4) veo/ (4) Image + video studio
 │   ├── news/ (5)            Editorial news feed + PostEditor
 │   ├── modals/ (6)          User mgmt, settings, etc.
@@ -147,6 +148,7 @@ src/
 │   ├── auth/                AuthService, SessionService
 │   ├── chat/                SessionService, StreamingService
 │   ├── knowledge/           RAGPipeline, KnowledgeBaseManager, EmbeddingService, DriveSync, DriveSearchService
+│   ├── timeclock/           TimeClockService (punch in/out, weekly timesheets, manager edits)
 │   └── ui/                  client-side helpers
 ├── types/  utils/           Shared types + pure utilities
 └── __tests__/               Jest suites (services, hooks, integration)
@@ -216,6 +218,8 @@ sequenceDiagram
 ---
 
 ## 7. AI Pipeline
+
+> **Provider note (2026-06):** Gemini is currently called via the **Gemini Developer API** (API-key auth) through `@google/generative-ai` (chat) and `@google/genai` (image/video/live). A migration to **Vertex AI** (ADC/service-account auth, latest models) is planned — see the step-by-step plan in [SOURCE_OF_TRUTH.md §6/§8](./SOURCE_OF_TRUTH.md#roadmap--backlog). It is staged separately because it touches the live chat across two SDKs and needs GCP-side enablement + IAM.
 
 ### 7.1 Model routing (MagicRouter)
 
@@ -368,9 +372,10 @@ flowchart LR
     ORG["organizations · org_members"]
     GDT["google_drive_tokens/{userId}"]
     PR["projects (sidebar) → chats by projectId"]
+    TE["time_entries/{id}<br/>userId, userName, clockIn, clockOut(null=open), edited"]
 ```
 
-**Indexes:** vector (COSINE, 1536-dim) on `knowledge` + `knowledge_vectors`; composites on `chats(ownerId/projectId+updatedAt)`, `generated_assets(userId+createdAt)`, `kb_articles(status+publishedAt)`, `news_posts(status+publishedAt)` and `(status+pinned+publishedAt)`.
+**Indexes:** vector (COSINE, 1536-dim) on `knowledge` + `knowledge_vectors`; composites on `chats(ownerId/projectId+updatedAt)`, `generated_assets(userId+createdAt)`, `kb_articles(status+publishedAt)`, `news_posts(status+publishedAt)` and `(status+pinned+publishedAt)`, `time_entries(userId+clockIn)` and `(userId+clockOut)`.
 
 **Caching layers:** `clientCache` (localStorage 5min–24h), `SemanticCache` (localStorage 24h, Jaccard ≥0.85 dedupe), in-memory caches in Memory/RAG/Embedding services, `KBIndexer` (IndexedDB 1h), `kb_content_cache` (Firestore 24h).
 
@@ -437,6 +442,31 @@ flowchart TD
 ```
 
 The **triple-injection** strategy combats LLM attention dilution so configured tone/format/style policies are actually followed in drafts.
+
+---
+
+## 13a. Time Clock
+
+Client-side feature backed entirely by Firestore `time_entries` (no API routes). Realtime via `onSnapshot`; permission boundary is Firestore rules (own entries, or everything for admins).
+
+```mermaid
+flowchart TD
+    subgraph Employee
+        P["Punch tab"] --> Q{"Open entry?<br/>(clockOut == null)"}
+        Q -->|No| CI["clockIn() → addDoc<br/>{userId, clockIn:now, clockOut:null}"]
+        Q -->|Yes| CO["clockOut() → updateDoc<br/>{clockOut:now}"]
+        TC2["My Timecard"] --> WK["subscribeUserWeek(uid, week)<br/>group by day · daily + week totals"]
+    end
+    subgraph Manager["Manager (role admin/superadmin)"]
+        MG["Manage tab"] --> AW["subscribeAllWeek(week)<br/>group by employee + totals"]
+        AW --> ED["updateEntry() adjust in/out (edited flag)"]
+        AW --> AD["addManualEntry() for any employee"]
+        AW --> DL["deleteEntry()"]
+    end
+    CI & CO & WK & ED & AD & DL --> FS[("Firestore time_entries<br/>idx: userId+clockIn · userId+clockOut")]
+```
+
+**Service:** `services/timeclock/TimeClockService.ts` (Firestore ops + Mon–Sun week/duration utils). **View:** `components/views/TimeClockView.tsx` (tabs: Punch · My Timecard · Manage[admin]). Sidebar item **Clock In/Out** (`clock` view id) is visible to all authenticated users; the **Manage** tab is admin-only and additionally enforced by rules.
 
 ---
 

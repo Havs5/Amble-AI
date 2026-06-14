@@ -29,6 +29,11 @@ const KnowledgeBaseView = dynamic(() => import('../views/KnowledgeBaseView').the
   ssr: false,
 });
 
+const TimeClockView = dynamic(() => import('../views/TimeClockView').then(m => ({ default: m.TimeClockView })), {
+  loading: () => <LoadingSpinner label="Loading time clock..." />,
+  ssr: false,
+});
+
 // Simple loading component
 function LoadingSpinner({ label }: { label: string }) {
   return (
@@ -185,6 +190,12 @@ export function FeatureRouter({
       {isVisited('pharmacies') && (
         <KeepAlive active={activeView === 'pharmacies'}>
           <PharmacyView />
+        </KeepAlive>
+      )}
+
+      {isVisited('clock') && (
+        <KeepAlive active={activeView === 'clock'}>
+          <TimeClockView />
         </KeepAlive>
       )}
     </main>

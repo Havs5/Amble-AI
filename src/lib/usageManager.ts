@@ -132,6 +132,28 @@ export class UsageManager {
   private static STORAGE_KEY_PREFIX = 'amble_usage_history_';
   private static LIMITS_KEY_PREFIX = 'amble_usage_limits_';
 
+  // Short-TTL cache of raw usage_logs per user. The Firestore fetch is the slow
+  // part; computing stats (range filter, model breakdown) over the cached array
+  // is instant — so switching date ranges / reopening a user no longer re-queries.
+  private static _logsCache = new Map<string, { logs: any[]; ts: number }>();
+  private static LOGS_TTL = 120000; // 2 minutes
+
+  static invalidateLogsCache(userId?: string) {
+    if (userId) this._logsCache.delete(userId);
+    else this._logsCache.clear();
+  }
+
+  private static async fetchLogs(userId: string): Promise<any[]> {
+    const cached = this._logsCache.get(userId);
+    if (cached && Date.now() - cached.ts < this.LOGS_TTL) return cached.logs;
+    const { query, where, getDocs } = await import('firebase/firestore');
+    const usageRef = collection(db, 'usage_logs');
+    const snapshot = await getDocs(query(usageRef, where('userId', '==', userId)));
+    const logs = snapshot.docs.map((d) => d.data());
+    this._logsCache.set(userId, { logs, ts: Date.now() });
+    return logs;
+  }
+
   // Export pricing for external use
   static getModelPricing() {
     return MODEL_PRICING;
@@ -396,18 +418,10 @@ export class UsageManager {
     let rangeTokens = 0; // Tokens within the filtered range
     
     try {
-      const { query, where, getDocs, orderBy } = await import('firebase/firestore');
-      const usageRef = collection(db, 'usage_logs');
-      // For efficiency we should use compound queries, but requires index.
-      // We'll fetch by user and filter in memory for now to be safe, 
-      // or we can try adding timestamp filter if index exists.
-      // UsageReport uses: query(usageRef, orderBy('timestamp', 'desc')) then filters.
-      // Here we filter by userId first.
-      const q = query(usageRef, where('userId', '==', userId));
-      const snapshot = await getDocs(q);
-      
-      snapshot.forEach((doc) => {
-        const data = doc.data();
+      // Cached fetch (2-min TTL) — range switches recompute in-memory, no re-query.
+      const logs = await this.fetchLogs(userId);
+
+      logs.forEach((data: any) => {
         const modelId = data.modelId || 'unknown';
         const inputTokens = data.inputTokens || 0;
         const outputTokens = data.outputTokens || 0;

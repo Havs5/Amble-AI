@@ -259,6 +259,11 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-15 — User Mgmt: overflow fix, faster usage, AI-config consolidation
+- **Horizontal scrollbar removed** — the two-column body lacked `min-w-0`, so the wide usage table forced the modal to overflow. Added `min-w-0` to the body + list + all detail panels, and switched the list to a fixed `lg:w-72` sidebar. Tables now scroll within their own column.
+- **Usage tab loads faster (same accurate data)** — `UsageManager` now caches raw `usage_logs` per user (2-min TTL) so date-range switches recompute in-memory with **no re-query**; the modal **lazy-loads** usage only when the Usage tab is open (opening a user on Profile no longer waits on a Firestore fetch).
+- **AI config consolidated (owner decision: per-user, one editor)** — Amble AI + Customer Experience config (system prompt + policies) stays **per-user** but is now edited in **one place: User Management → Settings → AI Configuration**. Removed the duplicate editor from the personal **Settings** modal (`ProfileModal`): dropped the Sidebar "AI Configuration"/"CX Configuration" menu items, the modal's AI-config nav section, and redirected any `amble-config`/`cx-config` deep-link to Profile (the old content panel is now inert/unreachable). **No data lost** — every user's stored `ambleConfig`/`cxConfig` is untouched and shown/edited in User Management. The CX draft flow (`useAmbleConfig` → user's `cxConfig`) is unchanged.
+
 ### 2026-06-15 — User Mgmt: IT label, usage-report fixes, modal polish
 - **Role label `Super Admin` → `IT`** — display only; the role **key stays `superadmin`** (and legacy `admin`). Changed `ROLE_LABELS.superadmin` in `lib/roles.ts`; the modal role filter + role-change hint now read from `ROLE_LABELS`. All rules/capabilities unchanged.
 - **Usage report accuracy fixed (two real bugs):**

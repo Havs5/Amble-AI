@@ -268,9 +268,8 @@ export function Sidebar({
             
             <MenuButton icon={User} label="Profile" onClick={() => { onOpenProfile('profile'); setShowProfileMenu(false); }} />
             <MenuButton icon={Shield} label="Security" onClick={() => { onOpenProfile('security'); setShowProfileMenu(false); }} />
-            <MenuButton icon={Bot} label="AI Configuration" onClick={() => { onOpenProfile('amble-config'); setShowProfileMenu(false); }} />
-            <MenuButton icon={FileText} label="CX Configuration" onClick={() => { onOpenProfile('cx-config'); setShowProfileMenu(false); }} />
-            
+            {/* AI/CX configuration is managed centrally in User Management (IT only). */}
+
             {canManageUsers && (
             <>
               <div className="h-px bg-slate-100 dark:bg-slate-800 mx-1 my-0.5" />

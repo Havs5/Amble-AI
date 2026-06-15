@@ -139,8 +139,9 @@ export function ProfileModal({
 
   useEffect(() => {
     if (isOpen) {
-      // Safety check: If tab is 'users' or 'premium' (which are now handled elsewhere or hidden), default to 'profile'
-      if (initialTab === 'users' || initialTab === 'premium') {
+      // Safety check: tabs handled elsewhere or removed default to 'profile'.
+      // (amble-config / cx-config are now managed in User Management, not here.)
+      if (initialTab === 'users' || initialTab === 'premium' || initialTab === 'amble-config' || initialTab === 'cx-config') {
         setActiveTab('profile');
       } else {
         setActiveTab(initialTab);
@@ -450,21 +451,8 @@ export function ProfileModal({
               <Shield size={18} />
               Security
             </button>
-            <div className="pt-4 pb-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI Configuration</div>
-            <button
-              onClick={() => setActiveTab('amble-config')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'amble-config' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
-            >
-              <Bot size={18} />
-              Amble AI
-            </button>
-            <button
-              onClick={() => setActiveTab('cx-config')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'cx-config' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
-            >
-              <MessageSquare size={18} />
-              Customer Experience
-            </button>
+            {/* AI / Customer Experience configuration is managed centrally in
+                User Management (IT only) — no longer a per-user editor here. */}
             {user?.role === 'admin' && (
               <>
                  <div className="pt-4 pb-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Administration</div>

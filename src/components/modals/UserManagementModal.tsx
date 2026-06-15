@@ -138,10 +138,11 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   };
 
   useEffect(() => {
-    if (selectedUser?.id) {
+    // Lazy-load: only fetch usage when the Usage tab is open (cached after first load).
+    if (selectedUser?.id && detailTab === 'usage') {
       loadStats(selectedUser.id, statsDateRange);
     }
-  }, [selectedUser?.id, statsDateRange]);
+  }, [selectedUser?.id, statsDateRange, detailTab]);
 
   const handleEditUser = async (user: any) => {
     // Guard against losing unsaved edits when switching to a different user.
@@ -406,9 +407,9 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
             <UsageReport />
           </div>
         ) : (
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden min-w-0">
           {/* Sidebar / List View */}
-          <div className={`flex-1 flex flex-col border-r border-slate-200 dark:border-slate-800 ${selectedUser ? 'hidden lg:flex lg:w-1/3 lg:flex-none' : 'w-full'}`}>
+          <div className={`flex flex-col min-w-0 border-r border-slate-200 dark:border-slate-800 ${selectedUser ? 'hidden lg:flex lg:w-72 lg:flex-none' : 'w-full'}`}>
             
             {/* Toolbar */}
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 space-y-4">
@@ -528,7 +529,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
           {/* Detail View */}
           {isAddingUser ? (
-            <div className="flex-[2] bg-slate-50 dark:bg-slate-950 p-5 overflow-y-auto">
+            <div className="flex-[2] min-w-0 bg-slate-50 dark:bg-slate-950 p-5 overflow-y-auto">
               <div className="max-w-2xl mx-auto space-y-6">
                 <div className="flex justify-between items-start">
                   <div>
@@ -696,7 +697,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
               </div>
             </div>
           ) : selectedUser ? (
-            <div className="flex-[2] flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
+            <div className="flex-[2] min-w-0 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
               <div className="flex-1 overflow-y-auto p-5">
               <div className="max-w-3xl mx-auto space-y-6">
                 <div className="flex justify-between items-start">
@@ -1453,7 +1454,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
               )}
             </div>
           ) : (
-            <div className="flex-[2] flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 dark:bg-slate-950/50">
+            <div className="flex-[2] min-w-0 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 dark:bg-slate-950/50">
               <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
                 <Edit2 size={24} className="opacity-50" />
               </div>

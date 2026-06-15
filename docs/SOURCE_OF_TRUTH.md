@@ -257,6 +257,10 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-14 — RBAC finalized (data migration + create-rule hardening)
+- **Migrated stored roles** to canonical values (`admin`→`superadmin`, `user`→`staff`) — 2 users updated via the Firestore REST API (owner token). Added idempotent `scripts/migrate_roles.js` for any future legacy users.
+- **Hardened the `users` create rule** — client create now requires `isManagerOrAbove()` and forbids a Manager minting elevated roles (legitimate creation is server-side via the Admin SDK, which bypasses rules). RBAC is now complete with no outstanding items.
+
 ### 2026-06-14 — RBAC follow-ups (edit role, rule hardening, default bundles)
 - **Edit an existing user's role** in User Management (role `<select>` on the edit screen, gated by `canManageRole`; saved via a direct `users/{id}` Firestore write).
 - **Firestore `users` rule refined**: Super Admin edits anyone; a Manager can only edit current-Staff and can't elevate them above Staff; a user can edit their own doc but not change their own role; delete gated the same way.
@@ -367,8 +371,10 @@ Foundation + most follow-ups shipped. Status:
 - ✅ **Edit a user's role** — role `<select>` on the edit screen, gated by `canManageRole(actor, target)`; saved via a direct `users/{id}` write.
 - ✅ **Firestore rule refinement** — `users` update now: Super Admin = anyone; Manager = only current-Staff docs and may not set role above Staff; self = own doc but can't change own role. Delete similarly gated.
 - ✅ **Role-based default permission bundles** — `defaultFeaturePermissions(role)` auto-applies when a role is picked in Add-User (Manager/Super Admin get KB + Pharmacy on; Staff get Amble/Billing/Clock).
-- 🔜 **Optional data migration** — rewrite existing users' stored `role` `'admin'`→`'superadmin'`, `'user'`→`'staff'` (cosmetic only; `normalizeRole` already handles legacy). One-off admin script.
-- 🔜 **Harden `users` create rule** (separate security item) — currently any authed user can create a `users/{id}` doc with any role; tighten so only `manageUsers` holders set elevated roles (without breaking first-sign-in self-provisioning).
+- ✅ **Data migration done** — existing users' stored roles normalized (`admin`→`superadmin`, `user`→`staff`) via `scripts/migrate_roles.js` (run through the Firestore REST API with the owner token; the KB service account lacked Firestore write). Idempotent script kept for future legacy users.
+- ✅ **`users` create rule hardened** — confirmed all real user creation is server-side (Admin SDK bypasses rules); the client create rule now requires `isManagerOrAbove()` and a Manager can't mint elevated roles. (Bootstrap unaffected — first user is created server-side.)
+
+**RBAC is now complete** — nothing outstanding.
 
 ---
 

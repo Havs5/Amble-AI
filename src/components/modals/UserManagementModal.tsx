@@ -138,11 +138,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   };
 
   useEffect(() => {
-    // Lazy-load: only fetch usage when the Usage tab is open (cached after first load).
-    if (selectedUser?.id && detailTab === 'usage') {
+    // Prefetch usage in the BACKGROUND as soon as a user is selected (result is
+    // cached for 2 min), so the Usage tab renders instantly when opened. Range
+    // changes recompute from the cached logs (no re-query).
+    if (selectedUser?.id) {
       loadStats(selectedUser.id, statsDateRange);
     }
-  }, [selectedUser?.id, statsDateRange, detailTab]);
+  }, [selectedUser?.id, statsDateRange]);
 
   const handleEditUser = async (user: any) => {
     // Guard against losing unsaved edits when switching to a different user.
@@ -929,24 +931,29 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                       <TrendingUp size={16} className="text-emerald-400" />
                       Daily Cost Trend
                     </h5>
-                    <div className="flex items-end gap-1 h-24">
-                      {userUsageStats.dailyTrend.map((day, idx) => {
-                        const maxCost = Math.max(...userUsageStats.dailyTrend.map(d => d.cost), 0.01);
-                        const height = (day.cost / maxCost) * 100;
-                        return (
-                          <div key={day.date} className="flex-1 flex flex-col items-center">
-                            <div 
-                              className="w-full bg-gradient-to-t from-indigo-500 to-indigo-400 rounded-t hover:from-indigo-600 hover:to-indigo-500 transition-colors cursor-pointer relative group"
-                              style={{ height: `${Math.max(height, 2)}%` }}
-                            >
-                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                ${day.cost.toFixed(4)}
+                    <div className="flex items-end gap-1.5 h-28">
+                      {(() => {
+                        const maxCost = Math.max(...userUsageStats.dailyTrend.map(d => d.cost), 0.0001);
+                        const CHART_PX = 92;
+                        return userUsageStats.dailyTrend.map((day) => {
+                          // Pixel height (definite) so bars render regardless of parent sizing.
+                          const barPx = day.cost > 0 ? Math.max(Math.round((day.cost / maxCost) * CHART_PX), 4) : 0;
+                          return (
+                            <div key={day.date} className="flex-1 flex flex-col items-center justify-end h-full group">
+                              <div className="relative w-full flex flex-1 items-end justify-center">
+                                <div
+                                  className="w-full max-w-[26px] bg-gradient-to-t from-indigo-500 to-indigo-400 rounded-t group-hover:from-indigo-600 group-hover:to-indigo-500 transition-colors"
+                                  style={{ height: `${barPx}px` }}
+                                />
+                                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
+                                  ${day.cost.toFixed(4)}
+                                </div>
                               </div>
+                              <span className="text-[10px] text-slate-400 mt-1">{new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}</span>
                             </div>
-                            <span className="text-xs text-slate-400 mt-1">{new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}</span>
-                          </div>
-                        );
-                      })}
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
                   )}

@@ -15,9 +15,12 @@ interface UserManagementModalProps {
   onBack?: () => void;
 }
 
+type DetailTab = 'profile' | 'usage' | 'settings' | 'danger';
+
 export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementModalProps) {
   const { users, addUser, user: currentUser, updateUserPermissions, updateUserCapabilities, updateUserConfig, updateUserDepartment, deleteUser, refreshUsers, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'users' | 'usage'>('users');
+  const [detailTab, setDetailTab] = useState<DetailTab>('profile');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -109,6 +112,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
   const handleEditUser = async (user: any) => {
     setStatsDateRange('last30'); // Reset to default
+    setDetailTab('profile'); // Always open on the Profile tab
     setSelectedUser(user);
     
     // Load limits from Firestore/UsageManager
@@ -615,39 +619,46 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
               </div>
             </div>
           ) : selectedUser ? (
-            <div className="flex-[2] bg-slate-50 dark:bg-slate-950 p-5 overflow-y-auto">
+            <div className="flex-[2] flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-5">
               <div className="max-w-3xl mx-auto space-y-6">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">{selectedUser.name}</h3>
                     <p className="text-slate-500 dark:text-slate-400">{selectedUser.email}</p>
                   </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => setSelectedUser(null)}
-                      className="lg:hidden px-3 py-2 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg"
-                    >
-                      Back
-                    </button>
-                    {can(currentUser?.role, 'manageUsers') && (
-                    <button 
-                      onClick={handleSaveUser}
-                      disabled={isSavingUser}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {isSavingUser ? (
-                        <>
-                          <Loader2 className="animate-spin" size={16} />
-                          Saving...
-                        </>
-                      ) : (
-                        'Save Changes'
-                      )}
-                    </button>
-                    )}
-                  </div>
+                  <button
+                    onClick={() => setSelectedUser(null)}
+                    className="lg:hidden px-3 py-2 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg"
+                  >
+                    Back
+                  </button>
                 </div>
 
+                {/* Detail tabs */}
+                <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-800">
+                  {([
+                    { id: 'profile' as DetailTab, label: 'Profile' },
+                    { id: 'usage' as DetailTab, label: 'Usage' },
+                    { id: 'settings' as DetailTab, label: 'Settings' },
+                    ...(can(currentUser?.role, 'manageUsers') ? [{ id: 'danger' as DetailTab, label: 'Danger' }] : []),
+                  ]).map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setDetailTab(t.id)}
+                      className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                        detailTab === t.id
+                          ? (t.id === 'danger' ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-indigo-600 text-indigo-600 dark:text-indigo-400')
+                          : (t.id === 'danger' ? 'border-transparent text-red-400 hover:text-red-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300')
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── Usage tab ── */}
+                {detailTab === 'usage' && (<>
                 {/* Usage Stats Section */}
                 {isLoadingStats ? (
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
@@ -863,7 +874,10 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   )}
                 </div>
                 )}
+                </>)}
 
+                {/* ── Profile tab ── */}
+                {detailTab === 'profile' && (<>
                 {/* Department Section */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
                   <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
@@ -995,6 +1009,10 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   </div>
                 </div>
 
+                </>)}
+
+                {/* ── Settings tab ── */}
+                {detailTab === 'settings' && (<>
                 {/* AI Configuration Section - Only accessible to admins */}
                 {can(currentUser?.role, 'manageUsers') && (
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
@@ -1316,6 +1334,10 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   </div>
                 </div>
 
+                </>)}
+
+                {/* ── Danger tab ── */}
+                {detailTab === 'danger' && (<>
                 {/* Danger Zone */}
                 {can(currentUser?.role, 'manageUsers') && (
                 <div className="bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-100 dark:border-red-900/30 p-5">
@@ -1340,8 +1362,21 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   </div>
                 </div>
                 )}
+                </>)}
 
               </div>
+              </div>
+              {can(currentUser?.role, 'manageUsers') && (
+                <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-5 py-3 flex items-center justify-end">
+                  <button
+                    onClick={handleSaveUser}
+                    disabled={isSavingUser}
+                    className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isSavingUser ? (<><Loader2 className="animate-spin" size={16} />Saving...</>) : ('Save Changes')}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex-[2] flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 dark:bg-slate-950/50">

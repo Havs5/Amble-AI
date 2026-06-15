@@ -10,6 +10,11 @@ const { GoogleGenAI } = require('@google/genai');
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
 
+// Vertex AI (ADC). Imagen/Veo are regional — served from us-central1, not the
+// global endpoint that Gemini chat uses.
+const VERTEX_PROJECT = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'amble-ai';
+const VERTEX_MEDIA_LOCATION = process.env.GOOGLE_CLOUD_LOCATION_MEDIA || 'us-central1';
+
 // ============================================================================
 // Main Handler
 // ============================================================================
@@ -29,18 +34,15 @@ async function handleImage(req, res, { adminDb, bucket, writeJson, readJsonBody,
     let mimeType = 'image/png';
     let provider = 'OpenAI';
 
-    // Gemini (Imagen)
+    // Imagen on Vertex AI (latest: imagen-4.0-generate-001, us-central1)
     if (model.startsWith('imagen') || model.includes('gemini')) {
-      provider = 'Gemini';
-      if (!process.env.GEMINI_API_KEY) {
-        return writeJson(res, 500, { error: 'GEMINI_API_KEY is missing' });
-      }
-      
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, apiVersion: 'v1beta' });
-      
+      provider = 'Vertex/Imagen';
+
+      const ai = new GoogleGenAI({ vertexai: true, project: VERTEX_PROJECT, location: VERTEX_MEDIA_LOCATION });
+
       try {
         const response = await ai.models.generateImages({
-          model: 'imagen-2.0-generate-001',
+          model: 'imagen-4.0-generate-001',
           prompt: prompt,
           config: {
             numberOfImages: 1,
@@ -48,17 +50,18 @@ async function handleImage(req, res, { adminDb, bucket, writeJson, readJsonBody,
             outputMimeType: 'image/jpeg'
           }
         });
-        
-        const image = response.response?.generatedImages?.[0]?.image;
+
+        // SDK shape varies by version: prefer response.generatedImages, fall back to response.response.*
+        const image = (response.generatedImages || response.response?.generatedImages)?.[0]?.image;
         if (!image?.imageBytes) {
-          return writeJson(res, 500, { error: 'No image data returned from Gemini' });
+          return writeJson(res, 500, { error: 'No image data returned from Imagen (Vertex)' });
         }
-        
+
         base64Image = image.imageBytes;
         mimeType = image.mimeType || 'image/jpeg';
-      } catch (geminiError) {
-        console.error('Gemini image gen error:', geminiError);
-        throw geminiError;
+      } catch (vertexError) {
+        console.error('Imagen (Vertex) image gen error:', vertexError);
+        throw vertexError;
       }
     } else {
       // OpenAI (DALL-E 3)

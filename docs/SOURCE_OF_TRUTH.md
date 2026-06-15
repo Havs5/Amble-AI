@@ -206,8 +206,10 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 ### AI provider
 - ✅ **Chat runs on Vertex AI** (`@google/genai`, ADC, **global** endpoint) with **gemini-3-flash-preview** (fast) + **gemini-3.1-pro-preview** (pro) — latest Gemini on Vertex. Preview IDs can rotate, so the prod handler **falls back to OpenAI (`gpt-5-mini`) on any Gemini error**.
+- ✅ **Image on Vertex** — Imagen 4 (`imagen-4.0-generate-001`, regional us-central1) via `image.js`
+- ✅ **Video-analysis on Vertex** — `videoAnalyze.js` → `gemini-2.5-flash` with the Storage video as a `gs://` URI (dropped the Developer-API file-manager upload)
 - ✅ Live Studio (browser Gemini Live) **removed**
-- 🔜 Image (Imagen), video (Veo), video-analysis, and the dev chat route still on the **Gemini Developer API** — queued to move to Vertex next (§8)
+- 🔜 **Veo** video gen (`video.js`/`veo/route.ts`) + dev chat route still on the **Gemini Developer API** — Veo left working (Sora is the verified path); Vertex move documented in §8
 
 ---
 
@@ -242,6 +244,12 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-14 — Image + video-analysis → Vertex
+- **Image generation on Vertex** — `image.js` now uses `@google/genai` Vertex (`vertexai:true`, regional `us-central1`) with **Imagen 4** (`imagen-4.0-generate-001`). Verified via prod smoke test.
+- **Video-analysis on Vertex** — `videoAnalyze.js` rewritten to `gemini-2.5-flash`, passing the Storage video as a `gs://` URI (no Developer-API file upload). Simpler + no temp files.
+- Probed + recorded Vertex media model IDs (Imagen 4/3, Veo 3/2) — see §8.
+- **Veo video gen intentionally left on the Developer API** (untestable paid LRO this session; Sora is the verified video path) — precise migration steps in §8.
 
 ### 2026-06-14 — Gemini 3 (Vertex global) + Clock In/Out permission
 - **Upgraded chat to Gemini 3** — probed the Vertex **global** endpoint and found the latest models there: **`gemini-3-flash-preview`** (fast) + **`gemini-3.1-pro-preview`** (pro). Switched the chat Vertex client to `location: global` and these IDs; picker now shows Gemini 3. (Earlier probe used `us-central1` which doesn't serve Gemini 3.)
@@ -305,14 +313,15 @@ Move Gemini usage from the **Gemini Developer API** (API-key) to **Vertex AI** (
 - Probed both endpoints: **Gemini 3 is on the `global` endpoint** (not `us-central1` — that's why the first probe 404'd). Live for amble-ai: **`gemini-3-flash-preview`** (fast) + **`gemini-3.1-pro-preview`** (pro); `gemini-3-pro-preview` is retired (404).
 - **PROD chat migrated** — `functions/src/routes/chat.js` uses `@google/genai` Vertex mode (`vertexai:true`, ADC, **`global`** endpoint); `normalizeModel` collapses any Gemini selection to `gemini-3-flash-preview` (fast) / `gemini-3.1-pro-preview` (pro/thinking). `modelConstants.ts` + picker updated to Gemini 3. Added a **Gemini→OpenAI (`gpt-5-mini`) fallback** in the prod handler since preview model IDs can rotate.
 - **Live Studio deleted** (`LiveStudio.tsx` + MediaStudio "Audio" tab) — the browser-side blocker is gone.
+- **Image migrated** — `functions/src/routes/image.js` → Vertex (`vertexai:true`, **regional `us-central1`**), Imagen **`imagen-4.0-generate-001`** via `ai.models.generateImages`. Verified by prod smoke test.
+- **Video-analysis migrated** — `functions/src/routes/videoAnalyze.js` rewritten to Vertex `gemini-2.5-flash`, passing the Storage video as a `gs://${bucket.name}/${storagePath}` URI (no more `GoogleAIFileManager` upload/poll). Compile-verified.
+- **Probed media model IDs** (us-central1, all exist): Imagen `imagen-4.0-generate-001` / `…-fast-generate-001` / `imagen-3.0-*`; Veo `veo-3.0-generate-001` / `…-fast-generate-001` / `veo-2.0-generate-001`. Gemini image (global): `gemini-3.1-flash-image`, `gemini-2.5-flash-image`.
 
-**🔜 Remaining (next session) — move the rest off the Gemini Developer API onto Vertex:**
-- `functions/src/routes/image.js` (Imagen) — switch constructor to Vertex; **find the Vertex Imagen model id** (current `imagen-2.0-generate-001` is a Developer-API id; Vertex uses e.g. `imagen-3.0-generate-002` / `imagen-3.0-fast-generate-001` — probe first).
-- `functions/src/routes/video.js` + `src/app/api/veo/route.ts` (Veo) — Veo on Vertex is a **long-running operation** API and differs from the Developer-API `generateVideos`; needs a careful rewrite + a Vertex Veo model id.
-- `functions/src/routes/videoAnalyze.js` — replace `GoogleAIFileManager` (Developer-API file upload) with Vertex-compatible input (inline bytes or a GCS URI).
-- `src/app/api/chat/route.ts` (dev-only chat) — mirror the chat.js change; needs local ADC (`gcloud auth application-default login`) for `next dev`.
+**🔜 Remaining (next session):**
+- **Veo video gen → Vertex** (`functions/src/routes/video.js` `handleVeoGeneration` + dev `src/app/api/veo/route.ts`). Left on the Developer API on purpose — it's an untestable-in-one-session paid LRO and **Sora is the verified video path**. Steps: client → `new GoogleGenAI({vertexai:true, project, location:'us-central1'})`; model **`veo-3.0-generate-001`** (or `…-fast-generate-001`); keep `generateVideos` + `operations.getVideosOperation` polling; **change output handling** — Vertex returns `generatedVideos[0].video.videoBytes` (base64, upload directly to Storage) OR set `config.outputGcsUri` and read the `gs://` result (the current `?key=GEMINI_API_KEY` URL trick is Developer-API-only). Verify with one real generation.
+- **Dev chat route** `src/app/api/chat/route.ts` — mirror the `chat.js` Vertex change; needs local ADC (`gcloud auth application-default login`) for `next dev` (dev-only; Functions win in prod).
 - `functions/src/services/driveSearchService.js` binary OCR (`GEMINI_API_KEY`) — optional move.
-- Once all paths are off it, retire `GEMINI_API_KEY`. **Probe each Vertex model id (`…:generateContent`/`:predict`) before wiring** — these features have no fallback, unlike chat.
+- Once Veo + dev route are off it, retire `GEMINI_API_KEY`. These features have **no OpenAI fallback** (unlike chat), so probe model IDs + test before deploy.
 
 ### 2. Near-term tech debt (from §6)
 System-prompt consolidation, route de-dup (Functions vs Next), auth on admin endpoints, prune `functions/package.json`.

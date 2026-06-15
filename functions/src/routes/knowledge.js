@@ -392,4 +392,48 @@ async function handleVectorKBSearch(req, res, { adminDb, writeJson, readJsonBody
   }
 }
 
-module.exports = { handleKnowledgeIngest, handleKnowledgeSearch, handleVectorKBSearch };
+// ============================================================================
+// Vector Reindex Handler — Drive → chunk → embed → knowledge_vectors
+// ============================================================================
+
+/** True if the caller is an authenticated Manager+ (super admin / admin / manager). */
+async function isManagerOrAbove(adminDb, token) {
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    const map = await adminDb.collection('users_by_uid').doc(decoded.uid).get();
+    if (!map.exists) return false;
+    const userDoc = await adminDb.collection('users').doc(map.data().userId).get();
+    const role = userDoc.exists ? userDoc.data().role : '';
+    return ['superadmin', 'admin', 'manager'].includes(role);
+  } catch (e) {
+    return false;
+  }
+}
+
+async function handleKbReindex(req, res, { adminDb, writeJson, readJsonBody }) {
+  try {
+    // Auth: either the reindex key (ops/CI trigger) OR an admin Firebase token.
+    const key = req.headers['x-reindex-key'];
+    const keyOk = process.env.KB_REINDEX_KEY && key === process.env.KB_REINDEX_KEY;
+
+    let authorized = keyOk;
+    if (!authorized) {
+      const authHeader = req.headers.authorization || '';
+      if (authHeader.startsWith('Bearer ')) {
+        authorized = await isManagerOrAbove(adminDb, authHeader.substring(7));
+      }
+    }
+    if (!authorized) return writeJson(res, 401, { error: 'Unauthorized' });
+
+    const body = await readJsonBody(req).catch(() => ({}));
+    const { reindexKb } = require('../services/kbIngest');
+    const summary = await reindexKb(adminDb, { full: !!body.full, maxFiles: body.maxFiles });
+
+    return writeJson(res, 200, { success: !summary.error, ...summary });
+  } catch (e) {
+    console.error('[KB Reindex] error:', e);
+    return writeJson(res, 500, { error: e.message || 'Reindex failed' });
+  }
+}
+
+module.exports = { handleKnowledgeIngest, handleKnowledgeSearch, handleVectorKBSearch, handleKbReindex };

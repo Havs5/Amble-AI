@@ -13,6 +13,7 @@ const { searchKnowledgeBase } = require('../services/knowledgeService');
 const { searchTavily, extractTavily } = require('../services/searchService');
 const { analyzeSearchIntent, intelligentSearch, formatSearchContext } = require('../services/intelligentSearch');
 const { searchDriveWithServiceAccount } = require('../services/driveSearchService');
+const { vectorRetrieve, MIN_SCORE } = require('../services/kbRetrieval');
 
 // Vertex AI — authenticated via ADC (the Cloud Function's runtime service
 // account, which has roles/aiplatform.user). No API key needed.
@@ -74,15 +75,14 @@ CAPABILITIES:
 
     prompt += `
 
-KNOWLEDGE BASE RULES (CRITICAL — FOLLOW EXACTLY):
-1. The KB documents below are your PRIMARY source. Use them FIRST.${docList}
-2. NEVER say "I couldn't find information" if any KB document contains relevant data.
-3. Extract and present SPECIFIC data (prices, names, dosages, procedures) directly from KB docs.
-4. Prefer the document whose title most closely matches the topic (e.g., query about "semaglutide" → prefer doc named "Semaglutide").
-5. State ONLY facts EXPLICITLY written in KB docs. Do NOT infer, assume, or fabricate.
-6. If docs partially answer the question, present what's available and note gaps.
-7. Cite documents inline: "According to [Semaglutide doc], the pricing is..."
-8. Fall back to web search or general knowledge ONLY when KB docs do not cover the topic.`;
+KNOWLEDGE BASE RULES (CRITICAL — GROUNDING CONTRACT, FOLLOW EXACTLY):
+1. The KB excerpts below are your PRIMARY and AUTHORITATIVE source. Use them FIRST.${docList}
+2. Answer ONLY from the KB excerpts. Every factual claim (prices, names, dosages, policies, procedures) MUST be supported by an excerpt — do NOT infer, assume, generalize, or fabricate.
+3. Cite the excerpt number inline for each claim, e.g. "[1]" or "According to [2] (Semaglutide)…". A claim without a supporting excerpt must not be stated as fact.
+4. Extract SPECIFIC data verbatim. Prefer the excerpt whose title most closely matches the topic.
+5. If the excerpts only PARTIALLY answer, give what IS supported and clearly state which part isn't in the KB.
+6. ABSTAIN HONESTLY: if the excerpts do NOT contain the answer, say so plainly ("I don't have that in the knowledge base") and offer to search the web — do NOT answer from prior/general knowledge and do NOT guess.
+7. Never present web or general knowledge as if it came from the KB.`;
   }
 
   prompt += `
@@ -499,57 +499,73 @@ async function handleChat(req, res, { adminDb, writeJson, readJsonBody }) {
       hasCompanyKB = true;
       console.log('[Chat] Client already provided KB context — skipping server search');
     } else if (isAmbleView) {
-      // CLIENT DID NOT SEARCH — Server must search. This is the primary path.
-      
-      // Use expanded keywords for KB detection (product names, policies, pricing, etc.)
-      const kbKeywords = /\b(price|pricing|cost|costs|fee|charge|how\s+much|product|products|formulary|pharmacy|pharmacies|medication|medications|drug|drugs|tirzepatide|semaglutide|ozempic|wegovy|mounjaro|zepbound|policy|policies|procedure|procedures|training|onboarding|benefit|benefits|catalog|inventory|dosage|dose|compound|compounding|supply|vendor|cancellation|cancel|refund|shipping|delivery|milligram|mg|injection|pen|vial|provider|patient|department|billing|insurance|copay|prior\s+auth|enrollment)\b/i;
-      const shouldSearchKB = kbKeywords.test(userQuery);
+      // CLIENT DID NOT SEARCH — Server searches. Multi-turn query reformulation.
+      const reformulatedQuery = reformulateQuery(userQuery, messages);
 
-      if (shouldSearchKB) {
-        // Multi-turn query reformulation
-        const reformulatedQuery = reformulateQuery(userQuery, messages);
-        const cacheKey = reformulatedQuery.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').substring(0, 100);
+      // ══ PRIMARY: semantic vector retrieval (gemini-embedding-001 @1536) ══
+      // Always attempt — fast (<~1s), gives true semantic recall (synonyms,
+      // paraphrases) instead of brittle keyword matching. Chunk-level + reranked.
+      let vec = { chunks: [], maxScore: 0 };
+      try {
+        vec = await vectorRetrieve(adminDb, reformulatedQuery, { limit: 6 });
+      } catch (e) {
+        console.warn('[Chat] vectorRetrieve error:', e.message);
+      }
 
-        console.log(`[Chat] KB search for: "${reformulatedQuery.substring(0, 80)}"`);
+      if (vec.chunks.length > 0 && vec.maxScore >= MIN_SCORE) {
+        hasCompanyKB = true;
+        kbDocTitles = [...new Set(vec.chunks.map(c => c.title))];
+        console.log(`[Chat] ✅ Vector KB: ${vec.chunks.length} chunks from ${kbDocTitles.length} docs (top ${(vec.maxScore * 100).toFixed(0)}%)`);
 
-        // Check cache first
-        let kbResults = await getCachedKBResults(adminDb, cacheKey);
-        
-        if (!kbResults) {
-          // Search Drive via service account
-          try {
-            kbResults = await searchDriveWithServiceAccount(reformulatedQuery, 5);
-            if (kbResults && kbResults.length > 0) {
-              // Cache for future queries
-              await setCachedKBResults(adminDb, cacheKey, kbResults.map(r => ({
-                title: r.title,
-                content: (r.content || '').substring(0, 8000), // Standardized truncation
-                score: r.score,
-                metadata: r.metadata,
-              })));
+        companyKBContext = '\n\n--- COMPANY KNOWLEDGE BASE (most relevant excerpts) ---\n';
+        vec.chunks.forEach((c, i) => {
+          const dept = c.department ? ` [${c.department}]` : '';
+          const rel = c.score ? ` (relevance ${(c.score * 100).toFixed(0)}%)` : '';
+          companyKBContext += `\n[${i + 1}] "${c.title}"${dept}${rel}\n${(c.text || '').substring(0, 4000)}\n`;
+        });
+        companyKBContext += '\n--- END KNOWLEDGE BASE ---\n';
+      } else {
+        // ══ FALLBACK: legacy live-Drive keyword search ══
+        // Covers a cold/empty vector index (before first reindex) or a query
+        // the vector store doesn't cover well. Keyword-gated to limit cost.
+        const kbKeywords = /\b(price|pricing|cost|costs|fee|charge|how\s+much|product|products|formulary|pharmacy|pharmacies|medication|medications|drug|drugs|tirzepatide|semaglutide|ozempic|wegovy|mounjaro|zepbound|policy|policies|procedure|procedures|training|onboarding|benefit|benefits|catalog|inventory|dosage|dose|compound|compounding|supply|vendor|cancellation|cancel|refund|shipping|delivery|milligram|mg|injection|pen|vial|provider|patient|department|billing|insurance|copay|prior\s+auth|enrollment)\b/i;
+        if (kbKeywords.test(userQuery)) {
+          const cacheKey = reformulatedQuery.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').substring(0, 100);
+          console.log(`[Chat] Vector miss — live-Drive fallback for: "${reformulatedQuery.substring(0, 80)}"`);
+
+          let kbResults = await getCachedKBResults(adminDb, cacheKey);
+          if (!kbResults) {
+            try {
+              kbResults = await searchDriveWithServiceAccount(reformulatedQuery, 5);
+              if (kbResults && kbResults.length > 0) {
+                await setCachedKBResults(adminDb, cacheKey, kbResults.map(r => ({
+                  title: r.title,
+                  content: (r.content || '').substring(0, 8000),
+                  score: r.score,
+                  metadata: r.metadata,
+                })));
+              }
+            } catch (kbErr) {
+              console.error('[Chat] live-Drive fallback failed:', kbErr.message);
+              kbResults = [];
             }
-          } catch (kbErr) {
-            console.error('[Chat] KB search failed:', kbErr.message);
-            kbResults = [];
           }
-        }
 
-        if (kbResults && kbResults.length > 0) {
-          hasCompanyKB = true;
-          kbDocTitles = kbResults.map(r => r.title);
-          console.log(`[Chat] ✅ KB found ${kbResults.length} docs: ${kbDocTitles.join(', ')}`);
-
-          // Compact context format — no ASCII art, max 8K per doc, structured for LLM parsing
-          companyKBContext = '\n\n--- COMPANY KNOWLEDGE BASE ---\n';
-          kbResults.forEach((doc, i) => {
-            const dept = doc.metadata?.department ? ` [${doc.metadata.department}]` : '';
-            const score = doc.score ? ` (relevance: ${(doc.score * 100).toFixed(0)}%)` : '';
-            const content = (doc.content || '').substring(0, 8000);
-            companyKBContext += `\n[${i + 1}] "${doc.title}"${dept}${score}\n${content}\n`;
-          });
-          companyKBContext += '\n--- END KNOWLEDGE BASE ---\n';
-        } else {
-          console.log('[Chat] KB search returned 0 results');
+          if (kbResults && kbResults.length > 0) {
+            hasCompanyKB = true;
+            kbDocTitles = kbResults.map(r => r.title);
+            console.log(`[Chat] ✅ Drive fallback found ${kbResults.length} docs: ${kbDocTitles.join(', ')}`);
+            companyKBContext = '\n\n--- COMPANY KNOWLEDGE BASE ---\n';
+            kbResults.forEach((doc, i) => {
+              const dept = doc.metadata?.department ? ` [${doc.metadata.department}]` : '';
+              const score = doc.score ? ` (relevance: ${(doc.score * 100).toFixed(0)}%)` : '';
+              const content = (doc.content || '').substring(0, 8000);
+              companyKBContext += `\n[${i + 1}] "${doc.title}"${dept}${score}\n${content}\n`;
+            });
+            companyKBContext += '\n--- END KNOWLEDGE BASE ---\n';
+          } else {
+            console.log('[Chat] KB search returned 0 results');
+          }
         }
       }
     }

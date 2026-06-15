@@ -1,6 +1,6 @@
 const OpenAI = require('openai');
 
-async function searchKnowledgeBase(adminDb, query, userId, projectId) {
+async function searchKnowledgeBase(adminDb, query, userId, projectId, limit = 5) {
   try {
       if (!process.env.OPENAI_API_KEY) return [];
 
@@ -12,33 +12,37 @@ async function searchKnowledgeBase(adminDb, query, userId, projectId) {
       });
       const queryVector = embeddingResponse.data[0].embedding;
 
-      // 2. Vector Search (using VectorField)
+      // 2. Vector Search (using VectorField).
+      // NOTE: we over-fetch (limit 40) and filter by owner/project IN APP, then
+      // trim to `limit`. The previous code fetched only 5 then filtered, which
+      // silently dropped valid hits when the 5 nearest belonged to other users.
       const coll = adminDb.collection('knowledge_vectors');
-      
-      const vectorQuery = coll.findNearest('embedding', queryVector, {
-          limit: 5,
-          distanceMeasure: 'COSINE'
+
+      const vectorQuery = coll.findNearest({
+          vectorField: 'embedding',
+          queryVector: queryVector,
+          limit: 40,
+          distanceMeasure: 'COSINE',
+          distanceResultField: 'vector_distance',
       });
 
-      // Apply pre-filter if projectId is present
-      let finalQuery = vectorQuery;
+      const snapshot = await vectorQuery.get();
 
-      const snapshot = await finalQuery.get();
-      
       const results = snapshot.docs.map(doc => {
           const data = doc.data();
-          // Post-filter manually if index is missing (safer for MVP rollout)
+          // Owner/project scoping (post-filter; over-fetch above preserves recall).
           if (projectId && data.projectId !== projectId) return null;
           if (!projectId && data.userId !== userId) return null;
-          
+
+          const dist = typeof data.vector_distance === 'number' ? data.vector_distance : 1;
           return {
               text: data.text,
-              score: 0, // SDK doesn't always return score in v1
-              filename: data.filename
+              score: Math.max(0, 1 - dist), // COSINE distance → similarity
+              filename: data.filename || data.title,
           };
       }).filter(Boolean);
 
-      return results;
+      return results.slice(0, limit || 5);
   } catch (e) {
       console.warn("RAG Search failed (likely missing index):", e.message);
       return [];

@@ -405,36 +405,42 @@ flowchart TD
 
 Retrieval over the synced KB is **hybrid**: a vector path (query embedding → paginated Firestore scan up to 5000 → cosine) fused with a keyword path (content×1, name×3, exact-phrase bonus) via **Reciprocal Rank Fusion (k=60)**, deduped to max 3 chunks/doc, min score 0.3.
 
-> ⚠️ **As-built vs as-described (dual execution).** The hybrid vector pipeline above lives in **`src/services/knowledge/*`** (client/dev) and the **dev** Next.js routes. In **production the SSR Cloud Function runs `functions/src/routes/*.js`, which does NOT execute that pipeline.** The live answer path is documented in **§11a**.
+> ℹ️ The legacy `src/services/knowledge/*` hybrid pipeline (client/dev) and the **dev** Next.js routes still exist, but **production now runs the §11a vector pipeline** in `functions/src/routes/*.js`.
 
-### 11a. KB Retrieval — as built in production
+### 11a. KB Retrieval — production vector RAG (shipped 2026-06-14)
 
-The Amble AI chat answer path (`/api/chat → handleChat`) does **keyword search over Google Drive in real time**, not vector search:
+The Amble AI chat answer path (`/api/chat → handleChat`) is now **semantic vector RAG with hybrid fusion, reranking, grounded generation, and abstention** — with the old live-Drive keyword search kept only as a cold-start fallback.
 
 ```mermaid
 flowchart TD
-    Q["User message (Amble tab)"] --> KW{"Regex keyword gate<br/>(price, pharmacy, policy…)"}
-    KW -->|no match| WEB["No KB search → maybe web search"]
-    KW -->|match| RF["reformulateQuery()<br/>hardcoded entity regex (drug/pharmacy names)"]
-    RF --> C{"kb_search_cache<br/>exact-key, 1h TTL"}
-    C -->|hit| INJ
-    C -->|miss| DRV["searchDriveWithServiceAccount(q,5)"]
-    DRV --> KX["Drive fullText + name contains<br/>(BFS folder tree, 3 levels)"]
-    KX --> EX["Extract content<br/>Workspace export · pdf-parse · Gemini OCR (binary)"]
-    EX --> CC["kb_content_cache (24h)"]
-    EX --> SC["Hand-rolled TF-IDF + title/phrase/density score"]
-    SC --> INJ["Inject top-5 whole docs (≤8K each) into system prompt"]
-    INJ --> LLM["Gemini 3 / GPT — answer with citations"]
+    Q["User message (Amble tab)"] --> RF["reformulateQuery() (multi-turn coref)"]
+    RF --> EMB["embedQuery — Vertex gemini-embedding-001 @1536 (RETRIEVAL_QUERY)"]
+    EMB --> KNN["Firestore findNearest(kb_vectors, COSINE, top 40)"]
+    KNN --> RRF["Lexical re-score + Reciprocal Rank Fusion (k=60)"]
+    RRF --> RR["Gemini-Flash rerank → top 6 chunks"]
+    RR --> FLOOR{"maxScore ≥ MIN_SCORE (0.35)?"}
+    FLOOR -->|yes| INJ["Inject top chunks w/ [n] citations + [dept]"]
+    FLOOR -->|no| FB["Fallback: live-Drive keyword search (keyword-gated)"]
+    FB -->|hits| INJ
+    FB -->|none| WEB["No KB → maybe web search"]
+    INJ --> LLM["Gemini 3 / GPT — grounding contract:<br/>answer ONLY from chunks, cite [n], else ABSTAIN"]
 ```
 
-**Three overlapping server retrieval systems coexist** (the 🧟 in [SOT §5](./SOURCE_OF_TRUTH.md)):
-| # | Entry point | Method | Store | Notes |
-|---|-------------|--------|-------|-------|
-| 1 | `/api/chat` (primary) | live Drive keyword + TF-IDF | Google Drive | no embeddings; whole-doc injection |
-| 2 | `/api/kb/search`, `useRAG` | Firestore `findNearest` (COSINE) | `knowledge_vectors` (real vectors) | post-filters userId/projectId **after** `limit:5` (drops valid hits); `score:0` |
-| 3 | `/api/knowledge/search` | in-memory cosine / keyword | `kb_documents`·`kb_chunks` (array embeds) | ≤500-doc scan; **different store** than #2's ingest |
+**Ingest (offline, incremental)** — `POST /api/knowledge/reindex` (admin token **or** `x-reindex-key`), `kbIngest.reindexKb()`:
+Drive walk (`listAllKbFiles`) → extract (reuse `extractFileContent`: Workspace export · pdf-parse · Gemini OCR) → **structure-aware chunk** (`kbChunker`, ~700 tok, 400 overlap) → **embed** (`gemini-embedding-001` @1536, `RETRIEVAL_DOCUMENT`) → write to **`kb_vectors`** `{fileId,title,department,text,chunkIndex,modifiedTime,embedding:Vector}`. Per-file state in `kb_index_state/{fileId}` (last `modifiedTime`) makes runs **incremental** (skip unchanged) and **resumable** (480 s soft-deadline → `incomplete:true`, re-run continues). First run: 43 files → 83 chunks, 0 errors, ~15 s.
 
-The improvement plan to unify these onto one Firestore-vector + hybrid + rerank pipeline is in **[SOT §8.5](./SOURCE_OF_TRUTH.md)**.
+**Why `kb_vectors` (new) not `knowledge_vectors`:** the legacy collection holds OpenAI `text-embedding-3-small` vectors (also 1536-dim) from the old ingest + user-upload path. Mixing embedding spaces is meaningless, so the Gemini company-KB lives in its own collection + vector index — zero collision.
+
+| Layer | Where | Accuracy role |
+|-------|-------|---------------|
+| Embeddings | `embeddingService.js` (Vertex `gemini-embedding-001` @1536, COSINE, asymmetric task types) | semantic recall |
+| Vector KNN | `kbRetrieval.vectorCandidates` (`findNearest` top 40) | recall pool |
+| Hybrid fusion | `kbRetrieval.rrfFuse` (semantic ⨁ lexical, RRF k=60) | lexical precision |
+| Rerank | `kbRetrieval.rerank` (Gemini-Flash, top 6) | precision (biggest jump) |
+| Grounded gen | `chat.buildSystemPrompt` grounding contract + `[n]` citations | faithfulness |
+| Abstention | `MIN_SCORE` floor + "say you don't have it" rule | no hallucination |
+
+**Other server retrieval paths** still exist but are secondary: `/api/kb/search` & `useRAG` → `searchKnowledgeBase` (now over-fetches 40 + post-filters by owner — the prior `limit:5`-then-filter recall bug is fixed); `/api/knowledge/search` → `handleVectorKBSearch` (in-memory cosine / Drive). Remaining unify/cleanup + scheduled auto-reindex + groundedness post-check + RAGAS eval are tracked in **[SOT §8.5](./SOURCE_OF_TRUTH.md)**.
 
 ---
 

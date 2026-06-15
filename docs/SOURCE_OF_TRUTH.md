@@ -160,12 +160,11 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - ✅ Export: copy + PDF (`@react-pdf/renderer`)
 
 ### Knowledge Base
-- ✅ Google Drive → Firestore sync (service account + per-user OAuth)
-- ✅ Document processing: PDF/DOCX/XLSX/Google Docs + **image analysis via GPT-4o vision**
-- ✅ Auto-classification (dept/pharmacy/product/category) + heading-aware chunking
-- ⚠️ **Prod chat retrieval is live-Drive keyword search + hand-rolled TF-IDF — NOT vector search.** The hybrid vector-RRF pipeline (`text-embedding-3-small`) exists in `src/services/knowledge/*` but the prod SSR function (`functions/src/routes/*.js`) doesn't run it. See [ARCHITECTURE §11a](./ARCHITECTURE.md).
-- ✅ KB views: status, documents, drive-list, debug
-- 🧟 **Three overlapping server retrieval systems** still active (live-Drive · `knowledge_vectors` findNearest · `kb_documents` in-memory cosine) — unify per **§8.5**
+- ✅ **Production vector RAG (shipped 2026-06-14)** — semantic retrieval on **Vertex `gemini-embedding-001` @1536** → Firestore **`findNearest`** (`kb_vectors`) → **hybrid RRF** (lexical fusion) → **Gemini-Flash rerank** → grounded answer with `[n]` citations + **abstention** when uncovered. Verified: cited KB facts on-topic; honest "not in the KB" off-topic. See [ARCHITECTURE §11a](./ARCHITECTURE.md).
+- ✅ **Incremental ingest** — `POST /api/knowledge/reindex` (admin token or `x-reindex-key`): Drive walk → extract → structure-aware chunk → embed → `kb_vectors`, per-file `kb_index_state` (modifiedTime) so re-runs skip unchanged + resume (480 s soft-deadline). First run 43 files → 83 chunks, 0 errors.
+- ✅ Document processing: PDF/DOCX/XLSX/Google Docs + image analysis (Gemini OCR for binaries), `kb_content_cache` (24 h)
+- ✅ Live-Drive keyword search retained as **cold-start fallback** (keyword-gated) so chat never regresses before/without an index
+- 📌 Remaining (§8.5): scheduled auto-reindex (Cloud Scheduler), groundedness post-check API, RAGAS eval set, department pre-filter index, migrate user-upload ingest to Gemini/`kb_vectors`, retire the 2 legacy retrieval paths
 
 ### Media Studio (Amble Studio) — ❌ REMOVED 2026-06-14
 - **Frontend removed**: `components/studio/` (Image + Video), `components/veo/`, `lib/studio/`, the sidebar item, the `veo`/`media` views, and the `enableStudio` capability + `accessStudio` permission.
@@ -256,6 +255,9 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-14 — KB vector RAG shipped (accuracy + speed + grounding)
+Replaced the live-Drive keyword KB path with a proper **vector RAG pipeline** and deployed it. New: `embeddingService.js` (Vertex **`gemini-embedding-001` @1536**, asymmetric task types), `kbChunker.js` (structure-aware ~700-tok chunks), `kbRetrieval.js` (`findNearest` top-40 → lexical **RRF** → **Gemini-Flash rerank** → top-6, `MIN_SCORE` floor), `kbIngest.js` (incremental Drive→**`kb_vectors`**, `kb_index_state`, resumable), `handleKbReindex` (`/api/knowledge/reindex`, admin token or `x-reindex-key`). `chat.js` now retrieves vector-first (live-Drive kept as cold-start fallback) and injects **chunks with `[n]` citations** under a strict **grounding contract + abstention** rule. Fixed `searchKnowledgeBase` recall bug (over-fetch 40 + post-filter). Added `kb_vectors` vector index (separate from legacy OpenAI `knowledge_vectors`). **Deployed; first reindex 43 files → 83 chunks, 0 errors; verified grounded citations + honest abstention.** Next-session items in §8.5. Docs: [ARCHITECTURE §11a](./ARCHITECTURE.md).
 
 ### 2026-06-14 — Time-clock department filter + KB search analysis
 - **Clock In/Out → Manage:** added a **Department filter** (from the user directory) that scopes the Employee filter and shows a per-employee department badge. `DirectoryUser`/`fetchUsers()` now carry `department`; entries aren't re-stamped (reflects re-assignments instantly). Build ✅, deployed.
@@ -371,9 +373,11 @@ System-prompt consolidation, route de-dup (Functions vs Next), auth on admin end
 ### 3. Time clock follow-ups (optional)
 CSV/payroll export, approvals, overtime rules, TIP/BON/COM amount fields, break tracking.
 
-### 5. 🔎 KB Search — analysis & improvement plan (2026-06-14)
+### 5. 🔎 KB Search — vector RAG (✅ SHIPPED 2026-06-14)
 
-**Finding.** Production answers KB questions with **live Google Drive keyword search + a hand-rolled TF-IDF** (`functions/src/routes/chat.js` → `driveSearchService.js`). There is **no semantic/vector search on the live path**, the KB is only searched when a **regex keyword gate** matches, coreference is resolved by a **hardcoded drug/pharmacy entity regex**, whole documents (≤8K each) are stuffed into the prompt, and a cold query does live Drive API calls + content extraction (incl. Gemini OCR for binaries) on the chat hot path (≤30 s timeout). Three disconnected retrieval systems coexist (see [ARCHITECTURE §11a](./ARCHITECTURE.md)), one with a post-filter bug that drops valid hits.
+> ✅ **Built, deployed, and verified this session.** The production chat KB path is now **Vertex `gemini-embedding-001` @1536 → Firestore `findNearest` (`kb_vectors`) → hybrid RRF → Gemini-Flash rerank → grounded answer with `[n]` citations + abstention.** First reindex: 43 files → 83 chunks, 0 errors. Verified: cited KB facts on a pharmacy question; honest "not in the knowledge base" on an off-KB question. New code: `embeddingService.js`, `kbChunker.js`, `kbRetrieval.js`, `kbIngest.js`, `handleKbReindex` (route `/api/knowledge/reindex`), chat.js wiring + grounding contract, `searchKnowledgeBase` recall-bug fix, `kb_vectors` vector index. Details: [ARCHITECTURE §11a](./ARCHITECTURE.md). **Remaining (next session) is listed at the end of this section.** The analysis that motivated it is preserved below.
+
+**Finding (pre-build).** Production answered KB questions with **live Google Drive keyword search + a hand-rolled TF-IDF** (`functions/src/routes/chat.js` → `driveSearchService.js`). There is **no semantic/vector search on the live path**, the KB is only searched when a **regex keyword gate** matches, coreference is resolved by a **hardcoded drug/pharmacy entity regex**, whole documents (≤8K each) are stuffed into the prompt, and a cold query does live Drive API calls + content extraction (incl. Gemini OCR for binaries) on the chat hot path (≤30 s timeout). Three disconnected retrieval systems coexist (see [ARCHITECTURE §11a](./ARCHITECTURE.md)), one with a post-filter bug that drops valid hits.
 
 **Why it underperforms** (industry baselines): paraphrase/synonym/conceptual queries miss (no embeddings); brittle intent gate skips real questions; whole-doc injection dilutes the context window and weakens citations; latency + cost on cold queries; duplicated/buggy code.
 
@@ -391,10 +395,10 @@ Retrieve (hot path):  embed query →
   rerank top ~50 → top 5–8 (cross-encoder)  →  inject CHUNKS w/ citations
 ```
 
-**Phased plan**
-- **P0 (quick wins, no new vendors):** fix the `searchKnowledgeBase` post-filter bug (pre-filter via `where()` + composite vector index, raise `limit`); replace the regex intent-gate with "search KB by default for the Amble tab, let the model cite or fall through"; inject **chunks, not whole docs**; LLM-reformulate the query with existing Gemini Flash instead of the entity regex.
-- **P1 (the real fix):** stand up the **incremental Drive→`knowledge_vectors` ingest** as a scheduled Cloud Function (Cloud Scheduler), make `/api/chat` retrieve via **Firestore `findNearest`**, add the **keyword pass + RRF fusion**, and **delete two of the three** retrieval systems. Add a `department`/`category` pre-filter to align with RBAC + the new time-clock departments.
-- **P2 (quality):** add a **reranker** (two-stage: recall ~50 → rerank → top ~8) and a tiny **eval set** (20–30 Q→expected-doc pairs) to measure recall\@k before/after.
+**Phased plan — status**
+- **P0 — ✅ shipped:** `searchKnowledgeBase` recall bug fixed (over-fetch 40 + post-filter, real COSINE score); intent-gate relaxed (vector search runs by default on the Amble tab, keyword gate only guards the live-Drive *fallback*); **chunk** injection (not whole docs); grounding contract + abstention added to the system prompt.
+- **P1 — ✅ shipped:** incremental **Drive→`kb_vectors` ingest** (`/api/knowledge/reindex`, per-file `kb_index_state`, resumable); `/api/chat` retrieves via **`findNearest`**; **lexical + RRF fusion**. *(Still on the table: a scheduled trigger, the `department` pre-filter index, and deleting the 2 legacy paths — see Remaining.)*
+- **P2 — ◐ partial:** **Gemini-Flash reranker shipped** (two-stage recall→rerank→top 6 + `MIN_SCORE` floor). *Remaining: the RAGAS eval set + the post-gen groundedness check.*
 
 **Decision — embeddings (analyzed for max accuracy, 2026-06-14):**
 
@@ -421,12 +425,14 @@ Retrieve (hot path):  embed query →
 
 **References (accuracy/grounding):** [Firestore vector dims/limits](https://docs.cloud.google.com/firestore/native/docs/vector-search) · [MTEB 2026 embedding benchmark (Milvus)](https://milvus.io/blog/choose-embedding-model-rag-2026.md) · [RAGAS faithfulness/groundedness](https://arxiv.org/html/2309.15217v1) · [Groundedness eval (deepset)](https://www.deepset.ai/blog/rag-llm-evaluation-groundedness) · [Hybrid + rerank gains (Superlinked)](https://superlinked.com/vectorhub/articles/optimizing-rag-with-hybrid-search-reranking)
 
-**What we'd need to "get" (owner):**
-1. **Confirm the embedding pick** — recommended **`gemini-embedding-001` @1536 (Vertex)**; approving it means a one-time re-embed of the KB (cheap). Reranker can default to Gemini-Flash (no new vendor) until eval says otherwise.
-2. **Firestore composite vector index** on `knowledge_vectors.embedding` incl. the pre-filter fields (`department`, optionally `category`) — add to `firestore.indexes.json` + deploy.
-3. **Cloud Scheduler** job (free-tier-ish) to run the incremental re-index — needs the scheduler API enabled.
-4. *(If reranker = Cohere)* a **Cohere API key** as a Cloud secret. *(If Vertex Ranking)* enable **Discovery Engine API**.
-5. *(Alternative, least code)* **Vertex AI Search** with its **GA Google Drive connector** — Google does crawl/chunk/embed/hybrid/rerank/citations end-to-end; tradeoff is a new paid GCP product + less control. Good fallback if we don't want to own the pipeline.
+**🔜 Remaining (next session) — resume here:**
+1. **Scheduled auto-reindex.** Today reindex is manual (`POST /api/knowledge/reindex`, gated by an admin Firebase token **or** the `KB_REINDEX_KEY` header — key lives in `.env.local`, flows to `functions/.env` via the deploy script; **gitignored, not committed**). Hosting caps proxied requests at **60 s**, so long runs must hit the **Cloud Run URL** (`https://ssrambleai-2flmqkt55a-uc.a.run.app/api/knowledge/reindex`, up to 540 s) or use small `maxFiles` batches. **Next:** add a Cloud Scheduler job (enable Scheduler API) calling reindex `{full:false}` every N min (incremental = cheap, skips unchanged), **or** an admin "Reindex KB" button in a KB admin view. `KB_AUTO_SYNC_ENABLED`/`KB_SYNC_INTERVAL_MINUTES` env already exist to drive it.
+2. **Groundedness post-check (the last accuracy layer).** Add a faithfulness verification after generation — **Vertex check-grounding API** or a Gemini-Flash NLI judge — that confirms each claim maps to a retrieved chunk; on fail → regenerate or abstain. Prompt-contract + `MIN_SCORE` floor already cover most of this; this makes it bulletproof.
+3. **RAGAS eval set.** 20–30 `question → expected-doc/answer` pairs + a script scoring context-recall / faithfulness / answer-relevancy, so quality is measured before/after each change.
+4. **`department` pre-filter index.** Add a composite vector index (`kb_vectors`: `department` + `embedding`) so retrieval can `where('department','==',…)` pre-filter (RBAC + time-clock-departments aligned). Without it, `where()+findNearest` errors — currently we don't pre-filter.
+5. **Retire the 2 legacy paths + migrate uploads.** Point `useRAG`/`/api/kb/search`/`/api/knowledge/search` at the new pipeline (or delete), and move the user-upload ingest (`handleKnowledgeIngest`) to `gemini-embedding-001` → `kb_vectors` so everything shares one embedding space.
+6. **Reranker upgrade (optional).** If the eval shows precision gaps, swap Gemini-Flash rerank for **Cohere Rerank** (Cohere API key as a Cloud secret) or **Vertex Ranking API** (enable Discovery Engine API).
+7. **Managed alternative (if we ever want out of the pipeline business):** **Vertex AI Search** + its GA Google Drive connector does crawl/chunk/embed/hybrid/rerank/citations end-to-end — more cost, less control.
 
 **References (current best practice):**
 - Firestore vector search + metadata pre-filtering — [Google Cloud blog](https://cloud.google.com/blog/products/databases/get-started-with-firestore-vector-similarity-search), [docs](https://docs.cloud.google.com/firestore/native/docs/vector-search)
@@ -434,7 +440,7 @@ Retrieve (hot path):  embed query →
 - Managed options — [Vertex AI Search vs RAG Engine vs Vector Search](https://medium.com/google-cloud/the-gcp-rag-spectrum-vertex-ai-search-rag-engine-and-vector-search-which-one-should-you-use-f56d50720d5a), [Vertex RAG Engine](https://cloud.google.com/blog/products/ai-machine-learning/introducing-vertex-ai-rag-engine)
 - Chunking + embedding model choice — [Firecrawl chunking guide](https://www.firecrawl.dev/blog/best-chunking-strategies-rag), [Milvus 2026 embedding benchmark](https://milvus.io/blog/choose-embedding-model-rag-2026.md)
 
-> **Status: ANALYSIS ONLY.** No KB code changed. Embedding model analyzed → **recommend `gemini-embedding-001` @1536**; accuracy depends on the 6-layer playbook (reranker + grounded gen + abstention + eval), not the embedder alone. Resume at **P0** once the owner confirms the embedding pick (and build-our-own-pipeline vs managed Vertex AI Search).
+> **Status: ✅ PIPELINE SHIPPED & VERIFIED (P0 + P1 + reranker).** `gemini-embedding-001` @1536 vector RAG live in prod with grounded generation + abstention. Remaining = the 7 next-session items above (scheduled reindex, groundedness post-check, RAGAS eval, department pre-filter, legacy cleanup). Re-run reindex after KB doc changes: `POST <CloudRunURL>/api/knowledge/reindex` with `x-reindex-key`.
 
 ### 4. RBAC follow-ups
 Foundation + most follow-ups shipped. Status:

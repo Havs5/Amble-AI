@@ -31,6 +31,7 @@ const {
   handleKnowledgeIngest,
   handleKnowledgeSearch,
   handleVectorKBSearch,
+  handleKbReindex,
   handleDriveSync,
 } = require('./src/routes');
 
@@ -117,6 +118,7 @@ const ROUTES = [
   { method: 'POST', paths: ['/api/knowledge/ingest', '/knowledge/ingest'], handler: handleKnowledgeIngest },
   { method: 'POST', paths: ['/api/kb/search', '/kb/search'], handler: handleKnowledgeSearch },
   { method: 'POST', paths: ['/api/knowledge/search', '/knowledge/search'], handler: handleVectorKBSearch },
+  { method: 'POST', paths: ['/api/knowledge/reindex', '/knowledge/reindex'], handler: handleKbReindex },
   { method: 'POST', paths: ['/api/knowledge/drive-sync', '/knowledge/drive-sync'], handler: handleDriveSync },
 ];
 

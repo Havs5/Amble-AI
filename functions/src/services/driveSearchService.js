@@ -358,6 +358,60 @@ async function filenameSearch(folderIds, keywords, accessToken, limit) {
 }
 
 /**
+ * List ALL non-folder files in the KB folder tree (recursive, BFS, max 3
+ * levels), resolving shortcuts to their targets. Returns raw file metadata
+ * (no content extraction) — used by the vector-ingest pipeline.
+ * @returns {Promise<Array<{id,name,mimeType,modifiedTime,size}>>}
+ */
+async function listAllKbFiles(accessToken, rootFolderId) {
+  const folderId = rootFolderId || process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+  if (!folderId) return [];
+
+  const allFiles = [];
+  const seen = new Set();
+  let foldersToScan = [folderId];
+  let depth = 0;
+
+  while (foldersToScan.length > 0 && depth < 3) {
+    const nextLevel = [];
+    for (const folder of foldersToScan) {
+      const q = `'${folder}' in parents and trashed = false`;
+      const url = `https://www.googleapis.com/drive/v3/files?` + new URLSearchParams({
+        q,
+        fields: 'files(id,name,mimeType,modifiedTime,size,shortcutDetails)',
+        pageSize: '1000',
+        orderBy: 'modifiedTime desc',
+        supportsAllDrives: 'true',
+        includeItemsFromAllDrives: 'true',
+      });
+      try {
+        const res = await driveApiGet(url, accessToken);
+        const data = await res.json();
+        for (const file of (data.files || [])) {
+          if (file.mimeType === 'application/vnd.google-apps.folder') {
+            nextLevel.push(file.id);
+          } else if (file.mimeType === 'application/vnd.google-apps.shortcut') {
+            const t = file.shortcutDetails;
+            if (t?.targetId && t.targetMimeType !== 'application/vnd.google-apps.folder' && !seen.has(t.targetId)) {
+              seen.add(t.targetId);
+              allFiles.push({ id: t.targetId, name: file.name, mimeType: t.targetMimeType, modifiedTime: file.modifiedTime });
+            }
+          } else if (!seen.has(file.id)) {
+            seen.add(file.id);
+            allFiles.push(file);
+          }
+        }
+      } catch (e) {
+        console.error(`[DriveSearch] listAllKbFiles ${folder} failed:`, e.message);
+      }
+    }
+    foldersToScan = nextLevel;
+    depth++;
+  }
+  return allFiles;
+}
+
+/**
  * List ALL files in the KB folder (recursive into subfolders).
  * Extract content and rank by keyword relevance.
  */
@@ -736,4 +790,11 @@ function inferDepartment(filename) {
   return 'General';
 }
 
-module.exports = { searchDriveWithServiceAccount };
+module.exports = {
+  searchDriveWithServiceAccount,
+  // Exposed for the vector-ingest pipeline (kbIngest.js):
+  getAuthToken,
+  listAllKbFiles,
+  extractFileContent,
+  inferDepartment,
+};

@@ -27,6 +27,19 @@
       ]
     },
     {
+      "collectionGroup": "kb_vectors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "embedding",
+          "vectorConfig": {
+            "dimension": 1536,
+            "flat": {}
+          }
+        }
+      ]
+    },
+    {
       "collectionGroup": "generated_assets",
       "queryScope": "COLLECTION",
       "fields": [

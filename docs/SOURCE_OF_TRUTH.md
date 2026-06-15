@@ -184,7 +184,7 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - ✅ Usage dashboard (token/cost from `usage_logs`)
 
 ### Roles & Access (RBAC)
-- ✅ **3-tier roles** via `lib/roles.ts` (single source of truth): **Super Admin** (`superadmin`) › **Manager** (`manager`) › **Staff** (`staff`). Backward-compatible — legacy `admin`→Super Admin, `user`→Staff (no data migration needed).
+- ✅ **3-tier roles** via `lib/roles.ts` (single source of truth): **IT** (`superadmin`, labeled "IT" in the UI) › **Manager** (`manager`) › **Staff** (`staff`). Backward-compatible — legacy `admin`→IT, `user`→Staff (no data migration needed). The role **key stays `superadmin`**; only the display label changed.
 - ✅ Capability matrix `can(role, capability)`: `manageUsers` (super admin + manager), `manageManagers` (super admin only), `manageNews`, `manageTimeclock`, `manageKnowledge`, `viewReports`. Helpers: `isSuperAdmin`, `isManagerOrAbove`, `assignableRoles`, `canManageRole`.
 - ✅ User Management: 3-role selector (a Manager can only assign/manage **Staff**); role badge + filter; gating routed through `can()`.
 - ✅ Gating migrated to the helper: time-clock Manage tab (`manageTimeclock`), news CRUD (`manageNews`), Sidebar "Manage Users" (`manageUsers`) + role badge.
@@ -258,6 +258,14 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-15 — User Mgmt: IT label, usage-report fixes, modal polish
+- **Role label `Super Admin` → `IT`** — display only; the role **key stays `superadmin`** (and legacy `admin`). Changed `ROLE_LABELS.superadmin` in `lib/roles.ts`; the modal role filter + role-change hint now read from `ROLE_LABELS`. All rules/capabilities unchanged.
+- **Usage report accuracy fixed (two real bugs):**
+  1. **Gemini logged 0 tokens / $0.** `logUsageToFirestore` only read OpenAI field names (`prompt_tokens`/`completion_tokens`); the Vertex Gemini path sends `input_tokens`/`output_tokens` → 0. Now reads **both** shapes. Also added the **actual normalized model IDs** to `functions/src/config/pricing.js` (`gemini-3-flash-preview`, `gemini-3.1-pro-preview`, `gemini-3-pro-preview`, `gemini-2.5-flash`) + aligned Gemini 3 rates to $0.10/$0.40 (flash) and $2.50/$10 (pro); previously they fell back to gpt-4o pricing. Mirrored the IDs in client `usageManager.ts` (display + rate). **Caveat:** historical 0-token Gemini logs are NOT backfilled — only new usage is accurate.
+  2. **Total row ≠ cards.** The Cost-Breakdown **Total** used `month` (calendar month) while the cards + rows use the selected **range** (e.g. last-30-days) → $1.08 vs $1.99. Total now uses `range`; the 30-day card's progress bar too.
+- **Removed** the "Dictation Pricing Reference" card from the user detail view.
+- **Modal polish** — `UserManagementModal` density pass (p-6→p-5, section headers text-lg→text-base, big numbers text-2xl→text-xl, tighter spacing, max-w-6xl→5xl) for a cleaner, more compact look.
 
 ### 2026-06-14 — KB RAG hardening: auto-reindex + groundedness + eval
 Completed the KB next-session items. **Scheduled auto-reindex** — new `kbReindexSchedule` (`onSchedule`, every 6 h, incremental `reindexKb({full:false})`); `cloudscheduler.googleapis.com` auto-enabled; created successfully on deploy. **Groundedness post-check** — `kbRetrieval.verifyGroundedness` (Gemini-Flash judge) wired into `chat.js`, gated to borderline confidence (<0.55) so high-confidence answers stay fast, **fail-open**, appends a verify-caveat when a claim isn't supported (env `KB_GROUNDEDNESS_CHECK`). **Eval harness** — `scripts/kb_eval.js` (gold questions → answer-correctness + abstention), baseline **4/5** (the one miss is generation phrasing, not retrieval; abstention verified on company-specific gaps). Deployed (`ssrambleai` updated + `kbReindexSchedule` created). Remaining KB items are optional cleanup (§8.5 items 4–7).

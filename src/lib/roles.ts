@@ -16,7 +16,7 @@ export type UserRole = 'superadmin' | 'manager' | 'staff';
 export const ROLES: UserRole[] = ['superadmin', 'manager', 'staff'];
 
 export const ROLE_LABELS: Record<UserRole, string> = {
-  superadmin: 'Super Admin',
+  superadmin: 'IT',
   manager: 'Manager',
   staff: 'Staff',
 };

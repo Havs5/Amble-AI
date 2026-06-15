@@ -66,6 +66,8 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   // Gemini 3 Preview API models
   'gemini-3-flash-preview': 'Gemini 3 Flash',
   'gemini-3-pro-preview': 'Gemini 3 Pro',
+  'gemini-3.1-pro-preview': 'Gemini 3 Pro',
+  'gemini-2.5-flash': 'Gemini 2.5 Flash',
   'gemini-1.5-flash': 'Gemini 1.5 Flash',
   'gemini-1.5-pro': 'Gemini 1.5 Pro',
   // Image/Video
@@ -102,6 +104,8 @@ const MODEL_PRICING: Record<string, { input: number, output: number, unit?: 'tok
   // Gemini 3 Preview API models (January 2026)
   'gemini-3-flash-preview': { input: 0.10, output: 0.40 },
   'gemini-3-pro-preview': { input: 2.50, output: 10.00 },
+  'gemini-3.1-pro-preview': { input: 2.50, output: 10.00 },
+  'gemini-2.5-flash': { input: 0.10, output: 0.40 },
   'gemini-1.5-flash': { input: 0.10, output: 0.40 },
   'gemini-1.5-pro': { input: 2.50, output: 10.00 },
   

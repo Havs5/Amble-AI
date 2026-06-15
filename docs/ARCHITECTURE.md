@@ -534,7 +534,7 @@ flowchart TD
 | Rate limiting | `lib/rateLimiter.ts` | in-memory sliding window, per instance |
 | Response caching | `lib/semanticCache.ts` | Jaccard ≥0.85 dedupe, 24h |
 | System prompt | `lib/systemPrompt.ts` **and** inline in `route.ts` | ⚠️ duplicated — drift risk |
-| Usage/cost | `usage_logs` + `functions/src/config` pricing | per-model token pricing |
+| Usage/cost | `usage_logs` + `functions/src/config/pricing.js` (server) / `lib/usageManager.ts` (client) | per-model token pricing. `logUsageToFirestore` normalizes **both** usage shapes (OpenAI `prompt_tokens`/`completion_tokens` + Vertex `input_tokens`/`output_tokens`) — keep model IDs in sync across both pricing maps or cost falls back to gpt-4o. Report `range` (selected window) ≠ `month` (calendar) — Total + cards both use `range`. |
 | Validation | Zod schemas on API boundaries | strict mode TS throughout |
 | Observability | `@opentelemetry/api` present | minimal wiring |
 | Tests | `src/__tests__` | services + hooks + integration; 50% coverage threshold |

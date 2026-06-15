@@ -11,8 +11,11 @@ async function logUsageToFirestore(adminDb, userId, model, usage) {
   }
 
   try {
-    const inputTokens = usage.prompt_tokens || 0;
-    const outputTokens = usage.completion_tokens || 0;
+    // Accept BOTH usage shapes: OpenAI (prompt_tokens/completion_tokens) and
+    // Gemini/Vertex (input_tokens/output_tokens). Previously only the OpenAI
+    // names were read, so every Gemini call logged 0 tokens → $0 cost.
+    const inputTokens = usage.prompt_tokens ?? usage.input_tokens ?? 0;
+    const outputTokens = usage.completion_tokens ?? usage.output_tokens ?? 0;
     const cost = calculateCost(model, inputTokens, outputTokens);
     
     await adminDb.collection('usage_logs').add({

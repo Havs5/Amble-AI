@@ -7,8 +7,14 @@ const MODEL_PRICING = {
   'gpt-5-nano': { input: 0.05, output: 0.20 },
   'gemini-1.5-pro': { input: 3.50, output: 10.50 },
   'gemini-1.5-flash': { input: 0.35, output: 1.05 },
-  'gemini-3-flash': { input: 0.35, output: 1.05 },
-  'gemini-3-pro': { input: 5.00, output: 15.00 },
+  'gemini-3-flash': { input: 0.10, output: 0.40 },
+  'gemini-3-pro': { input: 2.50, output: 10.00 },
+  // Actual normalized model IDs logged by chat.js (Vertex Gemini 3). Without
+  // these exact keys, calculateCost fell back to gpt-4o pricing.
+  'gemini-3-flash-preview': { input: 0.10, output: 0.40 },
+  'gemini-3-pro-preview': { input: 2.50, output: 10.00 },
+  'gemini-3.1-pro-preview': { input: 2.50, output: 10.00 },
+  'gemini-2.5-flash': { input: 0.10, output: 0.40 },
 };
 
 function calculateCost(model, inputTokens, outputTokens) {

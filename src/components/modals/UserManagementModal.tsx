@@ -289,10 +289,10 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <div className="bg-white dark:bg-slate-900 w-full max-w-6xl h-[80vh] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 mx-4">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[82vh] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 mx-4">
         
         {/* Header */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center gap-4">
             {onBack && (
               <button 
@@ -336,7 +336,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
         </div>
 
         {activeTab === 'usage' ? (
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950/50">
+          <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50">
             <UsageReport />
           </div>
         ) : (
@@ -363,9 +363,9 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                 >
                   <option value="all">All Roles</option>
-                  <option value="superadmin">Super Admin</option>
-                  <option value="manager">Manager</option>
-                  <option value="staff">Staff</option>
+                  <option value="superadmin">{ROLE_LABELS.superadmin}</option>
+                  <option value="manager">{ROLE_LABELS.manager}</option>
+                  <option value="staff">{ROLE_LABELS.staff}</option>
                 </select>
                 {can(currentUser?.role, 'manageUsers') && (
                 <button 
@@ -447,11 +447,11 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
           {/* Detail View */}
           {isAddingUser ? (
-            <div className="flex-[2] bg-slate-50 dark:bg-slate-950 p-6 overflow-y-auto">
-              <div className="max-w-2xl mx-auto space-y-8">
+            <div className="flex-[2] bg-slate-50 dark:bg-slate-950 p-5 overflow-y-auto">
+              <div className="max-w-2xl mx-auto space-y-6">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Add New User</h3>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">Add New User</h3>
                     <p className="text-slate-500 dark:text-slate-400">Create a new account for your organization.</p>
                   </div>
                   <button 
@@ -462,7 +462,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   </button>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-5">
                   {addUserError && (
                     <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center gap-2">
                       <XCircle size={16} />
@@ -615,11 +615,11 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
               </div>
             </div>
           ) : selectedUser ? (
-            <div className="flex-[2] bg-slate-50 dark:bg-slate-950 p-6 overflow-y-auto">
-              <div className="max-w-3xl mx-auto space-y-8">
+            <div className="flex-[2] bg-slate-50 dark:bg-slate-950 p-5 overflow-y-auto">
+              <div className="max-w-3xl mx-auto space-y-6">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{selectedUser.name}</h3>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">{selectedUser.name}</h3>
                     <p className="text-slate-500 dark:text-slate-400">{selectedUser.email}</p>
                   </div>
                   <div className="flex gap-2">
@@ -650,14 +650,14 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
                 {/* Usage Stats Section */}
                 {isLoadingStats ? (
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="animate-spin text-indigo-500 mr-2" size={24} />
                     <span className="text-slate-500">Loading usage statistics...</span>
                   </div>
                 </div>
                 ) : userUsageStats && (
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                     <h4 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                       <BarChart2 size={20} className="text-indigo-500" />
@@ -692,7 +692,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Today's Cost</span>
                         <DollarSign size={16} className="text-emerald-500" />
                       </div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+                      <div className="text-xl font-bold text-slate-900 dark:text-white mb-1">
                         ${userUsageStats.today.cost.toFixed(4)}
                       </div>
                       <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
@@ -716,13 +716,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         </span>
                         <Calendar size={16} className="text-blue-500" />
                       </div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+                      <div className="text-xl font-bold text-slate-900 dark:text-white mb-1">
                         ${(userUsageStats.range?.cost || 0).toFixed(4)}
                       </div>
                       <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full ${((userUsageStats.month.cost / (editLimits.monthlyCostLimit || 50)) * 100) > 90 ? 'bg-red-500' : 'bg-blue-500'}`} 
-                          style={{ width: `${Math.min(100, (userUsageStats.month.cost / (editLimits.monthlyCostLimit || 50)) * 100)}%` }} 
+                        <div
+                          className={`h-full rounded-full ${(((userUsageStats.range?.cost || 0) / (editLimits.monthlyCostLimit || 50)) * 100) > 90 ? 'bg-red-500' : 'bg-blue-500'}`}
+                          style={{ width: `${Math.min(100, ((userUsageStats.range?.cost || 0) / (editLimits.monthlyCostLimit || 50)) * 100)}%` }}
                         />
                       </div>
                       <div className="flex justify-between mt-1 text-xs text-slate-400">
@@ -736,7 +736,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Requests</span>
                         <Hash size={16} className="text-purple-500" />
                       </div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-white">
+                      <div className="text-xl font-bold text-slate-900 dark:text-white">
                         {userUsageStats.totalRequests.toLocaleString()}
                       </div>
                       <div className="text-xs text-slate-400 mt-1">
@@ -749,7 +749,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Avg Cost/Request</span>
                         <TrendingUp size={16} className="text-amber-500" />
                       </div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-white">
+                      <div className="text-xl font-bold text-slate-900 dark:text-white">
                         ${userUsageStats.avgCostPerRequest.toFixed(4)}
                       </div>
                       <div className="text-xs text-slate-400 mt-1">
@@ -822,8 +822,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                             <td className="py-2 px-3 text-slate-900 dark:text-white">Total</td>
                             <td className="py-2 px-3"></td>
                             <td className="py-2 px-3 text-right text-slate-900 dark:text-white">{userUsageStats.totalRequests.toLocaleString()}</td>
-                            <td className="py-2 px-3 text-right text-slate-900 dark:text-white">{userUsageStats.month.tokens.toLocaleString()}</td>
-                            <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">${userUsageStats.month.cost.toFixed(4)}</td>
+                            <td className="py-2 px-3 text-right text-slate-900 dark:text-white">{(userUsageStats.range?.tokens || 0).toLocaleString()}</td>
+                            <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">${(userUsageStats.range?.cost || 0).toFixed(4)}</td>
                             <td className="py-2 px-3"></td>
                             <td className="py-2 px-3"></td>
                           </tr>
@@ -865,8 +865,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                 )}
 
                 {/* Department Section */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-                  <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                  <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                     <Shield size={20} className="text-purple-500" />
                     Role
                   </h4>
@@ -883,12 +883,12 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   <p className="text-xs text-slate-500 mt-2">
                     {canManageRole(currentUser?.role, selectedUser.role)
                       ? ROLE_DESCRIPTIONS[editRole]
-                      : 'Only a Super Admin can change this user’s role.'}
+                      : 'Only IT can change this user’s role.'}
                   </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-                  <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                  <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                     <Users size={20} className="text-blue-500" />
                     Department
                   </h4>
@@ -906,8 +906,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                 </div>
 
                 {/* Permissions Section */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-                  <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                  <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                     <Shield size={20} className="text-green-500" />
                     Access Permissions
                   </h4>
@@ -997,8 +997,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
                 {/* AI Configuration Section - Only accessible to admins */}
                 {can(currentUser?.role, 'manageUsers') && (
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-                  <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                  <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                     <Bot size={20} className="text-purple-500" />
                     AI Configuration
                   </h4>
@@ -1135,7 +1135,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         Knowledge Base
                         <span className="ml-2 text-xs font-normal text-slate-500">Upload documents for context.</span>
                       </label>
-                      <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 text-center hover:border-indigo-500 transition-colors cursor-not-allowed relative bg-slate-50/50 dark:bg-slate-800/50 opacity-60">
+                      <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-5 text-center hover:border-indigo-500 transition-colors cursor-not-allowed relative bg-slate-50/50 dark:bg-slate-800/50 opacity-60">
                          <div className="pointer-events-none">
                             <div className="mx-auto text-slate-400 mb-2 flex justify-center">
                                 <Bot size={24} />
@@ -1152,8 +1152,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                 )}
 
                 {/* Capabilities Section */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-                  <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                  <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                     <Zap size={20} className="text-amber-500" />
                     Premium Capabilities
                   </h4>
@@ -1188,8 +1188,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                 </div>
 
                 {/* Voice Dictation Settings Section */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-                  <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                  <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                     <Mic size={20} className="text-indigo-500" />
                     Voice Dictation Settings
                   </h4>
@@ -1274,43 +1274,15 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                     </label>
                   </div>
 
-                  {/* Pricing Info Card - Enhanced */}
-                  <div className="p-4 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-800/50 dark:to-slate-900/50 border border-slate-200 dark:border-slate-700">
-                    <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                      <DollarSign size={14} className="text-emerald-500" />
-                      Dictation Pricing Reference
-                    </h5>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/50 dark:border-slate-700/50">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">Browser API:</span>
-                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">FREE</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/50 dark:border-slate-700/50">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">Whisper (STT):</span>
-                        <span className="text-xs font-bold text-amber-600 dark:text-amber-400">$0.006/min</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/50 dark:border-slate-700/50">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">GPT-5 Mini (correction):</span>
-                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400">$0.15/1M in</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/50 dark:border-slate-700/50">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">TTS Standard:</span>
-                        <span className="text-xs font-bold text-purple-600 dark:text-purple-400">$15/1M chars</span>
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
-                      💡 <strong>Cost Tip:</strong> 10 min/day dictation with Whisper ≈ <strong>$1.80/month</strong>. Browser mode is unlimited & free.
-                    </p>
-                  </div>
                 </div>
 
                 {/* Limits Section */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-                  <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                  <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                     <Activity size={20} className="text-blue-500" />
                     Usage Limits
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                     <div>
                       <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Daily Budget ($)</label>
                       <input 
@@ -1346,7 +1318,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
                 {/* Danger Zone */}
                 {can(currentUser?.role, 'manageUsers') && (
-                <div className="bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-100 dark:border-red-900/30 p-6">
+                <div className="bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-100 dark:border-red-900/30 p-5">
                   <h4 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-4 flex items-center gap-2">
                     <Shield size={20} />
                     Danger Zone
@@ -1386,7 +1358,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
       {/* Delete Confirmation Modal */}
       {showDeleteConfirmation && (
         <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 animate-in zoom-in-95 duration-200 mx-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-5 animate-in zoom-in-95 duration-200 mx-4">
             <div className="flex flex-col items-center text-center mb-6">
               <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
                 <AlertTriangle size={32} className="text-red-600 dark:text-red-500" />

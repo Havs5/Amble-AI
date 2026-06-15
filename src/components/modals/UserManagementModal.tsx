@@ -409,7 +409,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
         ) : (
         <div className="flex flex-1 overflow-hidden min-w-0">
           {/* Sidebar / List View */}
-          <div className={`flex flex-col min-w-0 border-r border-slate-200 dark:border-slate-800 ${selectedUser ? 'hidden lg:flex lg:w-72 lg:flex-none' : 'w-full'}`}>
+          <div className={`flex flex-col min-w-0 border-r border-slate-200 dark:border-slate-800 w-full lg:w-80 lg:flex-none ${(selectedUser || isAddingUser) ? 'hidden lg:flex' : 'flex'}`}>
             
             {/* Toolbar */}
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 space-y-4">
@@ -1454,7 +1454,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
               )}
             </div>
           ) : (
-            <div className="flex-[2] min-w-0 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 dark:bg-slate-950/50">
+            <div className="flex-[2] min-w-0 hidden lg:flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 dark:bg-slate-950/50">
               <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
                 <Edit2 size={24} className="opacity-50" />
               </div>

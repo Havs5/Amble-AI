@@ -16,76 +16,7 @@ export interface AIModel {
   };
 }
 
-export interface GenerateImageOptions {
-  prompt: string;
-  modelId?: string; // e.g. 'dall-e-3', 'imagen-3.0-generate-001'
-  size?: '1024x1024' | 'other';
-  quality?: 'standard' | 'hd';
-  n?: number;
-}
-
-export interface GenerateImageResult {
-  urls: string[];
-  provider: string;
-  model: string;
-}
-
 export class ModelGateway {
-  
-  /**
-   * Generates images using the appropriate backend provider based on the model ID.
-   * Auto-routes 'banana', 'gemini' keywords to Imagen if no specific model provided.
-   */
-  static async generateImage(options: GenerateImageOptions): Promise<GenerateImageResult> {
-    const { prompt, modelId } = options;
-    
-    // Client-side heuristic for model selection (can be overridden by UI)
-    let selectedModel = modelId || 'dall-e-3';
-    
-    try {
-
-      const response = await fetch('/api/image', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt,
-          model: selectedModel,
-          resolution: options.size || '1024x1024',
-          quality: options.quality || 'standard',
-          n: options.n || 1
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
-        throw new ApiError(
-          errorData.error || `Image generation failed: ${response.statusText}`, 
-          response.status, 
-          errorData
-        );
-      }
-
-      const data = await response.json();
-      return {
-        urls: data.urls || [],
-        provider: selectedModel.includes('imagen') ? 'google' : 'openai',
-        model: selectedModel
-      };
-
-    } catch (error: any) {
-      console.error('ModelGateway.generateImage Error:', error);
-      
-      // Fallback Logic
-      if (selectedModel !== 'imagen-3.0-generate-001') {
-         console.warn("Attempting fallback to Imagen...");
-         return this.generateImage({ ...options, modelId: 'imagen-3.0-generate-001' });
-      }
-
-      throw error;
-    }
-  }
 
   /**
    * Universal Text Generation (Chat) Facade
@@ -118,8 +49,8 @@ export class ModelGateway {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: 'Text generation failed' }));
             throw new ApiError(
-                errorData.error || `Text generation failed: ${response.statusText}`, 
-                response.status, 
+                errorData.error || `Text generation failed: ${response.statusText}`,
+                response.status,
                 errorData
             );
         }
@@ -130,11 +61,10 @@ export class ModelGateway {
         return await performRequest();
     } catch (error) {
         console.error(`ModelGateway: Primary model ${payload.modelId} failed.`, error);
-        
-        // Fallback Logic
-        // If OpenAI fails, try Gemini
+
+        // Fallback Logic: if OpenAI fails, try a Gemini model
         if (payload.modelId.includes('gpt')) {
-            const fallbackModel = 'gemini-1.5-pro-latest';
+            const fallbackModel = 'gemini-2.5-pro';
             console.warn(`Attempting fallback to ${fallbackModel}...`);
             try {
                 return await performRequest(fallbackModel);
@@ -146,5 +76,4 @@ export class ModelGateway {
         throw error;
     }
   }
-} 
-
+}

@@ -413,11 +413,6 @@ export const api = {
       apiClient.post<SearchResponse>('/api/tools/search', data),
   },
   
-  image: {
-    generate: (data: { prompt: string; model?: string }) =>
-      apiClient.post<{ url: string }>('/api/image', data),
-  },
-  
   audio: {
     transcribe: (file: File) => {
       const formData = new FormData();

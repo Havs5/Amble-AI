@@ -107,9 +107,8 @@ flowchart TD
     B -->|Yes| C["Served by Hosting CDN<br/>(no function invocation)"]
     B -->|No| D["Rewrite → ssrambleai"]
     D --> E{"Path + method in<br/>ROUTES[] ?"}
-    E -->|Yes| F["Functions API handler<br/>chat / image / video / audio /<br/>tools / gallery / knowledge"]
+    E -->|Yes| F["Functions API handler<br/>chat / audio /<br/>tools / knowledge"]
     E -->|"/api/admin/* (inline)"| G["Inline admin handler<br/>⚠️ no auth"]
-    E -->|"/api/videos/:id/content"| H["Inline video proxy"]
     E -->|No| I["Next.js SSR handler"]
     I --> J{"Next.js API route<br/>or page?"}
     J -->|API route| K["src/app/api/**/route.ts<br/>(auth callbacks, KB status, upload, admin user CRUD)"]
@@ -155,7 +154,7 @@ functions/
 ├── index.js                 SSR entry + ROUTES[] table + inline admin handlers
 └── src/
     ├── config/              Pricing tables
-    ├── routes/              chat, image, video, audio, tools, gallery, knowledge, driveSync, videoAnalyze
+    ├── routes/              chat, audio, tools, knowledge, driveSync
     ├── services/            Drive, search, knowledge, usage
     └── utils/               Response helpers
 ```
@@ -327,22 +326,17 @@ All paths resolve through `ssrambleai`. "Source" = which implementation actually
 | Method | Path | Prod source | Auth | Purpose |
 |--------|------|-------------|------|---------|
 | POST | `/api/chat` | Functions | rate-limit | Streaming chat + RAG + tools + agents |
-| POST | `/api/image` | Functions | — | DALL·E 3 / Imagen 3 → Storage |
-| POST | `/api/veo` | Functions | — | Sora / Veo video (poll → Storage) |
 | POST | `/api/transcribe` | Functions | — | Whisper STT (+ GPT correction) |
 | POST | `/api/rewrite` | Functions | — | Shorter/Firmer (likely orphaned; BillingView now uses `/api/chat`) |
 | POST | `/api/audio/speech` | Functions | — | TTS-1 → base64 MP3 |
 | POST | `/api/tools/search` | Functions | — | Google CSE → Tavily fallback |
 | POST | `/api/tools/extract` | Functions | — | Tavily URL extraction |
-| GET/DELETE | `/api/gallery` | Functions | userId | List / delete generated assets |
 | POST | `/api/knowledge/search` | Functions | Bearer | Vector KB + Drive search |
 | POST | `/api/knowledge/drive-sync` | Functions | Bearer + token | Drive → Firestore KB sync |
 | POST | `/api/knowledge/ingest` | Functions only | — | Chunk + embed a doc |
 | POST | `/api/kb/search` | Functions only | — | Project-scoped RAG |
-| POST | `/api/video/analyze` | Functions only | — | Gemini video analysis |
 | POST | `/api/admin/fix-duplicates` | Functions inline | ⚠️ none | Dedupe users |
 | POST | `/api/admin/restore-users` | Functions inline | ⚠️ none | Restore users |
-| GET | `/api/videos/:id/content` | Functions inline | — | Proxy OpenAI video bytes |
 | GET | `/api/auth/google/callback` | Next.js | OAuth state | Store Drive tokens |
 | POST | `/api/auth/google/refresh` | Next.js | Bearer | Refresh Drive token |
 | POST | `/api/admin/create-user` · `/delete-user` | Next.js | admin | User CRUD |
@@ -401,25 +395,9 @@ Retrieval over the synced KB is **hybrid**: a vector path (query embedding → p
 
 ---
 
-## 12. Media Generation
+## 12. Media Generation — removed
 
-```mermaid
-flowchart TD
-    subgraph Image
-        IA["POST /api/image"] --> IB{"model"}
-        IB -->|imagen-3| IC["Gemini Imagen"]
-        IB -->|dall-e-3| ID["OpenAI DALL·E"]
-        IC & ID --> IE["Save → Storage generated_images/"]
-        IE --> IF["Record → generated_assets"]
-    end
-    subgraph Video
-        VA["POST /api/veo"] --> VB{"model"}
-        VB -->|sora| VC["OpenAI: create job → poll ≤9min"]
-        VB -->|veo| VD["Google: generateVideos → poll op"]
-        VC & VD --> VE["Upload → Storage"]
-        VE --> VF["Record → generated_assets"]
-    end
-```
+The image/video generation + gallery surface (Amble Studio) and its backend (`/api/image`, `/api/veo`, `/api/video/analyze`, `/api/gallery`, the OpenAI video proxy) were **removed on 2026-06-14**. If image/video generation returns, it'll be (re)built as a dedicated project — see [SOURCE_OF_TRUTH.md](./SOURCE_OF_TRUTH.md). The `generated_assets` Firestore collection from past generations is retained.
 
 ---
 

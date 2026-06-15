@@ -23,18 +23,14 @@ require('dotenv').config();
 // Route handlers
 const {
   handleChat,
-  handleImage,
-  handleVideo,
   handleTranscribe,
   handleRewrite,
   handleSpeech,
   handleSearch,
   handleExtract,
-  handleGallery,
   handleKnowledgeIngest,
   handleKnowledgeSearch,
   handleVectorKBSearch,
-  handleVideoAnalyze,
   handleDriveSync,
 } = require('./src/routes');
 
@@ -107,33 +103,21 @@ function setSecretsToEnv() {
 const ROUTES = [
   // Chat
   { method: 'POST', paths: ['/api/chat', '/chat'], handler: handleChat },
-  
-  // Image
-  { method: 'POST', paths: ['/api/image', '/image'], handler: handleImage },
-  
-  // Video
-  { method: 'POST', paths: ['/api/veo', '/veo'], handler: handleVideo },
-  
+
   // Audio
   { method: 'POST', paths: ['/api/transcribe', '/transcribe'], handler: handleTranscribe },
   { method: 'POST', paths: ['/api/rewrite', '/rewrite'], handler: handleRewrite },
   { method: 'POST', paths: ['/api/audio/speech', '/audio/speech'], handler: handleSpeech },
-  
+
   // Tools
   { method: 'POST', paths: ['/api/tools/search', '/tools/search'], handler: handleSearch },
   { method: 'POST', paths: ['/api/tools/extract', '/tools/extract'], handler: handleExtract },
-  
-  // Gallery (GET + DELETE)
-  { method: ['GET', 'DELETE'], paths: ['/api/gallery', '/gallery'], handler: handleGallery },
-  
+
   // Knowledge
   { method: 'POST', paths: ['/api/knowledge/ingest', '/knowledge/ingest'], handler: handleKnowledgeIngest },
   { method: 'POST', paths: ['/api/kb/search', '/kb/search'], handler: handleKnowledgeSearch },
   { method: 'POST', paths: ['/api/knowledge/search', '/knowledge/search'], handler: handleVectorKBSearch },
   { method: 'POST', paths: ['/api/knowledge/drive-sync', '/knowledge/drive-sync'], handler: handleDriveSync },
-  
-  // Video Analysis
-  { method: 'POST', paths: ['/api/video/analyze', '/video/analyze'], handler: handleVideoAnalyze },
 ];
 
 // ============================================================================
@@ -224,13 +208,6 @@ exports.ssrambleai = onRequest(
       // Special: Admin - Delete User
       if (method === 'POST' && (path === '/api/admin/delete-user' || path === '/admin/delete-user')) {
         return handleAdminDeleteUser(req, res, context);
-      }
-
-      // Special: Video content proxy (dynamic path)
-      const videoContentMatch = path.match(/^\/(?:api\/)?videos\/([^/]+)\/content$/);
-      if (method === 'GET' && videoContentMatch) {
-        const videoId = decodeURIComponent(videoContentMatch[1]);
-        return handleVideoContentProxy(req, res, videoId);
       }
 
       // Fall through to Next.js
@@ -493,38 +470,6 @@ async function handleRestoreUsers(req, res, { adminDb, writeJson }) {
   } catch (e) {
     console.error('[Admin] Error restoring users:', e);
     return writeJson(res, 500, { error: e.message });
-  }
-}
-
-// ============================================================================
-// Video Content Proxy (Special Handler)
-// ============================================================================
-
-async function handleVideoContentProxy(req, res, videoId) {
-  try {
-    if (!process.env.OPENAI_API_KEY) {
-      return jsonError(res, 500, 'OPENAI_API_KEY is missing');
-    }
-
-    const upstream = await fetch(
-      `https://api.openai.com/v1/videos/${encodeURIComponent(videoId)}/content`,
-      { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } }
-    );
-
-    if (!upstream.ok) {
-      const text = await upstream.text().catch(() => '');
-      return jsonError(res, upstream.status, 'Failed to fetch video content', text);
-    }
-
-    const contentType = upstream.headers.get('content-type') || 'video/mp4';
-    res.status(200);
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'no-store');
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    return res.end(buf);
-  } catch (e) {
-    console.error('Error in video content proxy:', e);
-    return jsonError(res, getHttpStatusFromError(e) || 500, getErrorMessage(e));
   }
 }
 

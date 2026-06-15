@@ -168,8 +168,10 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - 🧟 Three overlapping server RAG systems still active (consolidation pending)
 
 ### Media Studio (Amble Studio) — ❌ REMOVED 2026-06-14
-- Deleted the whole surface: `components/studio/` (Image + Video), `components/veo/`, `lib/studio/`, the sidebar item, the `veo`/`media` views, and the `enableStudio` capability + `accessStudio` permission.
-- 🧟 **Orphaned backend kept**: `/api/image` (Imagen), `/api/veo` (Veo+Sora), `/api/video/analyze`, the gallery route, `modelGateway.generateImage/Video`, and `apiClient` image helper are still deployed (generic infra, `modelGateway` is imported by the agent system). Nothing in the UI calls them now — remove later if agents won't use image/video. The image/video-analysis handlers are already on Vertex.
+- **Frontend removed**: `components/studio/` (Image + Video), `components/veo/`, `lib/studio/`, the sidebar item, the `veo`/`media` views, and the `enableStudio` capability + `accessStudio` permission.
+- **Backend removed** (confirmed agents won't generate images for now): Functions routes `image.js`, `video.js`, `videoAnalyze.js`, `gallery.js` + their ROUTES entries + barrel exports; the inline `/api/videos/:id/content` OpenAI video proxy; the Next.js dev routes `app/api/{image,veo,gallery}`; `AssetGallery` component; `ModelGateway.generateImage` + image types; the `apiClient.image` helper. `ModelGateway.generateText` stays (used by agents).
+- **Retained:** the `generated_assets` Firestore collection (past generations) and the `usage_logs`/UsageReport categorization of historical image/video entries.
+- ↩️ **If image/video generation returns, it's a dedicated project** (see Roadmap §6) — the Vertex model IDs are already probed + recorded in §8.
 
 ### Dashboard & Company News
 - ✅ Editorial/magazine news layout + top-3 featured banner
@@ -232,6 +234,9 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - [ ] **CI/CD** — GitHub Actions: build + test + deploy on push to `main` (no pipeline today).
 - [ ] **Post-deploy health checks + rollback automation.**
 
+### Future projects
+- [ ] **Image / Video generation (rebuild)** — removed 2026-06-14. If reintroduced, build as a dedicated surface on Vertex: Imagen `imagen-4.0-generate-001` + Veo `veo-3.0-generate-001` (regional `us-central1`), and Gemini image `gemini-3.1-flash-image` (global). Model IDs already probed (§8). Would re-add a route + a sidebar entry + the `accessStudio`-style gating.
+
 ### Ideas / parking lot
 - [ ] Wire `web_extract` agent tool (available, unused).
 - [ ] Real-time voice (capability flag `realtimeVoice` exists, unimplemented).
@@ -243,6 +248,10 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-14 — Removed orphaned media backend
+- Confirmed agents won't generate images for now, so removed the dead image/video backend: Functions `image.js`/`video.js`/`videoAnalyze.js`/`gallery.js` (+ ROUTES entries + barrel exports), the inline `/api/videos/:id/content` proxy, the Next.js dev routes `app/api/{image,veo,gallery}`, `AssetGallery`, `ModelGateway.generateImage` (+ image types), and the `apiClient.image` helper. Kept `ModelGateway.generateText` (agents).
+- Retained `generated_assets` data + historical usage categorization. Image/video generation is now a **future project** (Roadmap §6; Vertex model IDs recorded in §8). Build clean; deployed.
 
 ### 2026-06-14 — Removed Amble Studio (Media Studio)
 - Deleted the entire Media Studio surface (Image Studio + Video Generation/Veo): `components/studio/`, `components/veo/`, `lib/studio/`.

@@ -350,6 +350,7 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
   const [weekStart, setWeekStart] = useState(() => TC.startOfWeek(new Date()));
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [users, setUsers] = useState<DirectoryUser[]>([]);
+  const [filterDept, setFilterDept] = useState<string>('all');
   const [filterUser, setFilterUser] = useState<string>('all');
   const [editing, setEditing] = useState<{ id: string; clockIn: string; clockOut: string } | null>(null);
   const [adding, setAdding] = useState(false);
@@ -359,19 +360,40 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
     TC.fetchUsers().then(setUsers).catch((e) => console.warn('[TimeClock] fetchUsers', e));
   }, []);
 
-  const visible = filterUser === 'all' ? entries : entries.filter((e) => e.userId === filterUser);
+  // uid → department, plus the distinct department list (from the user directory).
+  const deptByUid = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of users) if (u.uid) m.set(u.uid, (u.department || '').trim());
+    return m;
+  }, [users]);
+  const departments = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of users) { const d = (u.department || '').trim(); if (d) s.add(d); }
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [users]);
+
+  // Changing the department scope resets the employee filter.
+  useEffect(() => { setFilterUser('all'); }, [filterDept]);
+
+  // Apply the department filter first, then the per-employee filter.
+  const deptMatched = filterDept === 'all'
+    ? entries
+    : entries.filter((e) => (deptByUid.get(e.userId) || '') === filterDept);
+  const visible = filterUser === 'all'
+    ? deptMatched
+    : deptMatched.filter((e) => e.userId === filterUser);
 
   // Group by user for per-employee totals.
   const groups = useMemo(() => {
-    const m = new Map<string, { name: string; entries: TimeEntry[]; total: number }>();
+    const m = new Map<string, { userId: string; name: string; department: string; entries: TimeEntry[]; total: number }>();
     for (const e of visible) {
-      const g = m.get(e.userId) || { name: e.userName, entries: [], total: 0 };
+      const g = m.get(e.userId) || { userId: e.userId, name: e.userName, department: deptByUid.get(e.userId) || '', entries: [], total: 0 };
       g.entries.push(e);
       g.total += TC.entryDurationMs(e, now);
       m.set(e.userId, g);
     }
     return Array.from(m.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [visible, now]);
+  }, [visible, now, deptByUid]);
 
   const saveEdit = async () => {
     if (!editing) return;
@@ -388,13 +410,25 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <WeekNav weekStart={weekStart} setWeekStart={setWeekStart} />
         <div className="flex items-center gap-2">
+          {departments.length > 0 && (
+            <select
+              value={filterDept}
+              onChange={(e) => setFilterDept(e.target.value)}
+              className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+            >
+              <option value="all">All departments</option>
+              {departments.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          )}
           <select
             value={filterUser}
             onChange={(e) => setFilterUser(e.target.value)}
             className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
           >
             <option value="all">All employees</option>
-            {Array.from(new Map(entries.map((e) => [e.userId, e.userName])).entries()).map(([id, name]) => (
+            {Array.from(new Map(deptMatched.map((e) => [e.userId, e.userName])).entries()).map(([id, name]) => (
               <option key={id} value={id}>{name}</option>
             ))}
           </select>
@@ -415,9 +449,14 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
         <div className="text-center py-16 text-slate-400 dark:text-slate-500 text-sm">No entries for this week.</div>
       ) : (
         groups.map((g) => (
-          <div key={g.name} className="mb-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div key={g.userId} className="mb-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-              <span className="font-semibold text-sm text-slate-700 dark:text-slate-200">{g.name}</span>
+              <span className="flex items-center gap-2">
+                <span className="font-semibold text-sm text-slate-700 dark:text-slate-200">{g.name}</span>
+                {g.department && (
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{g.department}</span>
+                )}
+              </span>
               <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{TC.fmtDuration(g.total)}</span>
             </div>
             <table className="w-full text-sm">
@@ -560,7 +599,7 @@ function AddEntryForm({
           Employee
           <select value={userId} onChange={(e) => setUserId(e.target.value)} className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
             {users.length === 0 && <option value="">No users found</option>}
-            {users.map((u) => <option key={u.uid} value={u.uid}>{u.name}</option>)}
+            {users.map((u) => <option key={u.uid} value={u.uid}>{u.name}{u.department ? ` · ${u.department}` : ''}</option>)}
           </select>
         </label>
         <label className="text-xs text-slate-500 dark:text-slate-400">

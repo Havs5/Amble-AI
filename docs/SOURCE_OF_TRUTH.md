@@ -163,9 +163,9 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - ✅ Google Drive → Firestore sync (service account + per-user OAuth)
 - ✅ Document processing: PDF/DOCX/XLSX/Google Docs + **image analysis via GPT-4o vision**
 - ✅ Auto-classification (dept/pharmacy/product/category) + heading-aware chunking
-- ✅ Hybrid retrieval (vector RRF + keyword), embeddings `text-embedding-3-small`
+- ⚠️ **Prod chat retrieval is live-Drive keyword search + hand-rolled TF-IDF — NOT vector search.** The hybrid vector-RRF pipeline (`text-embedding-3-small`) exists in `src/services/knowledge/*` but the prod SSR function (`functions/src/routes/*.js`) doesn't run it. See [ARCHITECTURE §11a](./ARCHITECTURE.md).
 - ✅ KB views: status, documents, drive-list, debug
-- 🧟 Three overlapping server RAG systems still active (consolidation pending)
+- 🧟 **Three overlapping server retrieval systems** still active (live-Drive · `knowledge_vectors` findNearest · `kb_documents` in-memory cosine) — unify per **§8.5**
 
 ### Media Studio (Amble Studio) — ❌ REMOVED 2026-06-14
 - **Frontend removed**: `components/studio/` (Image + Video), `components/veo/`, `lib/studio/`, the sidebar item, the `veo`/`media` views, and the `enableStudio` capability + `accessStudio` permission.
@@ -206,7 +206,7 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ### Clock In/Out (time clock)
 - ✅ **Employee punch in/out** — live clock, IN/OUT status, optional note; one open `time_entries` doc until punch-out
 - ✅ **My Timecard** — weekly view (Mon–Sun), entries grouped by day with daily + week totals, week navigation, running time for open entries
-- ✅ **Manager panel** (admin/superadmin) — week view of all employees grouped with totals; **adjust** clock-in/out times (datetime pickers, `edited` flag), **add** manual entries for any employee, **delete** entries; employee filter
+- ✅ **Manager panel** (admin/superadmin) — week view of all employees grouped with totals; **adjust** clock-in/out times (datetime pickers, `edited` flag), **add** manual entries for any employee, **delete** entries; **Department filter → Employee filter** (department from the user directory; employee list scopes to the chosen dept; per-employee dept badge)
 - ✅ Realtime via Firestore `onSnapshot`; secured by Firestore rules (own entries, or all for admins) + composite indexes `(userId+clockIn)`, `(userId+clockOut)`
 - 📌 Possible follow-ups: CSV/payroll export, approvals, overtime rules, TIP/BON/COM amount fields (per OnTheClock reference), break tracking
 
@@ -256,6 +256,10 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-14 — Time-clock department filter + KB search analysis
+- **Clock In/Out → Manage:** added a **Department filter** (from the user directory) that scopes the Employee filter and shows a per-employee department badge. `DirectoryUser`/`fetchUsers()` now carry `department`; entries aren't re-stamped (reflects re-assignments instantly). Build ✅, deployed.
+- **KB search analysis (no code):** documented that prod chat KB retrieval is **live-Drive keyword + TF-IDF (no vector search)** with 3 overlapping systems; wrote the unify-to-Firestore-vector + hybrid-RRF + rerank plan with phased steps, embedding/reranker options, and the owner "what to get" list. See **§8.5** + [ARCHITECTURE §11a](./ARCHITECTURE.md).
 
 ### 2026-06-14 — RBAC finalized (data migration + create-rule hardening)
 - **Migrated stored roles** to canonical values (`admin`→`superadmin`, `user`→`staff`) — 2 users updated via the Firestore REST API (owner token). Added idempotent `scripts/migrate_roles.js` for any future legacy users.
@@ -365,6 +369,50 @@ System-prompt consolidation, route de-dup (Functions vs Next), auth on admin end
 
 ### 3. Time clock follow-ups (optional)
 CSV/payroll export, approvals, overtime rules, TIP/BON/COM amount fields, break tracking.
+
+### 5. 🔎 KB Search — analysis & improvement plan (2026-06-14)
+
+**Finding.** Production answers KB questions with **live Google Drive keyword search + a hand-rolled TF-IDF** (`functions/src/routes/chat.js` → `driveSearchService.js`). There is **no semantic/vector search on the live path**, the KB is only searched when a **regex keyword gate** matches, coreference is resolved by a **hardcoded drug/pharmacy entity regex**, whole documents (≤8K each) are stuffed into the prompt, and a cold query does live Drive API calls + content extraction (incl. Gemini OCR for binaries) on the chat hot path (≤30 s timeout). Three disconnected retrieval systems coexist (see [ARCHITECTURE §11a](./ARCHITECTURE.md)), one with a post-filter bug that drops valid hits.
+
+**Why it underperforms** (industry baselines): paraphrase/synonym/conceptual queries miss (no embeddings); brittle intent gate skips real questions; whole-doc injection dilutes the context window and weakens citations; latency + cost on cold queries; duplicated/buggy code.
+
+**Target architecture** — one pipeline, built from what we already have (Firestore vector search + Cloud Functions + OpenAI/Vertex embeddings):
+
+```
+Ingest (offline, incremental):  Drive file → extract (reuse extractFileContent) →
+  structure-aware chunk (~500–800 tok, 10–15% overlap, keep tables/headings) →
+  embed → knowledge_vectors {embedding: Vector, fileId, title, department, chunkIndex, modifiedTime}
+  (only re-index files whose modifiedTime changed)
+
+Retrieve (hot path):  embed query →
+  Firestore findNearest (COSINE, top ~50) [+ optional where(department==…) pre-filter] ⨁
+  keyword/fullText pass  →  fuse with Reciprocal Rank Fusion (k≈60)  →
+  rerank top ~50 → top 5–8 (cross-encoder)  →  inject CHUNKS w/ citations
+```
+
+**Phased plan**
+- **P0 (quick wins, no new vendors):** fix the `searchKnowledgeBase` post-filter bug (pre-filter via `where()` + composite vector index, raise `limit`); replace the regex intent-gate with "search KB by default for the Amble tab, let the model cite or fall through"; inject **chunks, not whole docs**; LLM-reformulate the query with existing Gemini Flash instead of the entity regex.
+- **P1 (the real fix):** stand up the **incremental Drive→`knowledge_vectors` ingest** as a scheduled Cloud Function (Cloud Scheduler), make `/api/chat` retrieve via **Firestore `findNearest`**, add the **keyword pass + RRF fusion**, and **delete two of the three** retrieval systems. Add a `department`/`category` pre-filter to align with RBAC + the new time-clock departments.
+- **P2 (quality):** add a **reranker** (two-stage: recall ~50 → rerank → top ~8) and a tiny **eval set** (20–30 Q→expected-doc pairs) to measure recall\@k before/after.
+
+**Decision — embeddings & reranker (pick to proceed):**
+- **Embeddings:** stay **OpenAI `text-embedding-3-small`** (already wired, cheap, strong) — or, to consolidate on Vertex (we just moved chat there) and go multimodal-ready, **Vertex `gemini-embedding-001`/Embedding 2**. *Recommendation: keep `-3-small` for P0/P1, revisit at P2. Either way pick ONE and re-embed everything (don't mix models in one index).*
+- **Reranker:** **Cohere Rerank** (managed, ~$1/1k searches, best quality) · **Vertex Ranking API** (stays in GCP) · or **LLM rerank with Gemini Flash** (no new vendor). *Recommendation: start with Gemini-Flash rerank at P2 (zero new vendors), upgrade to Cohere if quality needs it.*
+
+**What we'd need to "get" (owner):**
+1. **Decision** on the two bullets above (embedding model + reranker).
+2. **Firestore composite vector index** on `knowledge_vectors.embedding` incl. the pre-filter fields (`department`, optionally `category`) — add to `firestore.indexes.json` + deploy.
+3. **Cloud Scheduler** job (free-tier-ish) to run the incremental re-index — needs the scheduler API enabled.
+4. *(If reranker = Cohere)* a **Cohere API key** as a Cloud secret. *(If Vertex Ranking)* enable **Discovery Engine API**.
+5. *(Alternative, least code)* **Vertex AI Search** with its **GA Google Drive connector** — Google does crawl/chunk/embed/hybrid/rerank/citations end-to-end; tradeoff is a new paid GCP product + less control. Good fallback if we don't want to own the pipeline.
+
+**References (current best practice):**
+- Firestore vector search + metadata pre-filtering — [Google Cloud blog](https://cloud.google.com/blog/products/databases/get-started-with-firestore-vector-similarity-search), [docs](https://docs.cloud.google.com/firestore/native/docs/vector-search)
+- Hybrid search + RRF + two-stage rerank — [Superlinked VectorHub](https://superlinked.com/vectorhub/articles/optimizing-rag-with-hybrid-search-reranking), [RRF explainer (Laforge/Google)](https://glaforge.dev/posts/2026/02/10/advanced-rag-understanding-reciprocal-rank-fusion-in-hybrid-search/)
+- Managed options — [Vertex AI Search vs RAG Engine vs Vector Search](https://medium.com/google-cloud/the-gcp-rag-spectrum-vertex-ai-search-rag-engine-and-vector-search-which-one-should-you-use-f56d50720d5a), [Vertex RAG Engine](https://cloud.google.com/blog/products/ai-machine-learning/introducing-vertex-ai-rag-engine)
+- Chunking + embedding model choice — [Firecrawl chunking guide](https://www.firecrawl.dev/blog/best-chunking-strategies-rag), [Milvus 2026 embedding benchmark](https://milvus.io/blog/choose-embedding-model-rag-2026.md)
+
+> **Status: ANALYSIS ONLY — blocked on the owner decision above.** No code changed for KB in this session. Resume at **P0** once the embedding/reranker choice is made.
 
 ### 4. RBAC follow-ups
 Foundation + most follow-ups shipped. Status:

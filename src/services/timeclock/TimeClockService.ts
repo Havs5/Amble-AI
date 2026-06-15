@@ -44,6 +44,7 @@ export interface DirectoryUser {
   uid: string;
   name: string;
   email: string;
+  department?: string;
 }
 
 // ─── Week helpers (week runs Monday → Sunday) ──────────────────────────────
@@ -231,7 +232,13 @@ export async function fetchUsers(): Promise<DirectoryUser[]> {
   return snap.docs
     .map((d) => {
       const u = d.data() as any;
-      return { id: d.id, uid: u.uid || '', name: u.displayName || u.name || d.id, email: u.email || d.id };
+      return {
+        id: d.id,
+        uid: u.uid || '',
+        name: u.displayName || u.name || d.id,
+        email: u.email || d.id,
+        department: u.department || '',
+      };
     })
     .filter((u) => u.uid) // need a Firebase uid to attribute entries
     .sort((a, b) => a.name.localeCompare(b.name));

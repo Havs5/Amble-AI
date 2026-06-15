@@ -260,6 +260,7 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ### 2026-06-14 — Time-clock department filter + KB search analysis
 - **Clock In/Out → Manage:** added a **Department filter** (from the user directory) that scopes the Employee filter and shows a per-employee department badge. `DirectoryUser`/`fetchUsers()` now carry `department`; entries aren't re-stamped (reflects re-assignments instantly). Build ✅, deployed.
 - **KB search analysis (no code):** documented that prod chat KB retrieval is **live-Drive keyword + TF-IDF (no vector search)** with 3 overlapping systems; wrote the unify-to-Firestore-vector + hybrid-RRF + rerank plan with phased steps, embedding/reranker options, and the owner "what to get" list. See **§8.5** + [ARCHITECTURE §11a](./ARCHITECTURE.md).
+- **Embedding deep-dive + Accuracy Playbook (§8.5):** found the **Firestore 2048-dim cap**; recommended **`gemini-embedding-001` @1536 (Vertex, MTEB #1, multimodal-ready)** over `-3-small`/`-3-large`/Voyage; added the 6-layer "always grounded" playbook (recall→rerank→chunks→grounded prompt→groundedness check/abstention→RAGAS eval) — embedder is a few points; **rerank + grounding/abstention are what make it accurate every time.**
 
 ### 2026-06-14 — RBAC finalized (data migration + create-rule hardening)
 - **Migrated stored roles** to canonical values (`admin`→`superadmin`, `user`→`staff`) — 2 users updated via the Firestore REST API (owner token). Added idempotent `scripts/migrate_roles.js` for any future legacy users.
@@ -395,12 +396,33 @@ Retrieve (hot path):  embed query →
 - **P1 (the real fix):** stand up the **incremental Drive→`knowledge_vectors` ingest** as a scheduled Cloud Function (Cloud Scheduler), make `/api/chat` retrieve via **Firestore `findNearest`**, add the **keyword pass + RRF fusion**, and **delete two of the three** retrieval systems. Add a `department`/`category` pre-filter to align with RBAC + the new time-clock departments.
 - **P2 (quality):** add a **reranker** (two-stage: recall ~50 → rerank → top ~8) and a tiny **eval set** (20–30 Q→expected-doc pairs) to measure recall\@k before/after.
 
-**Decision — embeddings & reranker (pick to proceed):**
-- **Embeddings:** stay **OpenAI `text-embedding-3-small`** (already wired, cheap, strong) — or, to consolidate on Vertex (we just moved chat there) and go multimodal-ready, **Vertex `gemini-embedding-001`/Embedding 2**. *Recommendation: keep `-3-small` for P0/P1, revisit at P2. Either way pick ONE and re-embed everything (don't mix models in one index).*
-- **Reranker:** **Cohere Rerank** (managed, ~$1/1k searches, best quality) · **Vertex Ranking API** (stays in GCP) · or **LLM rerank with Gemini Flash** (no new vendor). *Recommendation: start with Gemini-Flash rerank at P2 (zero new vendors), upgrade to Cohere if quality needs it.*
+**Decision — embeddings (analyzed for max accuracy, 2026-06-14):**
+
+> ⚙️ **Hard constraint:** the **Firestore vector index caps at 2048 dimensions** ([docs](https://docs.cloud.google.com/firestore/native/docs/vector-search)). So `text-embedding-3-large` (3072) can't be stored at full size — it'd need MRL reduction to 2048. This shapes the choice.
+
+| Model | Native dim (Firestore-usable) | MTEB Eng | Domain (medical) | Vendor | Notes |
+|-------|------------------------------|----------|------------------|--------|-------|
+| `text-embedding-3-small` *(current)* | 1536 | ~62 | baseline | OpenAI | already wired; weakest of the four |
+| `text-embedding-3-large` | 3072 → **MRL 2048** | ~64.6 | +0 | OpenAI | drop-in API; must reduce dims for Firestore |
+| **`gemini-embedding-001`** ✅ | 3072 → **MRL 1536/2048** | **68.3 (MTEB #1)** | strong | **Google/Vertex** | native to our Vertex stack, multimodal-ready, ~$0.006/M, MRL dial |
+| `voyage-3-large` / v4 | 1024 (→2048) | ~65 | **+4–6 pts on medical** | Voyage (new) | domain specialist; best if eval shows medical recall gaps |
+
+**Recommendation:** migrate **`text-embedding-3-small` → `gemini-embedding-001` at output dim 1536 (MRL), COSINE.** Why: tops the English MTEB leaderboard, **consolidates on the Vertex stack we just standardized chat on** (one auth/vendor surface), is **multimodal-ready** for our PDFs/spreadsheets/images, costs almost nothing to re-embed, and 1536 sits comfortably under Firestore's 2048 cap. Keep **`text-embedding-3-large` (MRL 2048)** as the no-new-stack fallback; hold **Voyage** in reserve — adopt only if the eval set (P2) shows medical-domain recall is the bottleneck. **Pick ONE and re-embed the whole KB — never mix models in one index.**
+
+> 🔑 **Reality check the user asked for:** the embedding model is worth only a *few* MTEB points. What actually makes the assistant **"always use the KB accurately"** is the **Accuracy Playbook** below — a reranker alone adds **+12–17 pts** retrieval quality (more than any embedder swap), and grounded-generation + abstention + an eval loop are what stop confident wrong answers. Top-notch = good embeddings **× all six layers**, not embeddings alone.
+
+**Accuracy Playbook — "always grounded in the KB" (impact-ranked):**
+1. **Recall first (retrieve the right chunk):** hybrid **vector + keyword** fused with **RRF**, retrieve ~50 candidates, `where(department/category)` pre-filter. *If the answer chunk isn't retrieved, nothing downstream can fix it — this is the #1 accuracy lever.*
+2. **Rerank (precision):** cross-encoder rerank 50 → top 6–8, with a **relevance floor** (drop weak chunks). Reranker = the single biggest quality jump (+12–17 pts). Options: **Gemini-Flash rerank** (no new vendor, start here) → **Cohere Rerank** (~$1/1k, best) or **Vertex Ranking API** if eval demands.
+3. **Self-contained chunks:** structure-aware ~500–800 tokens, 10–15% overlap, keep tables/headings intact; attach `{title, department, sourceUrl, modifiedTime}`. Use **parent-document / late-chunking** so a retrieved snippet carries its surrounding context.
+4. **Grounded generation (the prompt contract):** "Answer **ONLY** from CONTEXT. Cite the chunk id for every claim `[#]`. If CONTEXT doesn't contain it, say so — do not use prior knowledge." Low temperature. This is what makes it *use the KB* instead of free-associating.
+5. **Groundedness verification + abstention (the guarantee):** after generation, run a **faithfulness check** — **Vertex check-grounding API** or an NLI/LLM judge that confirms each sentence is supported by a retrieved chunk. If ungrounded or top-rerank score < threshold → **regenerate or abstain** ("not in the KB" + offer web). *This is what prevents confident hallucinations even when retrieval is imperfect — the core of "accurate every time."*
+6. **Eval loop (prove it):** a 20–30 question gold set (question → expected doc/answer), scored with **RAGAS** (context recall, context precision, **faithfulness**, answer relevancy). Gate every change on it so "top-notch" is measured, not assumed.
+
+**References (accuracy/grounding):** [Firestore vector dims/limits](https://docs.cloud.google.com/firestore/native/docs/vector-search) · [MTEB 2026 embedding benchmark (Milvus)](https://milvus.io/blog/choose-embedding-model-rag-2026.md) · [RAGAS faithfulness/groundedness](https://arxiv.org/html/2309.15217v1) · [Groundedness eval (deepset)](https://www.deepset.ai/blog/rag-llm-evaluation-groundedness) · [Hybrid + rerank gains (Superlinked)](https://superlinked.com/vectorhub/articles/optimizing-rag-with-hybrid-search-reranking)
 
 **What we'd need to "get" (owner):**
-1. **Decision** on the two bullets above (embedding model + reranker).
+1. **Confirm the embedding pick** — recommended **`gemini-embedding-001` @1536 (Vertex)**; approving it means a one-time re-embed of the KB (cheap). Reranker can default to Gemini-Flash (no new vendor) until eval says otherwise.
 2. **Firestore composite vector index** on `knowledge_vectors.embedding` incl. the pre-filter fields (`department`, optionally `category`) — add to `firestore.indexes.json` + deploy.
 3. **Cloud Scheduler** job (free-tier-ish) to run the incremental re-index — needs the scheduler API enabled.
 4. *(If reranker = Cohere)* a **Cohere API key** as a Cloud secret. *(If Vertex Ranking)* enable **Discovery Engine API**.
@@ -412,7 +434,7 @@ Retrieve (hot path):  embed query →
 - Managed options — [Vertex AI Search vs RAG Engine vs Vector Search](https://medium.com/google-cloud/the-gcp-rag-spectrum-vertex-ai-search-rag-engine-and-vector-search-which-one-should-you-use-f56d50720d5a), [Vertex RAG Engine](https://cloud.google.com/blog/products/ai-machine-learning/introducing-vertex-ai-rag-engine)
 - Chunking + embedding model choice — [Firecrawl chunking guide](https://www.firecrawl.dev/blog/best-chunking-strategies-rag), [Milvus 2026 embedding benchmark](https://milvus.io/blog/choose-embedding-model-rag-2026.md)
 
-> **Status: ANALYSIS ONLY — blocked on the owner decision above.** No code changed for KB in this session. Resume at **P0** once the embedding/reranker choice is made.
+> **Status: ANALYSIS ONLY.** No KB code changed. Embedding model analyzed → **recommend `gemini-embedding-001` @1536**; accuracy depends on the 6-layer playbook (reranker + grounded gen + abstention + eval), not the embedder alone. Resume at **P0** once the owner confirms the embedding pick (and build-our-own-pipeline vs managed Vertex AI Search).
 
 ### 4. RBAC follow-ups
 Foundation + most follow-ups shipped. Status:

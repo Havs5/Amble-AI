@@ -5,7 +5,9 @@ import { UsageManager, DetailedUsageStats, ModelUsageBreakdown } from '../../lib
 import { UsageReport } from '../admin/UsageReport';
 import { Toast } from '../ui/Toast';
 import { NEWS_DEPARTMENTS } from '../../types/news';
-import { ROLE_LABELS, ROLE_DESCRIPTIONS, assignableRoles, can, roleLabel, normalizeRole, type UserRole } from '@/lib/roles';
+import { ROLE_LABELS, ROLE_DESCRIPTIONS, assignableRoles, can, canManageRole, defaultFeaturePermissions, roleLabel, normalizeRole, type UserRole } from '@/lib/roles';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 interface UserManagementModalProps {
   isOpen: boolean;
@@ -38,6 +40,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   const [editLimits, setEditLimits] = useState<any>({});
   const [editPermissions, setEditPermissions] = useState({ accessAmble: true, accessBilling: true, accessPharmacy: false, accessKnowledge: false, accessClock: true });
   const [editDepartment, setEditDepartment] = useState('');
+  const [editRole, setEditRole] = useState<UserRole>('staff');
   const [userUsageStats, setUserUsageStats] = useState<DetailedUsageStats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [statsDateRange, setStatsDateRange] = useState<'last30' | 'last7' | 'thisMonth' | 'all'>('last30');
@@ -116,6 +119,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
     const basePermissions = { accessAmble: true, accessBilling: true, accessPharmacy: false, accessKnowledge: false, accessClock: true };
     setEditPermissions({ ...basePermissions, ...user.permissions });
     setEditDepartment(user.department || '');
+    setEditRole(normalizeRole(user.role));
 
     // Set AI Configs
     const ambleCfg = user.ambleConfig || { 
@@ -149,6 +153,12 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
       await updateUserPermissions(selectedUser.id, editPermissions, true);
       await updateUserDepartment(selectedUser.id, editDepartment, true);
       await updateUserCapabilities(selectedUser.id, editCapabilities, true);
+
+      // Role change — only if it changed and the actor is allowed to manage
+      // this user's (current) role. A Manager can only manage Staff.
+      if (db && selectedUser.id && editRole !== normalizeRole(selectedUser.role) && canManageRole(currentUser?.role, selectedUser.role)) {
+        await updateDoc(doc(db, 'users', selectedUser.id), { role: editRole });
+      }
 
       if (updateUserConfig) {
         // Only save AI configs if they were actually modified
@@ -495,7 +505,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                             name="role"
                             value={r}
                             checked={newUserRole === r}
-                            onChange={() => setNewUserRole(r)}
+                            onChange={() => { setNewUserRole(r); setNewUserPermissions(defaultFeaturePermissions(r)); }}
                             className="sr-only"
                           />
                           <div className="font-medium text-slate-900 dark:text-white mb-1">{ROLE_LABELS[r]}</div>
@@ -855,6 +865,28 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                 )}
 
                 {/* Department Section */}
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                  <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Shield size={20} className="text-purple-500" />
+                    Role
+                  </h4>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as UserRole)}
+                    disabled={!canManageRole(currentUser?.role, selectedUser.role)}
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {Array.from(new Set([normalizeRole(selectedUser.role), ...assignableRoles(currentUser?.role)])).map((r) => (
+                      <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 mt-2">
+                    {canManageRole(currentUser?.role, selectedUser.role)
+                      ? ROLE_DESCRIPTIONS[editRole]
+                      : 'Only a Super Admin can change this user’s role.'}
+                  </p>
+                </div>
+
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
                   <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                     <Users size={20} className="text-blue-500" />

@@ -257,6 +257,12 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-14 — RBAC follow-ups (edit role, rule hardening, default bundles)
+- **Edit an existing user's role** in User Management (role `<select>` on the edit screen, gated by `canManageRole`; saved via a direct `users/{id}` Firestore write).
+- **Firestore `users` rule refined**: Super Admin edits anyone; a Manager can only edit current-Staff and can't elevate them above Staff; a user can edit their own doc but not change their own role; delete gated the same way.
+- **Role-based default permissions** — `defaultFeaturePermissions(role)` auto-fills the Add-User toggles when a role is chosen (Manager/Super Admin → KB + Pharmacy on). Build clean; deployed.
+- Remaining (§8): optional stored-role data migration + tightening the `users` *create* rule.
+
 ### 2026-06-14 — RBAC redesign: Super Admin / Manager / Staff
 - New 3-tier role model via **`lib/roles.ts`** (single source of truth), backward-compatible (legacy `admin`→Super Admin, `user`→Staff; no data migration needed). Capability matrix `can(role, cap)` + helpers `isSuperAdmin`/`isManagerOrAbove`/`assignableRoles`/`canManageRole`.
 - User Management: 3-role selector (a Manager can only assign **Staff**), role badge + filter, all edit-gating routed through `can(...,'manageUsers')`. Migrated time-clock (`manageTimeclock`), news (`manageNews`), and Sidebar (`manageUsers` + role badge) gating to the helper. Widened `role` type fields to `string`.
@@ -356,12 +362,13 @@ System-prompt consolidation, route de-dup (Functions vs Next), auth on admin end
 ### 3. Time clock follow-ups (optional)
 CSV/payroll export, approvals, overtime rules, TIP/BON/COM amount fields, break tracking.
 
-### 4. RBAC follow-ups (next session)
-Foundation shipped (`lib/roles.ts` + 3-role selector + gating + rules). Remaining:
-- **Edit a user's role** — role is chosen at creation only; add a role `<select>` on the edit screen, gated by `canManageRole(actor, target)`.
-- **Firestore rule refinement** — Managers can currently write any `users/{id}` doc via `isManagerOrAbove()`. Add a target check so a Manager cannot edit/elevate Managers or Super Admins (needs a `get()` on the target user doc in the rule).
-- **Role-based default permission bundles** in create-user (e.g. Manager → all feature toggles on by default).
-- **Optional data migration** — rewrite existing users' stored `role` `'admin'`→`'superadmin'`, `'user'`→`'staff'` (cosmetic; `normalizeRole` already handles legacy values).
+### 4. RBAC follow-ups
+Foundation + most follow-ups shipped. Status:
+- ✅ **Edit a user's role** — role `<select>` on the edit screen, gated by `canManageRole(actor, target)`; saved via a direct `users/{id}` write.
+- ✅ **Firestore rule refinement** — `users` update now: Super Admin = anyone; Manager = only current-Staff docs and may not set role above Staff; self = own doc but can't change own role. Delete similarly gated.
+- ✅ **Role-based default permission bundles** — `defaultFeaturePermissions(role)` auto-applies when a role is picked in Add-User (Manager/Super Admin get KB + Pharmacy on; Staff get Amble/Billing/Clock).
+- 🔜 **Optional data migration** — rewrite existing users' stored `role` `'admin'`→`'superadmin'`, `'user'`→`'staff'` (cosmetic only; `normalizeRole` already handles legacy). One-off admin script.
+- 🔜 **Harden `users` create rule** (separate security item) — currently any authed user can create a `users/{id}` doc with any role; tighten so only `manageUsers` holders set elevated roles (without breaking first-sign-in self-provisioning).
 
 ---
 

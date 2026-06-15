@@ -23,9 +23,22 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && (
-        resource.data.uid == request.auth.uid ||
-        isAdminByUid()
+
+      // Super Admin manages everyone. A Manager may only edit Staff (current
+      // role staff/user) and may not elevate them above Staff. A user may edit
+      // their own doc but cannot change their own role.
+      allow update: if request.auth != null && (
+        isSuperAdmin() ||
+        (isManagerOrAbove()
+          && resource.data.role in ['staff', 'user']
+          && request.resource.data.role in ['staff', 'user']) ||
+        (resource.data.uid == request.auth.uid
+          && request.resource.data.role == resource.data.role)
+      );
+
+      allow delete: if request.auth != null && (
+        isSuperAdmin() ||
+        (isManagerOrAbove() && resource.data.role in ['staff', 'user'])
       );
     }
 

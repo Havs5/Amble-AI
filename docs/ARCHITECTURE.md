@@ -323,7 +323,7 @@ Three tiers, all resolved through **`lib/roles.ts`** — never compare `role` st
 | `manager` | **Manager** | Staff only | ✓ | ✓ | ✓ | ✓ | — |
 | `staff` | **Staff** | — | — | — | — | — | — |
 
-Helpers: `normalizeRole`, `can(role, capability)`, `isSuperAdmin`, `isManagerOrAbove`, `assignableRoles`, `canManageRole`. Firestore rules mirror this with `isSuperAdmin()` / `isManagerOrAbove()` (the legacy `isAdminByUid()` is now an alias for manager-or-above; `organizations` + `news_audit` are super-admin-only).
+Helpers: `normalizeRole`, `can(role, capability)`, `isSuperAdmin`, `isManagerOrAbove`, `assignableRoles`, `canManageRole`, `defaultFeaturePermissions`. Firestore rules mirror this with `isSuperAdmin()` / `isManagerOrAbove()` (the legacy `isAdminByUid()` is now an alias for manager-or-above; `organizations` + `news_audit` are super-admin-only). The `users` collection: Super Admin writes anyone; a **Manager may only edit current-Staff docs and cannot elevate a role above Staff**; a user may edit their own doc but not change their own `role`. Roles are set at creation **and** editable later (role `<select>` in User Management, gated by `canManageRole`).
 
 **Feature permissions** (per-user toggles, independent of role): `accessAmble`, `accessBilling`, `accessKnowledge`, `accessPharmacy`, `accessClock` (default `true`). **Capabilities** gate features: `dictation`, `webBrowse`, `imageGen`, etc. All editable per-user in User Management by anyone with `manageUsers` (Super Admin / Manager); a Manager can only create/edit **Staff**.
 

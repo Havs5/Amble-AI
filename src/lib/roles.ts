@@ -101,3 +101,19 @@ export function canManageRole(actorRole?: string | null, targetRole?: string | n
   if (isManagerOrAbove(actorRole)) return normalizeRole(targetRole) === 'staff';
   return false;
 }
+
+/**
+ * Sensible default feature-access toggles for a newly created user, by role.
+ * Managers/Super Admins get everything; Staff get the everyday surfaces.
+ * (Admins can still tweak individual toggles after picking a role.)
+ */
+export function defaultFeaturePermissions(role?: string | null) {
+  const elevated = isManagerOrAbove(role);
+  return {
+    accessAmble: true,
+    accessBilling: true,
+    accessClock: true,
+    accessKnowledge: elevated,
+    accessPharmacy: elevated,
+  };
+}

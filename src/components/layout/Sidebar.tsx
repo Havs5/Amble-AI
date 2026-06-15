@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, User, Settings, Moon, Sun, RefreshCw, LogOut, Shield, LayoutGrid, FileText, Folder, Image as ImageIcon, Bot, Video, Mic, ScanEye, Pill, Database, X, Keyboard, Home, Bell, ChevronDown, Sparkles, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, Settings, Moon, Sun, RefreshCw, LogOut, Shield, LayoutGrid, FileText, Folder, Image as ImageIcon, Bot, Mic, ScanEye, Pill, Database, X, Keyboard, Home, Bell, ChevronDown, Sparkles, Clock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContextRefactored';
 import { OrgSwitcher } from '../organization/OrgSwitcher';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
-type ViewType = 'dashboard' | 'amble' | 'billing' | 'projects' | 'media' | 'veo' | 'pharmacies' | 'knowledge' | 'clock';
+type ViewType = 'dashboard' | 'amble' | 'billing' | 'projects' | 'pharmacies' | 'knowledge' | 'clock';
 
 interface SidebarProps {
   isExpanded: boolean;
@@ -18,7 +18,6 @@ interface SidebarProps {
   activeView: ViewType;
   onViewChange: (view: ViewType) => void;
   onLogout: () => void;
-  enableStudio?: boolean;
   onCloseMobile?: () => void;
 }
 
@@ -34,7 +33,6 @@ export function Sidebar({
   activeView,
   onViewChange,
   onLogout,
-  enableStudio = false,
   onCloseMobile
 }: SidebarProps) {
   const { user } = useAuth();
@@ -70,7 +68,6 @@ export function Sidebar({
     accessAmble: user?.permissions?.accessAmble ?? true,
     accessBilling: user?.permissions?.accessBilling ?? true,
     accessPharmacy: user?.permissions?.accessPharmacy ?? false,
-    accessStudio: user?.permissions?.accessStudio ?? false,
     accessKnowledge: user?.permissions?.accessKnowledge ?? (user?.role === 'admin'),
     accessClock: user?.permissions?.accessClock ?? true,
   };
@@ -207,16 +204,6 @@ export function Sidebar({
         />
         )}
 
-        {enableStudio && (
-        <NavItem
-          icon={Video}
-          label="Media Studio"
-          isActive={activeView === 'veo'}
-          isExpanded={isExpanded}
-          onClick={() => { onViewChange('veo'); onCloseMobile?.(); }}
-          badge="Beta"
-        />
-        )}
       </nav>
 
       {/* Sidebar Footer (Profile) */}

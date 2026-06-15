@@ -105,8 +105,9 @@ The single React shell (`app/page.tsx` → `FeatureRouter`) switches between sur
 | Knowledge Base | `accessKnowledge` | `KnowledgeBaseView` |
 | RxConnect (sidebar item, `pharmacies` view id) | `accessPharmacy` | `PharmacyView` (embeds `rxconnect.tweaking.agency`) |
 | Clock In/Out (`clock` view id) | `accessClock` (default **true**); Manage tab = admin | `TimeClockView` + `TimeClockService` |
-| Media Studio | `enableStudio` (capability) | `studio/` + `veo/` |
 | Admin tools (user mgmt, news CRUD, KB admin) | `role === 'admin'` | `modals/`, `admin/`, `news/PostEditor` |
+
+> **Media Studio (Amble Studio) was removed** (2026-06-14) — see Changelog. The `enableStudio` capability / `accessStudio` permission and the `veo`/`media` views are gone.
 
 ---
 
@@ -166,11 +167,9 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - ✅ KB views: status, documents, drive-list, debug
 - 🧟 Three overlapping server RAG systems still active (consolidation pending)
 
-### Media Studio
-- ✅ Image generation: DALL·E 3 / Imagen 3 → Storage + `generated_assets`
-- ✅ Video generation: Sora / Veo (poll → Storage)
-- ✅ Gallery (list/delete, ownership-checked)
-- ✅ Video analysis (`/api/video/analyze`, Gemini)
+### Media Studio (Amble Studio) — ❌ REMOVED 2026-06-14
+- Deleted the whole surface: `components/studio/` (Image + Video), `components/veo/`, `lib/studio/`, the sidebar item, the `veo`/`media` views, and the `enableStudio` capability + `accessStudio` permission.
+- 🧟 **Orphaned backend kept**: `/api/image` (Imagen), `/api/veo` (Veo+Sora), `/api/video/analyze`, the gallery route, `modelGateway.generateImage/Video`, and `apiClient` image helper are still deployed (generic infra, `modelGateway` is imported by the agent system). Nothing in the UI calls them now — remove later if agents won't use image/video. The image/video-analysis handlers are already on Vertex.
 
 ### Dashboard & Company News
 - ✅ Editorial/magazine news layout + top-3 featured banner
@@ -244,6 +243,11 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-14 — Removed Amble Studio (Media Studio)
+- Deleted the entire Media Studio surface (Image Studio + Video Generation/Veo): `components/studio/`, `components/veo/`, `lib/studio/`.
+- Removed all wiring across ~12 files: sidebar item, `FeatureRouter` `veo` branch + import, `AppView`/`ViewType` `veo`/`media`, `GlobalCommandCenter` guard, the STUDIO voice command, and the **`enableStudio` capability + `accessStudio` permission** (User Management toggle/checkbox, `UserPermissions` type, defaults, `useAmbleConfig`, `ProfileModal`, test). Build verified clean.
+- **Kept (orphaned) backend**: `/api/image`, `/api/veo`, `/api/video/analyze`, gallery route, `modelGateway` (imported by the agent system) — generic infra, no UI caller now. Documented in §5 for optional later removal.
 
 ### 2026-06-14 — Image + video-analysis → Vertex
 - **Image generation on Vertex** — `image.js` now uses `@google/genai` Vertex (`vertexai:true`, regional `us-central1`) with **Imagen 4** (`imagen-4.0-generate-001`). Verified via prod smoke test.

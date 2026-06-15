@@ -52,7 +52,6 @@ import { getCached, setCache, invalidateCache, CACHE_TTL, CACHE_KEYS } from '@/l
 export interface UserPermissions {
   accessAmble: boolean;
   accessBilling: boolean;
-  accessStudio?: boolean;
   accessKnowledge?: boolean;
   accessPharmacy?: boolean;
   accessClock?: boolean;
@@ -115,7 +114,6 @@ export interface AuthError {
 const DEFAULT_PERMISSIONS: UserPermissions = {
   accessAmble: true,
   accessBilling: true,
-  accessStudio: false,
   accessKnowledge: false,
   accessPharmacy: false,
 };

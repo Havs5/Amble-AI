@@ -14,11 +14,6 @@ const BillingView = dynamic(() => import('../views/BillingView').then(m => ({ de
   ssr: false,
 });
 
-const MediaStudio = dynamic(() => import('../studio/MediaStudio').then(m => ({ default: m.MediaStudio })), {
-  loading: () => <LoadingSpinner label="Loading studio..." />,
-  ssr: false,
-});
-
 const PharmacyView = dynamic(() => import('../views/PharmacyView').then(m => ({ default: m.PharmacyView })), {
   loading: () => <LoadingSpinner label="Loading RxConnect..." />,
   ssr: false,
@@ -100,7 +95,6 @@ interface FeatureRouterProps {
       accessAmble: boolean;
       accessBilling: boolean;
       accessPharmacy: boolean;
-      accessStudio: boolean;
       accessKnowledge: boolean;
     };
     stats?: {
@@ -172,12 +166,6 @@ export function FeatureRouter({
             setToast={billingProps.setToast}
             onHelp={billingProps.onHelp}
           />
-        </KeepAlive>
-      )}
-
-      {isVisited('veo') && (
-        <KeepAlive active={activeView === 'veo'}>
-          <MediaStudio />
         </KeepAlive>
       )}
 

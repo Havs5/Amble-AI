@@ -88,7 +88,6 @@ export function ProfileModal({
     enableVoice: false,
     enableCode: false,
     enableImage: false,
-    enableStudio: false,
     dailyBudget: 5,
     imageLimit: 50,
     videoLimit: 10
@@ -269,7 +268,6 @@ export function ProfileModal({
       enableVoice: premiumSettings.enableVoice,
       enableCode: premiumSettings.enableCode,
       enableImage: premiumSettings.enableImage,
-      enableStudio: premiumSettings.enableStudio,
     };
 
     localStorage.setItem(`amble_capabilities_${selectedUserId}`, JSON.stringify(newCapabilities));

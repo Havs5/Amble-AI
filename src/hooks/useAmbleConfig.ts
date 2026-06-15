@@ -16,8 +16,7 @@ export function useAmbleConfig() {
     jsonSchema: false,
     audioIn: false,
     videoIn: false,
-    dictation: true, // Enabled by default
-    enableStudio: false
+    dictation: true // Enabled by default
   });
 
   // AI Configuration State
@@ -41,7 +40,6 @@ export function useAmbleConfig() {
         realtimeVoice: user.capabilities?.realtimeVoice ?? false,
         videoIn: user.capabilities?.videoIn ?? false,
         dictation: user.capabilities?.aiDictation ?? true, // Default enabled
-        enableStudio: user.permissions?.accessStudio ?? false,
       };
       setActiveCapabilities(prev => ({
         ...prev,

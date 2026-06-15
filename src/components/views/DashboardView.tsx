@@ -12,7 +12,6 @@ interface DashboardViewProps {
     accessAmble: boolean;
     accessBilling: boolean;
     accessPharmacy: boolean;
-    accessStudio: boolean;
     accessKnowledge: boolean;
   };
   stats?: {

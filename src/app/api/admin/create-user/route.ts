@@ -6,7 +6,6 @@ import crypto from 'crypto';
 const DEFAULT_PERMISSIONS = {
   accessAmble: true,
   accessBilling: true,
-  accessStudio: false,
   accessKnowledge: false,
   accessPharmacy: false,
   accessClock: true,

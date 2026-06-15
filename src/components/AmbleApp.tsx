@@ -104,10 +104,6 @@ function AmbleAppContent() {
                       if (nav.activeView !== 'amble') nav.setActiveView('amble');
                   }
               }
-              else if (command.type === 'STUDIO') {
-                  nav.setActiveView('veo'); // Assuming 'veo' is the studio view ID
-                  // Note: Passing tab state to MediaStudio requires url params or context for better deep linking V2
-              }
           } else {
               // Not a command? Treat as dictation (But where to put it?)
               // For now, just show toast. In V3 we inject into chat input
@@ -266,7 +262,7 @@ function AmbleAppContent() {
 
     if (newState[cap]) {
       const requiredCaps = (Object.keys(newState) as string[])
-        .filter(k => k !== 'enableStudio' && newState[k as keyof typeof newState]) as CapabilityKey[];
+        .filter(k => newState[k as keyof typeof newState]) as CapabilityKey[];
       
       let bestModelId = findBestModelForCapabilities(requiredCaps, modelSel.selectedModel);
       
@@ -358,7 +354,6 @@ function AmbleAppContent() {
         activeView={nav.activeView}
         onViewChange={nav.setActiveView}
         onLogout={logout}
-        enableStudio={config.activeCapabilities.enableStudio}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
       </div>
@@ -440,7 +435,6 @@ function AmbleAppContent() {
                accessAmble: true,
                accessBilling: true,
                accessPharmacy: true,
-               accessStudio: config.activeCapabilities.enableStudio ?? false,
                accessKnowledge: true,
              },
              user: {

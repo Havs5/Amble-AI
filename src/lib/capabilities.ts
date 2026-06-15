@@ -1,7 +1,7 @@
 export type CapabilityKey = 'realtimeVoice' | 'audioIn' | 'webBrowse' | 'fileSearch' | 'codeInterpreter' | 'imageGen' | 'jsonSchema' | 'videoIn';
 
 // User-level capabilities (not model-specific)
-export type UserCapabilityKey = CapabilityKey | 'dictation' | 'enableStudio';
+export type UserCapabilityKey = CapabilityKey | 'dictation';
 
 export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   realtimeVoice: 'Realtime Voice',

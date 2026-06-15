@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export type AppView = 'dashboard' | 'amble' | 'billing' | 'projects' | 'media' | 'veo' | 'pharmacies' | 'knowledge' | 'clock';
+export type AppView = 'dashboard' | 'amble' | 'billing' | 'projects' | 'pharmacies' | 'knowledge' | 'clock';
 
 export function useAppNavigation() {
   const [activeView, setActiveView] = useState<AppView>('dashboard');

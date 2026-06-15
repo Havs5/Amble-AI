@@ -26,7 +26,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   const [newUserDepartment, setNewUserDepartment] = useState('');
 
   const [newUserRole, setNewUserRole] = useState<'admin' | 'user'>('user');
-  const [newUserPermissions, setNewUserPermissions] = useState({ accessAmble: true, accessBilling: true, accessStudio: false, accessPharmacy: false, accessKnowledge: false, accessClock: true });
+  const [newUserPermissions, setNewUserPermissions] = useState({ accessAmble: true, accessBilling: true, accessPharmacy: false, accessKnowledge: false, accessClock: true });
   const [addUserError, setAddUserError] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
@@ -35,7 +35,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   // Edit State
   const [editCapabilities, setEditCapabilities] = useState<any>({});
   const [editLimits, setEditLimits] = useState<any>({});
-  const [editPermissions, setEditPermissions] = useState({ accessAmble: true, accessBilling: true, accessStudio: false, accessPharmacy: false, accessKnowledge: false, accessClock: true });
+  const [editPermissions, setEditPermissions] = useState({ accessAmble: true, accessBilling: true, accessPharmacy: false, accessKnowledge: false, accessClock: true });
   const [editDepartment, setEditDepartment] = useState('');
   const [userUsageStats, setUserUsageStats] = useState<DetailedUsageStats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
@@ -112,7 +112,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
     setEditLimits(limits);
     
     // Permissions and Configs - include defaults for new fields
-    const basePermissions = { accessAmble: true, accessBilling: true, accessStudio: false, accessPharmacy: false, accessKnowledge: false, accessClock: true };
+    const basePermissions = { accessAmble: true, accessBilling: true, accessPharmacy: false, accessKnowledge: false, accessClock: true };
     setEditPermissions({ ...basePermissions, ...user.permissions });
     setEditDepartment(user.department || '');
 
@@ -190,7 +190,6 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
         const accessList = [];
         if (newUserPermissions.accessAmble) accessList.push('Amble AI');
         if (newUserPermissions.accessBilling) accessList.push('CX');
-        if (newUserPermissions.accessStudio) accessList.push('Studio');
         if (newUserPermissions.accessPharmacy) accessList.push('Pharmacies');
         const accessSummary = accessList.length > 0 ? accessList.join(', ') : 'No modules';
         
@@ -203,7 +202,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
         setNewUserEmail('');
         setNewUserDepartment('');
         setNewUserRole('user');
-        setNewUserPermissions({ accessAmble: true, accessBilling: true, accessStudio: false, accessPharmacy: false, accessKnowledge: false, accessClock: true });
+        setNewUserPermissions({ accessAmble: true, accessBilling: true, accessPharmacy: false, accessKnowledge: false, accessClock: true });
       }
     } catch (error: any) {
       const errorMsg = error.message || 'Failed to create user';
@@ -553,20 +552,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         </div>
                       </label>
                       <label className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={newUserPermissions.accessStudio}
-                          onChange={(e) => setNewUserPermissions({...newUserPermissions, accessStudio: e.target.checked})}
-                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                        />
-                        <div>
-                          <div className="font-medium text-slate-900 dark:text-white text-sm">Amble Studio</div>
-                          <div className="text-xs text-slate-500">Access to advanced creative tools</div>
-                        </div>
-                      </label>
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={newUserPermissions.accessPharmacy}
                           onChange={(e) => setNewUserPermissions({...newUserPermissions, accessPharmacy: e.target.checked})}
                           className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
@@ -925,22 +912,6 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                           className="sr-only peer" 
                           checked={editPermissions.accessBilling}
                           onChange={(e) => setEditPermissions({...editPermissions, accessBilling: e.target.checked})}
-                          disabled={currentUser?.role !== 'admin'}
-                        />
-                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                      </label>
-                    </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900 transition-colors">
-                      <div>
-                        <div className="font-medium text-slate-900 dark:text-white text-sm">Amble Studio</div>
-                        <div className="text-xs text-slate-500">Access to advanced creative tools</div>
-                      </div>
-                      <label className={`relative inline-flex items-center ${currentUser?.role === 'admin' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
-                        <input 
-                          type="checkbox" 
-                          className="sr-only peer" 
-                          checked={editPermissions.accessStudio || false}
-                          onChange={(e) => setEditPermissions({...editPermissions, accessStudio: e.target.checked})}
                           disabled={currentUser?.role !== 'admin'}
                         />
                         <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>

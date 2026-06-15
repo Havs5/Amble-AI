@@ -17,7 +17,6 @@ It bundles five product surfaces behind one permission-gated shell:
 | **Amble AI (Chat)** | Streaming multi-model chat (GPT-5 / Gemini 3) with RAG, web search, tools, agents, projects, artifacts |
 | **Billing CX** | Drafts patient/billing replies that obey configurable tone/format/style policies; rewrite + PDF export |
 | **Knowledge Base** | Google Drive → Firestore sync, chunking, embeddings, hybrid vector+keyword retrieval |
-| **Media Studio** | Image generation (DALL·E / Imagen) and video generation (Sora / Veo) with a gallery |
 | **RxConnect** | Embedded external pharmacy portal (`https://rxconnect.tweaking.agency`) shown in-app via iframe |
 | **Clock In/Out** | Employee time clock — punch in/out, weekly timecard, and a manager panel to adjust/add/delete entries (Firestore `time_entries`) |
 | **Dashboard / News** | Company news feed (editorial layout, admin CRUD) + usage dashboard |
@@ -134,7 +133,6 @@ src/
 ├── components/              52 components across 14 domains
 │   ├── chat/ (10)           Composer, message list, thinking panel, artifacts
 │   ├── views/ (5)           DashboardView, BillingView, KnowledgeBaseView, PharmacyView (RxConnect iframe), TimeClockView
-│   ├── studio/ (4) veo/ (4) Image + video studio
 │   ├── news/ (5)            Editorial news feed + PostEditor
 │   ├── modals/ (6)          User mgmt, settings, etc.
 │   ├── auth/ (2)            AuthContextRefactored, LoginRefactored

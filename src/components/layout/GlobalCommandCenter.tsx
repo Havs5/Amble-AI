@@ -71,7 +71,7 @@ export function GlobalCommandCenter({
             }}
             variant="pill"
           />
-        ) : activeView !== 'veo' && activeView !== 'knowledge' && (
+        ) : activeView !== 'knowledge' && (
           // Default model selector for other views
           <ModelSelector
             categories={AMBLE_AI_MODEL_CATEGORIES}

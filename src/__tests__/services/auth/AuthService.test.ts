@@ -98,14 +98,12 @@ describe('AuthService', () => {
       const defaultPermissions = {
         accessAmble: true,
         accessBilling: false,
-        accessStudio: false,
         accessKnowledge: false,
         accessPharmacy: false,
       };
 
       expect(defaultPermissions.accessAmble).toBe(true);
       expect(defaultPermissions.accessBilling).toBe(false);
-      expect(defaultPermissions.accessStudio).toBe(false);
     });
 
     it('should have correct default user capabilities', () => {

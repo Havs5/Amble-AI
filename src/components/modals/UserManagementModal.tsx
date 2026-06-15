@@ -17,10 +17,43 @@ interface UserManagementModalProps {
 
 type DetailTab = 'profile' | 'usage' | 'settings' | 'danger';
 
+// Stable serialization of all editable fields — used to detect unsaved changes.
+const serializeEdits = (permissions: any, department: any, role: any, capabilities: any, limits: any, amble: any, cx: any) =>
+  JSON.stringify({ permissions, department, role, capabilities, limits, amble, cx });
+
+// ── User-list avatar + last-active helpers ──
+const AVATAR_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#3b82f6'];
+const initials = (name: string) =>
+  (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || '?';
+const avatarColor = (name: string) => {
+  let h = 0;
+  for (let i = 0; i < (name || '').length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+};
+const fmtLastActive = (v: any): string | null => {
+  if (!v) return null;
+  let d: Date;
+  if (v?.toDate) d = v.toDate();                       // Firestore Timestamp
+  else if (typeof v?.seconds === 'number') d = new Date(v.seconds * 1000);
+  else if (typeof v === 'number') d = new Date(v);
+  else if (typeof v === 'string') d = new Date(v);
+  else return null;
+  if (isNaN(d.getTime())) return null;
+  const diff = Date.now() - d.getTime();
+  const DAY = 86400000;
+  if (diff < 0) return null;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < DAY) return `${Math.floor(diff / 3600000)}h ago`;
+  if (diff < 30 * DAY) return `${Math.floor(diff / DAY)}d ago`;
+  return d.toLocaleDateString();
+};
+
 export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementModalProps) {
   const { users, addUser, user: currentUser, updateUserPermissions, updateUserCapabilities, updateUserConfig, updateUserDepartment, deleteUser, refreshUsers, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'users' | 'usage'>('users');
   const [detailTab, setDetailTab] = useState<DetailTab>('profile');
+  const [originalSnapshot, setOriginalSnapshot] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -111,6 +144,11 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   }, [selectedUser?.id, statsDateRange]);
 
   const handleEditUser = async (user: any) => {
+    // Guard against losing unsaved edits when switching to a different user.
+    if (selectedUser && user.id !== selectedUser.id && isDirty &&
+        !window.confirm('You have unsaved changes. Discard them and switch users?')) {
+      return;
+    }
     setStatsDateRange('last30'); // Reset to default
     setDetailTab('profile'); // Always open on the Profile tab
     setSelectedUser(user);
@@ -145,6 +183,17 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
     // Capabilities - Fetch from Firestore or fallback to local (migration support)
     setEditCapabilities(user.capabilities || {});
+
+    // Snapshot the loaded state so we can detect unsaved changes.
+    setOriginalSnapshot(serializeEdits(
+      { ...basePermissions, ...user.permissions },
+      user.department || '',
+      normalizeRole(user.role),
+      user.capabilities || {},
+      limits,
+      ambleCfg,
+      cxCfg,
+    ));
   };
 
   const handleSaveUser = async () => {
@@ -174,7 +223,10 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
       // Refresh user list once after all saves complete
       await refreshUsers();
-      
+
+      // Mark the form clean so the unsaved-changes guard doesn't fire.
+      setOriginalSnapshot(serializeEdits(editPermissions, editDepartment, editRole, editCapabilities, editLimits, editAmbleConfig, editCxConfig));
+
       setToast({ message: 'User settings saved successfully', type: 'success' });
       
       setTimeout(() => {
@@ -288,6 +340,16 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
     }
   };
 
+  // Unsaved-changes detection (current edits vs the snapshot taken on load).
+  const currentSnapshot = serializeEdits(editPermissions, editDepartment, editRole, editCapabilities, editLimits, editAmbleConfig, editCxConfig);
+  const isDirty = !!selectedUser && !!originalSnapshot && currentSnapshot !== originalSnapshot;
+  const attemptClose = () => {
+    if (!isDirty || window.confirm('You have unsaved changes. Discard them and close?')) onClose();
+  };
+  const attemptBack = () => {
+    if (!isDirty || window.confirm('You have unsaved changes. Discard them?')) setSelectedUser(null);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -331,8 +393,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
             )}
           </div>
 
-          <button 
-            onClick={onClose}
+          <button
+            onClick={attemptClose}
             className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500"
           >
             <X size={20} />
@@ -425,11 +487,26 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                       className={`cursor-pointer transition-colors ${selectedUser?.id === user.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
                     >
                       <td className="px-4 py-3">
-                        <div className="font-medium text-slate-900 dark:text-white">{user.name}</div>
-                        <div className="text-xs text-slate-500">{user.email}</div>
-                        {user.department && NEWS_DEPARTMENTS[user.department] && (
-                          <div className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">{NEWS_DEPARTMENTS[user.department]}</div>
-                        )}
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
+                            style={{ backgroundColor: avatarColor(user.name) }}
+                          >
+                            {initials(user.name)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-slate-900 dark:text-white truncate">{user.name}</div>
+                            <div className="text-xs text-slate-500 truncate">{user.email}</div>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              {user.department && NEWS_DEPARTMENTS[user.department] && (
+                                <span className="text-xs text-blue-500 dark:text-blue-400">{NEWS_DEPARTMENTS[user.department]}</span>
+                              )}
+                              {fmtLastActive(user.lastLoginAt) && (
+                                <span className="text-[11px] text-slate-400">Active {fmtLastActive(user.lastLoginAt)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${normalizeRole(user.role) === 'superadmin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : normalizeRole(user.role) === 'manager' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
@@ -628,7 +705,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                     <p className="text-slate-500 dark:text-slate-400">{selectedUser.email}</p>
                   </div>
                   <button
-                    onClick={() => setSelectedUser(null)}
+                    onClick={attemptBack}
                     className="lg:hidden px-3 py-2 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg"
                   >
                     Back
@@ -1178,11 +1255,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                       { key: 'webBrowse', label: 'Web Browsing', desc: 'Access real-time internet data' },
-                      { key: 'imageGen', label: 'Image Generation', desc: 'Create AI images via DALL-E/Imagen' },
-                      { key: 'codeInterpreter', label: 'Code Interpreter', desc: 'Execute Python code' },
-                      { key: 'realtimeVoice', label: 'Realtime Voice', desc: 'Low-latency voice chat' },
                       { key: 'vision', label: 'Vision', desc: 'Analyze uploaded images' },
-                      { key: 'videoIn', label: 'Video Input', desc: 'Analyze video content' },
+                      { key: 'codeInterpreter', label: 'Code Interpreter', desc: 'Execute Python code' },
                       { key: 'longContext', label: 'Long Context', desc: 'Process large documents' },
                     ].map((cap) => (
                       <div key={cap.key} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900 transition-colors">

@@ -13,7 +13,7 @@ const { searchKnowledgeBase } = require('../services/knowledgeService');
 const { searchTavily, extractTavily } = require('../services/searchService');
 const { analyzeSearchIntent, intelligentSearch, formatSearchContext } = require('../services/intelligentSearch');
 const { searchDriveWithServiceAccount } = require('../services/driveSearchService');
-const { vectorRetrieve, MIN_SCORE } = require('../services/kbRetrieval');
+const { vectorRetrieve, verifyGroundedness, MIN_SCORE } = require('../services/kbRetrieval');
 
 // Vertex AI — authenticated via ADC (the Cloud Function's runtime service
 // account, which has roles/aiplatform.user). No API key needed.
@@ -485,6 +485,7 @@ async function handleChat(req, res, { adminDb, writeJson, readJsonBody }) {
     let companyKBContext = "";
     let hasCompanyKB = false;
     let kbDocTitles = [];
+    let kbMaxScore = 0; // top vector relevance — gates the groundedness post-check
 
     // Check if client already sent KB context (from SearchService)
     const allSystemMessages = messages.filter(m => m.role === 'system');
@@ -514,6 +515,7 @@ async function handleChat(req, res, { adminDb, writeJson, readJsonBody }) {
 
       if (vec.chunks.length > 0 && vec.maxScore >= MIN_SCORE) {
         hasCompanyKB = true;
+        kbMaxScore = vec.maxScore;
         kbDocTitles = [...new Set(vec.chunks.map(c => c.title))];
         console.log(`[Chat] ✅ Vector KB: ${vec.chunks.length} chunks from ${kbDocTitles.length} docs (top ${(vec.maxScore * 100).toFixed(0)}%)`);
 
@@ -629,6 +631,23 @@ async function handleChat(req, res, { adminDb, writeJson, readJsonBody }) {
 
     if (result.status && result.error) {
       return writeJson(res, result.status, { error: result.error, details: result.details });
+    }
+
+    // ── Groundedness post-check (SOT §8.5 layer 5) ──
+    // Only for KB-grounded answers at BORDERLINE confidence (high-confidence
+    // matches skip it → no latency cost), and only when enabled. Fail-open:
+    // appends a non-destructive caveat if the judge flags the answer.
+    if (hasCompanyKB && result.text && process.env.KB_GROUNDEDNESS_CHECK !== '0'
+        && kbMaxScore > 0 && kbMaxScore < 0.55) {
+      try {
+        const { grounded } = await verifyGroundedness(result.text, companyKBContext);
+        if (!grounded) {
+          console.warn(`[Chat] ⚠️ groundedness flagged (top score ${(kbMaxScore * 100).toFixed(0)}%) — appending caveat`);
+          result.text += `\n\n_Note: I'm not fully certain the knowledge base covers all of the above — please verify the specifics._`;
+        }
+      } catch (e) {
+        console.warn('[Chat] groundedness post-check error (ignored):', e?.message);
+      }
     }
 
     if (stream) {

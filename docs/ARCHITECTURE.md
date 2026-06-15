@@ -429,6 +429,8 @@ flowchart TD
 **Ingest (offline, incremental)** — `POST /api/knowledge/reindex` (admin token **or** `x-reindex-key`), `kbIngest.reindexKb()`:
 Drive walk (`listAllKbFiles`) → extract (reuse `extractFileContent`: Workspace export · pdf-parse · Gemini OCR) → **structure-aware chunk** (`kbChunker`, ~700 tok, 400 overlap) → **embed** (`gemini-embedding-001` @1536, `RETRIEVAL_DOCUMENT`) → write to **`kb_vectors`** `{fileId,title,department,text,chunkIndex,modifiedTime,embedding:Vector}`. Per-file state in `kb_index_state/{fileId}` (last `modifiedTime`) makes runs **incremental** (skip unchanged) and **resumable** (480 s soft-deadline → `incomplete:true`, re-run continues). First run: 43 files → 83 chunks, 0 errors, ~15 s.
 
+> 🕒 **Auto-refresh:** a scheduled Cloud Function **`kbReindexSchedule`** (`onSchedule`, **every 6 h**, us-central1) runs `reindexKb({full:false})` — incremental, so unchanged files cost ~nothing. Manual full rebuilds still via `POST /api/knowledge/reindex {"full":true}`.
+
 **Why `kb_vectors` (new) not `knowledge_vectors`:** the legacy collection holds OpenAI `text-embedding-3-small` vectors (also 1536-dim) from the old ingest + user-upload path. Mixing embedding spaces is meaningless, so the Gemini company-KB lives in its own collection + vector index — zero collision.
 
 | Layer | Where | Accuracy role |
@@ -439,6 +441,9 @@ Drive walk (`listAllKbFiles`) → extract (reuse `extractFileContent`: Workspace
 | Rerank | `kbRetrieval.rerank` (Gemini-Flash, top 6) | precision (biggest jump) |
 | Grounded gen | `chat.buildSystemPrompt` grounding contract + `[n]` citations | faithfulness |
 | Abstention | `MIN_SCORE` floor + "say you don't have it" rule | no hallucination |
+| Groundedness post-check | `kbRetrieval.verifyGroundedness` (Gemini-Flash judge, **borderline confidence < 0.55 only**, fail-open, env `KB_GROUNDEDNESS_CHECK`) | flags/caveats unsupported claims |
+
+**Eval gate:** `scripts/kb_eval.js` — black-box gold-question harness (answer-correctness + abstention) against `/api/chat`. Baseline **4/5**; expand the `GOLD` set as the regression gate for future retrieval/embedding/rerank changes.
 
 **Other server retrieval paths** still exist but are secondary: `/api/kb/search` & `useRAG` → `searchKnowledgeBase` (now over-fetches 40 + post-filters by owner — the prior `limit:5`-then-filter recall bug is fixed); `/api/knowledge/search` → `handleVectorKBSearch` (in-memory cosine / Drive). Remaining unify/cleanup + scheduled auto-reindex + groundedness post-check + RAGAS eval are tracked in **[SOT §8.5](./SOURCE_OF_TRUTH.md)**.
 

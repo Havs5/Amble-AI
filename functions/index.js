@@ -15,6 +15,7 @@
  */
 
 const { onRequest } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret } = require('firebase-functions/params');
 const next = require('next');
 const admin = require('firebase-admin');
@@ -226,6 +227,36 @@ exports.ssrambleai = onRequest(
       } catch {
         return;
       }
+    }
+  }
+);
+
+// ============================================================================
+// Scheduled KB Reindex — keeps kb_vectors fresh as Drive docs change.
+// Incremental (full:false): lists Drive + skips files whose modifiedTime is
+// unchanged, so most runs do near-zero embedding work. Vertex embeddings use
+// ADC; Drive uses GOOGLE_SERVICE_ACCOUNT_KEY from .env; GEMINI_API_KEY is only
+// for binary (XLSX/DOCX) OCR fallback during extraction.
+// ============================================================================
+
+exports.kbReindexSchedule = onSchedule(
+  {
+    schedule: 'every 6 hours',
+    region: 'us-central1',
+    memory: '1GiB',
+    timeoutSeconds: 540,
+    secrets: [GEMINI_API_KEY],
+  },
+  async () => {
+    try {
+      if (GEMINI_API_KEY.value()) process.env.GEMINI_API_KEY = GEMINI_API_KEY.value();
+      ensureAdmin();
+      const adminDb = admin.firestore();
+      const { reindexKb } = require('./src/services/kbIngest');
+      const summary = await reindexKb(adminDb, { full: false });
+      console.log('[kbReindexSchedule] done:', JSON.stringify(summary));
+    } catch (e) {
+      console.error('[kbReindexSchedule] failed:', e?.message);
     }
   }
 );

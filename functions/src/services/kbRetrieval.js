@@ -160,4 +160,28 @@ async function vectorRetrieve(adminDb, query, opts = {}) {
   }
 }
 
-module.exports = { vectorRetrieve, MIN_SCORE };
+/**
+ * Groundedness post-check (SOURCE_OF_TRUTH §8.5 layer 5). Uses a Gemini-Flash
+ * judge to confirm every factual claim in `answer` is supported by `context`.
+ * FAIL-OPEN: returns { grounded:true } on any error so it can never block or
+ * degrade a good answer. Cheap (one fast call) — callers gate it to borderline
+ * confidence so it doesn't slow down high-confidence responses.
+ */
+async function verifyGroundedness(answer, context) {
+  try {
+    const prompt = `You are a strict fact-checker. Given CONTEXT and an ANSWER, decide whether EVERY factual claim in the ANSWER is supported by the CONTEXT. Ignore generic conversational phrasing and offers to help. Respond with ONLY JSON: {"grounded": true} or {"grounded": false}.\n\nCONTEXT:\n${(context || '').slice(0, 12000)}\n\nANSWER:\n${(answer || '').slice(0, 4000)}`;
+    const resp = await ai().models.generateContent({
+      model: RERANK_MODEL,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: { temperature: 0, maxOutputTokens: 50 },
+    });
+    const m = (resp.text || '').match(/\{[^}]*\}/);
+    if (!m) return { grounded: true };
+    return { grounded: JSON.parse(m[0]).grounded !== false };
+  } catch (e) {
+    console.warn('[KB] groundedness check failed (fail-open):', e?.message);
+    return { grounded: true };
+  }
+}
+
+module.exports = { vectorRetrieve, verifyGroundedness, MIN_SCORE };

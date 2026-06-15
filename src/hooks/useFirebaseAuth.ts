@@ -335,7 +335,7 @@ export interface UseAuthAdminResult {
     email: string,
     password: string,
     name: string,
-    role?: 'admin' | 'user',
+    role?: string,
     permissions?: Partial<AppUser['permissions']>,
     capabilities?: Partial<AppUser['capabilities']>,
     department?: string
@@ -344,7 +344,7 @@ export interface UseAuthAdminResult {
   preRegisterUser: (
     email: string,
     name: string,
-    role?: 'admin' | 'user',
+    role?: string,
     permissions?: Partial<AppUser['permissions']>,
     capabilities?: Partial<AppUser['capabilities']>
   ) => Promise<string>;
@@ -428,7 +428,7 @@ export function useAuthAdmin(currentUser?: AppUser | null): UseAuthAdminResult {
     email: string,
     password: string,
     name: string,
-    role: 'admin' | 'user' = 'user',
+    role: string = 'staff',
     permissions?: Partial<AppUser['permissions']>,
     capabilities?: Partial<AppUser['capabilities']>,
     department?: string
@@ -447,7 +447,7 @@ export function useAuthAdmin(currentUser?: AppUser | null): UseAuthAdminResult {
   const preRegisterUser = useCallback(async (
     email: string,
     name: string,
-    role: 'admin' | 'user' = 'user',
+    role: string = 'staff',
     permissions?: Partial<AppUser['permissions']>,
     capabilities?: Partial<AppUser['capabilities']>
   ): Promise<string> => {

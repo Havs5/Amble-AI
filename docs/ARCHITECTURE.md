@@ -313,7 +313,19 @@ flowchart TD
     CTX --> GATE["FeatureRouter + Sidebar gating"]
 ```
 
-**Permissions** gate whole surfaces: `accessAmble`, `accessBilling`, `accessKnowledge`, `accessPharmacy`, `accessClock` (time clock — defaults to `true`). **Capabilities** gate features: `enableStudio`, `dictation`, `webBrowse`, `imageGen`, etc. All editable per-user in the User Management modal's Access Permissions panel. **Admin-only** (`role==='admin'`): user management, pre-registration, KB admin, news CRUD (also enforced by Firestore rules).
+### Roles (RBAC)
+
+Three tiers, all resolved through **`lib/roles.ts`** — never compare `role` strings directly. **Backward-compatible:** legacy stored `admin` → Super Admin, `user` → Staff, so no data migration is required.
+
+| Role (`internal`) | Label | Manage users | News | Time-clock Manage | KB admin | Reports | Orgs / audit |
+|---|---|---|---|---|---|---|---|
+| `superadmin` | **Super Admin** | everyone (incl. Managers) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `manager` | **Manager** | Staff only | ✓ | ✓ | ✓ | ✓ | — |
+| `staff` | **Staff** | — | — | — | — | — | — |
+
+Helpers: `normalizeRole`, `can(role, capability)`, `isSuperAdmin`, `isManagerOrAbove`, `assignableRoles`, `canManageRole`. Firestore rules mirror this with `isSuperAdmin()` / `isManagerOrAbove()` (the legacy `isAdminByUid()` is now an alias for manager-or-above; `organizations` + `news_audit` are super-admin-only).
+
+**Feature permissions** (per-user toggles, independent of role): `accessAmble`, `accessBilling`, `accessKnowledge`, `accessPharmacy`, `accessClock` (default `true`). **Capabilities** gate features: `dictation`, `webBrowse`, `imageGen`, etc. All editable per-user in User Management by anyone with `manageUsers` (Super Admin / Manager); a Manager can only create/edit **Staff**.
 
 > ⚠️ **Security note:** most API routes trust a `userId` in the body without verifying the Firebase ID token, and the inline `/api/admin/*` Functions handlers have **no auth**. Firestore rules are the real security boundary. Tracked in the [SOT](./SOURCE_OF_TRUTH.md#known-issues--risks).
 

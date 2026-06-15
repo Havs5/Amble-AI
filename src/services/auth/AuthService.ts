@@ -82,7 +82,7 @@ export interface AppUser {
   uid: string; // Firebase Auth UID
   email: string;
   name: string;
-  role: 'admin' | 'user' | 'superadmin';
+  role: string; // 'superadmin' | 'manager' | 'staff' (legacy 'admin'/'user'); resolve via @/lib/roles
   permissions: UserPermissions;
   capabilities: UserCapabilities;
   ambleConfig?: AIConfig;
@@ -300,7 +300,7 @@ export class AuthService {
     email: string,
     password: string,
     name: string,
-    role: 'admin' | 'user' = 'user',
+    role: string = 'staff',
     permissions?: Partial<UserPermissions>,
     capabilities?: Partial<UserCapabilities>,
     department?: string
@@ -365,7 +365,7 @@ export class AuthService {
   async preRegisterUser(
     email: string,
     name: string,
-    role: 'admin' | 'user' = 'user',
+    role: string = 'staff',
     permissions?: Partial<UserPermissions>,
     capabilities?: Partial<UserCapabilities>
   ): Promise<string> {
@@ -808,7 +808,7 @@ export class AuthService {
       uid: firebaseUser.uid,
       email: firebaseUser.email!,
       name: overrides.name || firebaseUser.displayName || 'User',
-      role: overrides.role || 'user',
+      role: overrides.role || 'staff',
       permissions: overrides.permissions || DEFAULT_PERMISSIONS,
       capabilities: overrides.capabilities || DEFAULT_CAPABILITIES,
       ambleConfig: DEFAULT_AI_CONFIG,
@@ -1024,7 +1024,7 @@ export class AuthService {
       uid: data.uid || '',
       email: data.email,
       name: data.name || 'User',
-      role: data.role || 'user',
+      role: data.role || 'staff',
       permissions: { ...DEFAULT_PERMISSIONS, ...data.permissions },
       capabilities: { ...DEFAULT_CAPABILITIES, ...data.capabilities },
       ambleConfig: data.ambleConfig,

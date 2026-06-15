@@ -16,6 +16,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { can } from '@/lib/roles';
 import {
   collection,
   query,
@@ -128,7 +129,7 @@ const PAGE_SIZE = 20;
 
 interface UseCompanyNewsParams {
   userId: string;
-  userRole: 'admin' | 'user' | 'superadmin';
+  userRole: string;
   userName: string;
   userDepartmentId?: string;
 }
@@ -144,7 +145,7 @@ export function useCompanyNews({ userId, userRole, userName, userDepartmentId }:
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+  const isAdmin = can(userRole, 'manageNews');
 
   // ── Realtime listener for published posts ─────────────────────────────────
   useEffect(() => {

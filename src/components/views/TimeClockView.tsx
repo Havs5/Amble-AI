@@ -9,6 +9,7 @@ import { useAuth } from '../auth/AuthContextRefactored';
 import { auth as fbAuth } from '@/lib/firebase';
 import * as TC from '@/services/timeclock/TimeClockService';
 import type { TimeEntry, DirectoryUser } from '@/services/timeclock/TimeClockService';
+import { can } from '@/lib/roles';
 
 type Tab = 'punch' | 'timecard' | 'manage';
 
@@ -25,7 +26,8 @@ const fmtWeekRange = (start: Date) => {
 
 export function TimeClockView() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  // Managers and Super Admins get the "Manage" tab (adjust anyone's entries).
+  const isAdmin = can(user?.role, 'manageTimeclock');
   const uid = fbAuth?.currentUser?.uid || (user as any)?.uid || user?.id || '';
   const userName = user?.name || 'User';
   const userEmail = user?.email || '';

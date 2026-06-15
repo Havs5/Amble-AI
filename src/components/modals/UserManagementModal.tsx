@@ -5,6 +5,7 @@ import { UsageManager, DetailedUsageStats, ModelUsageBreakdown } from '../../lib
 import { UsageReport } from '../admin/UsageReport';
 import { Toast } from '../ui/Toast';
 import { NEWS_DEPARTMENTS } from '../../types/news';
+import { ROLE_LABELS, ROLE_DESCRIPTIONS, assignableRoles, can, roleLabel, normalizeRole, type UserRole } from '@/lib/roles';
 
 interface UserManagementModalProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   const { users, addUser, user: currentUser, updateUserPermissions, updateUserCapabilities, updateUserConfig, updateUserDepartment, deleteUser, refreshUsers, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'users' | 'usage'>('users');
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isAddingUser, setIsAddingUser] = useState(false);
 
@@ -25,7 +26,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserDepartment, setNewUserDepartment] = useState('');
 
-  const [newUserRole, setNewUserRole] = useState<'admin' | 'user'>('user');
+  const [newUserRole, setNewUserRole] = useState<UserRole>('staff');
   const [newUserPermissions, setNewUserPermissions] = useState({ accessAmble: true, accessBilling: true, accessPharmacy: false, accessKnowledge: false, accessClock: true });
   const [addUserError, setAddUserError] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -69,7 +70,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+    const matchesRole = roleFilter === 'all' || normalizeRole(user.role) === roleFilter;
     return matchesSearch && matchesRole;
   });
 
@@ -201,7 +202,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
         setNewUserName('');
         setNewUserEmail('');
         setNewUserDepartment('');
-        setNewUserRole('user');
+        setNewUserRole('staff');
         setNewUserPermissions({ accessAmble: true, accessBilling: true, accessPharmacy: false, accessKnowledge: false, accessClock: true });
       }
     } catch (error: any) {
@@ -305,7 +306,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
             >
               Users
             </button>
-            {currentUser?.role === 'admin' && (
+            {can(currentUser?.role, 'manageUsers') && (
             <button
               onClick={() => setActiveTab('usage')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'usage' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
@@ -352,10 +353,11 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                 >
                   <option value="all">All Roles</option>
-                  <option value="admin">Admins</option>
-                  <option value="user">Users</option>
+                  <option value="superadmin">Super Admin</option>
+                  <option value="manager">Manager</option>
+                  <option value="staff">Staff</option>
                 </select>
-                {currentUser?.role === 'admin' && (
+                {can(currentUser?.role, 'manageUsers') && (
                 <button 
                   onClick={() => {
                     setSelectedUser(null);
@@ -416,8 +418,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
-                          {user.role}
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${normalizeRole(user.role) === 'superadmin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : normalizeRole(user.role) === 'manager' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                          {roleLabel(user.role)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -482,31 +484,24 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
 
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Role</label>
-                    <div className="flex gap-4">
-                      <label className={`flex-1 p-4 rounded-lg border cursor-pointer transition-all ${newUserRole === 'user' ? 'bg-indigo-50 border-indigo-500 dark:bg-indigo-900/20' : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'}`}>
-                        <input 
-                          type="radio" 
-                          name="role" 
-                          value="user" 
-                          checked={newUserRole === 'user'} 
-                          onChange={() => setNewUserRole('user')}
-                          className="sr-only"
-                        />
-                        <div className="font-medium text-slate-900 dark:text-white mb-1">User</div>
-                        <div className="text-xs text-slate-500">Standard access to features.</div>
-                      </label>
-                      <label className={`flex-1 p-4 rounded-lg border cursor-pointer transition-all ${newUserRole === 'admin' ? 'bg-purple-50 border-purple-500 dark:bg-purple-900/20' : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'}`}>
-                        <input 
-                          type="radio" 
-                          name="role" 
-                          value="admin" 
-                          checked={newUserRole === 'admin'} 
-                          onChange={() => setNewUserRole('admin')}
-                          className="sr-only"
-                        />
-                        <div className="font-medium text-slate-900 dark:text-white mb-1">Admin</div>
-                        <div className="text-xs text-slate-500">Full control over users and settings.</div>
-                      </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {assignableRoles(currentUser?.role).map((r) => (
+                        <label
+                          key={r}
+                          className={`p-4 rounded-lg border cursor-pointer transition-all ${newUserRole === r ? 'bg-indigo-50 border-indigo-500 dark:bg-indigo-900/20' : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'}`}
+                        >
+                          <input
+                            type="radio"
+                            name="role"
+                            value={r}
+                            checked={newUserRole === r}
+                            onChange={() => setNewUserRole(r)}
+                            className="sr-only"
+                          />
+                          <div className="font-medium text-slate-900 dark:text-white mb-1">{ROLE_LABELS[r]}</div>
+                          <div className="text-xs text-slate-500">{ROLE_DESCRIPTIONS[r]}</div>
+                        </label>
+                      ))}
                     </div>
                   </div>
 
@@ -624,7 +619,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                     >
                       Back
                     </button>
-                    {currentUser?.role === 'admin' && (
+                    {can(currentUser?.role, 'manageUsers') && (
                     <button 
                       onClick={handleSaveUser}
                       disabled={isSavingUser}
@@ -868,7 +863,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                   <select
                     value={editDepartment}
                     onChange={(e) => setEditDepartment(e.target.value)}
-                    disabled={currentUser?.role !== 'admin'}
+                    disabled={!can(currentUser?.role, 'manageUsers')}
                     className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <option value="">No department assigned</option>
@@ -890,13 +885,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         <div className="font-medium text-slate-900 dark:text-white text-sm">Amble AI</div>
                         <div className="text-xs text-slate-500">Access to AI chat features</div>
                       </div>
-                      <label className={`relative inline-flex items-center ${currentUser?.role === 'admin' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                      <label className={`relative inline-flex items-center ${can(currentUser?.role, 'manageUsers') ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                         <input 
                           type="checkbox" 
                           className="sr-only peer" 
                           checked={editPermissions.accessAmble}
                           onChange={(e) => setEditPermissions({...editPermissions, accessAmble: e.target.checked})}
-                          disabled={currentUser?.role !== 'admin'}
+                          disabled={!can(currentUser?.role, 'manageUsers')}
                         />
                         <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                       </label>
@@ -906,13 +901,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         <div className="font-medium text-slate-900 dark:text-white text-sm">Customer Experience</div>
                         <div className="text-xs text-slate-500">Access to billing and cx tools</div>
                       </div>
-                      <label className={`relative inline-flex items-center ${currentUser?.role === 'admin' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                      <label className={`relative inline-flex items-center ${can(currentUser?.role, 'manageUsers') ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                         <input 
                           type="checkbox" 
                           className="sr-only peer" 
                           checked={editPermissions.accessBilling}
                           onChange={(e) => setEditPermissions({...editPermissions, accessBilling: e.target.checked})}
-                          disabled={currentUser?.role !== 'admin'}
+                          disabled={!can(currentUser?.role, 'manageUsers')}
                         />
                         <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                       </label>
@@ -922,13 +917,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         <div className="font-medium text-slate-900 dark:text-white text-sm">Pharmacies</div>
                         <div className="text-xs text-slate-500">Access to pharmacy systems (Revive, Align)</div>
                       </div>
-                      <label className={`relative inline-flex items-center ${currentUser?.role === 'admin' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                      <label className={`relative inline-flex items-center ${can(currentUser?.role, 'manageUsers') ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                         <input 
                           type="checkbox" 
                           className="sr-only peer" 
                           checked={editPermissions.accessPharmacy || false}
                           onChange={(e) => setEditPermissions({...editPermissions, accessPharmacy: e.target.checked})}
-                          disabled={currentUser?.role !== 'admin'}
+                          disabled={!can(currentUser?.role, 'manageUsers')}
                         />
                         <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                       </label>
@@ -938,13 +933,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         <div className="font-medium text-slate-900 dark:text-white text-sm">Knowledge Base</div>
                         <div className="text-xs text-slate-500">Access to knowledge base files</div>
                       </div>
-                      <label className={`relative inline-flex items-center ${currentUser?.role === 'admin' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                      <label className={`relative inline-flex items-center ${can(currentUser?.role, 'manageUsers') ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                         <input 
                           type="checkbox" 
                           className="sr-only peer" 
                           checked={editPermissions.accessKnowledge || false}
                           onChange={(e) => setEditPermissions({...editPermissions, accessKnowledge: e.target.checked})}
-                          disabled={currentUser?.role !== 'admin'}
+                          disabled={!can(currentUser?.role, 'manageUsers')}
                         />
                         <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                       </label>
@@ -954,13 +949,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         <div className="font-medium text-slate-900 dark:text-white text-sm">Clock In/Out</div>
                         <div className="text-xs text-slate-500">Access to the time clock (punch in/out)</div>
                       </div>
-                      <label className={`relative inline-flex items-center ${currentUser?.role === 'admin' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                      <label className={`relative inline-flex items-center ${can(currentUser?.role, 'manageUsers') ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                         <input
                           type="checkbox"
                           className="sr-only peer"
                           checked={editPermissions.accessClock ?? true}
                           onChange={(e) => setEditPermissions({...editPermissions, accessClock: e.target.checked})}
-                          disabled={currentUser?.role !== 'admin'}
+                          disabled={!can(currentUser?.role, 'manageUsers')}
                         />
                         <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                       </label>
@@ -969,7 +964,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                 </div>
 
                 {/* AI Configuration Section - Only accessible to admins */}
-                {currentUser?.role === 'admin' && (
+                {can(currentUser?.role, 'manageUsers') && (
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
                   <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                     <Bot size={20} className="text-purple-500" />
@@ -1145,13 +1140,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                           <div className="font-medium text-slate-900 dark:text-white text-sm">{cap.label}</div>
                           <div className="text-xs text-slate-500">{cap.desc}</div>
                         </div>
-                        <label className={`relative inline-flex items-center ${currentUser?.role === 'admin' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                        <label className={`relative inline-flex items-center ${can(currentUser?.role, 'manageUsers') ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                           <input 
                             type="checkbox" 
                             className="sr-only peer" 
                             checked={editCapabilities[cap.key] || false}
                             onChange={(e) => setEditCapabilities({...editCapabilities, [cap.key]: e.target.checked})}
-                            disabled={currentUser?.role !== 'admin'}
+                            disabled={!can(currentUser?.role, 'manageUsers')}
                           />
                           <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                         </label>
@@ -1178,13 +1173,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                       </div>
                       <div className="text-xs text-slate-500 mt-0.5">Use OpenAI Whisper for accurate speech-to-text transcription</div>
                     </div>
-                    <label className={`relative inline-flex items-center ${currentUser?.role === 'admin' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                    <label className={`relative inline-flex items-center ${can(currentUser?.role, 'manageUsers') ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                       <input 
                         type="checkbox" 
                         className="sr-only peer" 
                         checked={editCapabilities.aiDictation || false}
                         onChange={(e) => setEditCapabilities({...editCapabilities, aiDictation: e.target.checked})}
-                        disabled={currentUser?.role !== 'admin'}
+                        disabled={!can(currentUser?.role, 'manageUsers')}
                       />
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                     </label>
@@ -1205,13 +1200,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                       ].map((mode) => (
                         <button
                           key={mode.id}
-                          onClick={() => currentUser?.role === 'admin' && setEditCapabilities({...editCapabilities, dictationMode: mode.id})}
-                          disabled={currentUser?.role !== 'admin'}
+                          onClick={() => can(currentUser?.role, 'manageUsers') && setEditCapabilities({...editCapabilities, dictationMode: mode.id})}
+                          disabled={!can(currentUser?.role, 'manageUsers')}
                           className={`p-4 rounded-xl border-2 text-left transition-all ${
                             editCapabilities.dictationMode === mode.id 
                               ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 shadow-md shadow-indigo-500/10' 
                               : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                          } ${currentUser?.role !== 'admin' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          } ${!can(currentUser?.role, 'manageUsers') ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-lg">{mode.icon}</span>
@@ -1235,13 +1230,13 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                       </div>
                       <div className="text-xs text-slate-500 mt-0.5">Skip GPT-5 Mini text polish for faster, cheaper results (Whisper/Hybrid)</div>
                     </div>
-                    <label className={`relative inline-flex items-center ${currentUser?.role === 'admin' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                    <label className={`relative inline-flex items-center ${can(currentUser?.role, 'manageUsers') ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                       <input 
                         type="checkbox" 
                         className="sr-only peer" 
                         checked={editCapabilities.skipCorrection || false}
                         onChange={(e) => setEditCapabilities({...editCapabilities, skipCorrection: e.target.checked})}
-                        disabled={currentUser?.role !== 'admin'}
+                        disabled={!can(currentUser?.role, 'manageUsers')}
                       />
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                     </label>
@@ -1290,8 +1285,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         type="number" 
                         value={editLimits.dailyCostLimit || 0}
                         onChange={(e) => setEditLimits({...editLimits, dailyCostLimit: parseFloat(e.target.value)})}
-                        disabled={currentUser?.role !== 'admin'}
-                        className={`w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${currentUser?.role !== 'admin' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        disabled={!can(currentUser?.role, 'manageUsers')}
+                        className={`w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${!can(currentUser?.role, 'manageUsers') ? 'opacity-60 cursor-not-allowed' : ''}`}
                       />
                     </div>
                     <div>
@@ -1300,8 +1295,8 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         type="number" 
                         value={editLimits.monthlyCostLimit || 0}
                         onChange={(e) => setEditLimits({...editLimits, monthlyCostLimit: parseFloat(e.target.value)})}
-                        disabled={currentUser?.role !== 'admin'}
-                        className={`w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${currentUser?.role !== 'admin' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        disabled={!can(currentUser?.role, 'manageUsers')}
+                        className={`w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${!can(currentUser?.role, 'manageUsers') ? 'opacity-60 cursor-not-allowed' : ''}`}
                       />
                     </div>
                     <div>
@@ -1310,15 +1305,15 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                         type="number" 
                         value={editLimits.imageLimit || 0}
                         onChange={(e) => setEditLimits({...editLimits, imageLimit: parseInt(e.target.value)})}
-                        disabled={currentUser?.role !== 'admin'}
-                        className={`w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${currentUser?.role !== 'admin' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        disabled={!can(currentUser?.role, 'manageUsers')}
+                        className={`w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${!can(currentUser?.role, 'manageUsers') ? 'opacity-60 cursor-not-allowed' : ''}`}
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* Danger Zone */}
-                {currentUser?.role === 'admin' && (
+                {can(currentUser?.role, 'manageUsers') && (
                 <div className="bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-100 dark:border-red-900/30 p-6">
                   <h4 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-4 flex items-center gap-2">
                     <Shield size={20} />

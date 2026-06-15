@@ -106,7 +106,7 @@ interface FeatureRouterProps {
     user?: {
       id: string;
       name: string;
-      role: 'admin' | 'user' | 'superadmin';
+      role: string;
       departmentId?: string;
     };
   };

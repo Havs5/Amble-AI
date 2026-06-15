@@ -181,6 +181,14 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - ✅ Image uploads via server-side GCS route (`/api/upload`)
 - ✅ Usage dashboard (token/cost from `usage_logs`)
 
+### Roles & Access (RBAC)
+- ✅ **3-tier roles** via `lib/roles.ts` (single source of truth): **Super Admin** (`superadmin`) › **Manager** (`manager`) › **Staff** (`staff`). Backward-compatible — legacy `admin`→Super Admin, `user`→Staff (no data migration needed).
+- ✅ Capability matrix `can(role, capability)`: `manageUsers` (super admin + manager), `manageManagers` (super admin only), `manageNews`, `manageTimeclock`, `manageKnowledge`, `viewReports`. Helpers: `isSuperAdmin`, `isManagerOrAbove`, `assignableRoles`, `canManageRole`.
+- ✅ User Management: 3-role selector (a Manager can only assign/manage **Staff**); role badge + filter; gating routed through `can()`.
+- ✅ Gating migrated to the helper: time-clock Manage tab (`manageTimeclock`), news CRUD (`manageNews`), Sidebar "Manage Users" (`manageUsers`) + role badge.
+- ✅ Firestore rules mirror it: `isSuperAdmin()` / `isManagerOrAbove()`; `organizations` + `news_audit` are super-admin-only; legacy `isAdminByUid()` now = manager-or-above.
+- 📌 Per-feature toggles (`accessAmble/Billing/Knowledge/Pharmacy/Clock`) are independent of role, edited per-user by `manageUsers` holders.
+
 ### Auth & Admin
 - ✅ Email/Password + Google OAuth (Drive scope) login
 - ✅ Pre-registration gate (Google sign-in requires existing `users/{email}`)
@@ -248,6 +256,12 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-14 — RBAC redesign: Super Admin / Manager / Staff
+- New 3-tier role model via **`lib/roles.ts`** (single source of truth), backward-compatible (legacy `admin`→Super Admin, `user`→Staff; no data migration needed). Capability matrix `can(role, cap)` + helpers `isSuperAdmin`/`isManagerOrAbove`/`assignableRoles`/`canManageRole`.
+- User Management: 3-role selector (a Manager can only assign **Staff**), role badge + filter, all edit-gating routed through `can(...,'manageUsers')`. Migrated time-clock (`manageTimeclock`), news (`manageNews`), and Sidebar (`manageUsers` + role badge) gating to the helper. Widened `role` type fields to `string`.
+- Firestore rules: `isSuperAdmin()` / `isManagerOrAbove()`; `organizations` + `news_audit` now super-admin-only; legacy `isAdminByUid()` = manager-or-above. Build clean; deployed.
+- ⏭️ **Staged for next session** (§8): edit-existing-user role UI, per-target Firestore rule (Manager can't edit/elevate Managers or Super Admins), role-based default permission bundles, optional stored-role data migration.
 
 ### 2026-06-14 — Removed orphaned media backend
 - Confirmed agents won't generate images for now, so removed the dead image/video backend: Functions `image.js`/`video.js`/`videoAnalyze.js`/`gallery.js` (+ ROUTES entries + barrel exports), the inline `/api/videos/:id/content` proxy, the Next.js dev routes `app/api/{image,veo,gallery}`, `AssetGallery`, `ModelGateway.generateImage` (+ image types), and the `apiClient.image` helper. Kept `ModelGateway.generateText` (agents).
@@ -341,6 +355,13 @@ System-prompt consolidation, route de-dup (Functions vs Next), auth on admin end
 
 ### 3. Time clock follow-ups (optional)
 CSV/payroll export, approvals, overtime rules, TIP/BON/COM amount fields, break tracking.
+
+### 4. RBAC follow-ups (next session)
+Foundation shipped (`lib/roles.ts` + 3-role selector + gating + rules). Remaining:
+- **Edit a user's role** — role is chosen at creation only; add a role `<select>` on the edit screen, gated by `canManageRole(actor, target)`.
+- **Firestore rule refinement** — Managers can currently write any `users/{id}` doc via `isManagerOrAbove()`. Add a target check so a Manager cannot edit/elevate Managers or Super Admins (needs a `get()` on the target user doc in the rule).
+- **Role-based default permission bundles** in create-user (e.g. Manager → all feature toggles on by default).
+- **Optional data migration** — rewrite existing users' stored `role` `'admin'`→`'superadmin'`, `'user'`→`'staff'` (cosmetic; `normalizeRole` already handles legacy values).
 
 ---
 

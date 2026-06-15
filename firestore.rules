@@ -2,11 +2,20 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ─── Helper: resolve admin via UID mapping ─────────────────────────────
-    function isAdminByUid() {
+    // ─── RBAC role helpers (superadmin > manager > staff; legacy admin/user) ──
+    function actorRole() {
       let mapping = get(/databases/$(database)/documents/users_by_uid/$(request.auth.uid));
-      let userId = mapping.data.userId;
-      return get(/databases/$(database)/documents/users/$(userId)).data.role in ['admin', 'superadmin'];
+      return get(/databases/$(database)/documents/users/$(mapping.data.userId)).data.role;
+    }
+    function isSuperAdmin() {
+      return actorRole() in ['superadmin', 'admin']; // legacy 'admin' = super admin
+    }
+    function isManagerOrAbove() {
+      return actorRole() in ['superadmin', 'admin', 'manager'];
+    }
+    // Backward-compat alias used by existing rules: manager-or-above can manage.
+    function isAdminByUid() {
+      return isManagerOrAbove();
     }
 
     // ─── Existing collections ────────────────────────────────────────────────
@@ -63,7 +72,7 @@ service cloud.firestore {
     // ─── Organizations ──────────────────────────────────────────────────────
     match /organizations/{orgId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && isAdminByUid();
+      allow write: if request.auth != null && isSuperAdmin(); // super admin only
     }
 
     match /org_members/{memberId} {
@@ -89,10 +98,10 @@ service cloud.firestore {
       allow read: if request.auth != null;
     }
 
-    // Audit trail: only admin can write, anyone authenticated can read
+    // Audit trail: super admin only writes, anyone authenticated can read
     match /news_audit/{auditId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && isAdminByUid();
+      allow write: if request.auth != null && isSuperAdmin();
     }
 
     // ─── Time Clock (punch in/out) ───────────────────────────────────────────

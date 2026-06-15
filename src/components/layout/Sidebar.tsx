@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, User, Settings, Moon, Sun, RefreshCw, LogOut, Shield, LayoutGrid, FileText, Folder, Image as ImageIcon, Bot, Mic, ScanEye, Pill, Database, X, Keyboard, Home, Bell, ChevronDown, Sparkles, Clock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContextRefactored';
+import { can, isManagerOrAbove, roleLabel } from '@/lib/roles';
 import { OrgSwitcher } from '../organization/OrgSwitcher';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
@@ -48,7 +49,7 @@ export function Sidebar({
   // Always use fresh user name from auth context - prop is fallback
   const displayName = user?.name || userName || 'User';
   const displayRole = user?.role || 'user';
-  const isAdmin = user?.role === 'admin';
+  const canManageUsers = can(user?.role, 'manageUsers');
 
   // Calculate profile menu position when toggled
   const toggleProfileMenu = useCallback(() => {
@@ -68,7 +69,7 @@ export function Sidebar({
     accessAmble: user?.permissions?.accessAmble ?? true,
     accessBilling: user?.permissions?.accessBilling ?? true,
     accessPharmacy: user?.permissions?.accessPharmacy ?? false,
-    accessKnowledge: user?.permissions?.accessKnowledge ?? (user?.role === 'admin'),
+    accessKnowledge: user?.permissions?.accessKnowledge ?? isManagerOrAbove(user?.role),
     accessClock: user?.permissions?.accessClock ?? true,
   };
 
@@ -225,7 +226,7 @@ export function Sidebar({
               <div className="flex-1 flex items-center justify-between min-w-0">
                 <div className="flex flex-col items-start overflow-hidden">
                   <span className="text-sm font-semibold truncate text-slate-800 dark:text-slate-200 max-w-[140px]">{displayName}</span>
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">{isAdmin ? 'Administrator' : 'Team Member'}</span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">{roleLabel(user?.role)}</span>
                 </div>
                 <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${showProfileMenu ? 'rotate-180' : ''}`} />
               </div>
@@ -270,10 +271,10 @@ export function Sidebar({
             <MenuButton icon={Bot} label="AI Configuration" onClick={() => { onOpenProfile('amble-config'); setShowProfileMenu(false); }} />
             <MenuButton icon={FileText} label="CX Configuration" onClick={() => { onOpenProfile('cx-config'); setShowProfileMenu(false); }} />
             
-            {isAdmin && (
+            {canManageUsers && (
             <>
               <div className="h-px bg-slate-100 dark:bg-slate-800 mx-1 my-0.5" />
-              <MenuButton icon={Settings} label="Manage Users" onClick={() => { onOpenProfile('users'); setShowProfileMenu(false); }} badge="Admin" />
+              <MenuButton icon={Settings} label="Manage Users" onClick={() => { onOpenProfile('users'); setShowProfileMenu(false); }} badge={roleLabel(user?.role)} />
             </>
             )}
             

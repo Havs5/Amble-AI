@@ -440,7 +440,7 @@ function AmbleAppContent() {
              user: {
                id: user.id,
                name: user.name || 'User',
-               role: (user.role as 'admin' | 'user' | 'superadmin') || 'user',
+               role: user.role || 'staff',
              },
            }}
         />

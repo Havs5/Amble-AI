@@ -70,7 +70,7 @@ function getDayKey(date: Date | null): string {
 
 interface CompanyNewsPanelProps {
   userId: string;
-  userRole: 'admin' | 'user' | 'superadmin';
+  userRole: string;
   userName: string;
   userDepartmentId?: string;
 }

@@ -52,7 +52,7 @@ interface AuthContextType {
     email: string, 
     password: string, 
     name: string, 
-    role: 'admin' | 'user', 
+    role: string, 
     permissions?: UserPermissions, 
     capabilities?: UserCapabilities,
     department?: string
@@ -71,7 +71,7 @@ interface AuthContextType {
   preRegisterUser: (
     email: string,
     name: string,
-    role?: 'admin' | 'user',
+    role?: string,
     permissions?: Partial<UserPermissions>,
     capabilities?: Partial<UserCapabilities>
   ) => Promise<string>;
@@ -175,7 +175,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     email: string,
     password: string,
     name: string,
-    role: 'admin' | 'user',
+    role: string,
     permissions?: UserPermissions,
     capabilities?: UserCapabilities,
     department?: string
@@ -245,7 +245,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const preRegisterUser = async (
     email: string,
     name: string,
-    role: 'admin' | 'user' = 'user',
+    role: string = 'user',
     permissions?: Partial<UserPermissions>,
     capabilities?: Partial<UserCapabilities>
   ): Promise<string> => {

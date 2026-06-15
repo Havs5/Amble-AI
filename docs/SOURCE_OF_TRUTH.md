@@ -259,6 +259,11 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-15 — User Mgmt: layout regression, daily-trend chart, usage prefetch
+- **Layout regression fixed** — the list column only received its `lg:` width when a user was *selected*, so with **no selection** it stretched full-width and pushed the detail/empty-state off the right edge. Made the list a consistent `lg:w-80` sidebar (full-width only on mobile while browsing); empty-state detail is `lg`-only. Detail is always visible on desktop now. Also removed the dead AI-config content panel from `ProfileModal` (770→570 lines).
+- **Daily Cost Trend chart now renders** — bars used `%` heights with no definite-height parent → collapsed to ~0 (invisible). Switched to **pixel heights** (computed from `maxCost`, bottom-aligned, hover tooltip).
+- **Usage loads instantly** — now **prefetches in the background** on user-select (cached 2 min) instead of only fetching when the Usage tab opens; the tab renders from cache.
+
 ### 2026-06-15 — User Mgmt: overflow fix, faster usage, AI-config consolidation
 - **Horizontal scrollbar removed** — the two-column body lacked `min-w-0`, so the wide usage table forced the modal to overflow. Added `min-w-0` to the body + list + all detail panels, and switched the list to a fixed `lg:w-72` sidebar. Tables now scroll within their own column.
 - **Usage tab loads faster (same accurate data)** — `UsageManager` now caches raw `usage_logs` per user (2-min TTL) so date-range switches recompute in-memory with **no re-query**; the modal **lazy-loads** usage only when the Usage tab is open (opening a user on Profile no longer waits on a Firestore fetch).

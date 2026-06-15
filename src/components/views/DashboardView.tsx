@@ -3,6 +3,7 @@
 import React from 'react';
 import { Newspaper } from 'lucide-react';
 import { CompanyNewsPanel } from '../news/CompanyNewsPanel';
+import { useClockStatus } from '@/hooks/useClockStatus';
 
 interface DashboardViewProps {
   userName: string;
@@ -41,14 +42,17 @@ export function DashboardView({
 }: DashboardViewProps) {
   const greeting = getGreeting();
   const firstName = userName.split(' ')[0];
+  const { online } = useClockStatus();
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Hero greeting — fixed at top */}
       <div className="shrink-0 max-w-[1800px] w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-4" style={{ animation: 'entrance-stagger 0.5s ease-out both' }}>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Online</span>
+            <div className={`w-2 h-2 rounded-full ${online ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
+            <span className={`text-sm font-medium ${online ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+              {online ? 'Online' : 'Offline'}
+            </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">
             {greeting}, <span className="gradient-text">{firstName}</span>

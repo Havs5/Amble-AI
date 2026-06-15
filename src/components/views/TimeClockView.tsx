@@ -3,15 +3,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Clock, LogIn, LogOut, ChevronLeft, ChevronRight, Pencil, Trash2, Plus,
-  Check, X, CalendarDays, Users,
+  Check, X, CalendarDays, Users, UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContextRefactored';
 import { auth as fbAuth } from '@/lib/firebase';
 import * as TC from '@/services/timeclock/TimeClockService';
-import type { TimeEntry, DirectoryUser } from '@/services/timeclock/TimeClockService';
+import type { TimeEntry, DirectoryUser, OnlineUser } from '@/services/timeclock/TimeClockService';
 import { can } from '@/lib/roles';
+import { NEWS_DEPARTMENTS } from '@/types/news';
 
-type Tab = 'punch' | 'timecard' | 'manage';
+type Tab = 'punch' | 'timecard' | 'online' | 'manage';
+
+const AVATAR_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#3b82f6'];
+const initials = (name: string) =>
+  (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || '?';
+const avatarColor = (name: string) => {
+  let h = 0;
+  for (let i = 0; i < (name || '').length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+};
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toLocalInput = (d: Date) =>
@@ -58,11 +68,13 @@ export function TimeClockView() {
     return TC.subscribeUserWeek(uid, myWeekStart, setMyEntries);
   }, [uid, myWeekStart]);
 
+  const userDept = (user as any)?.department || '';
+
   const doClockIn = async () => {
     if (!uid || busy) return;
     setBusy(true);
     try {
-      await TC.clockIn({ userId: uid, userName, userEmail, note: note.trim() });
+      await TC.clockIn({ userId: uid, userName, userEmail, department: userDept, note: note.trim() });
       setNote('');
     } catch (e) {
       console.error('[TimeClock] clock-in failed', e);
@@ -75,7 +87,7 @@ export function TimeClockView() {
     if (!openEntry || busy) return;
     setBusy(true);
     try {
-      await TC.clockOut(openEntry.id);
+      await TC.clockOut(openEntry.id, { uid, name: userName, email: userEmail, department: userDept });
     } catch (e) {
       console.error('[TimeClock] clock-out failed', e);
     } finally {
@@ -83,9 +95,14 @@ export function TimeClockView() {
     }
   };
 
+  // Live team presence (everyone currently clocked in).
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  useEffect(() => TC.subscribeOnlineUsers(setOnlineUsers), []);
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'punch', label: 'Punch', icon: <Clock size={15} /> },
     { id: 'timecard', label: 'My Timecard', icon: <CalendarDays size={15} /> },
+    { id: 'online', label: "Who's In", icon: <UserCheck size={15} /> },
     ...(isAdmin ? [{ id: 'manage' as Tab, label: 'Manage', icon: <Users size={15} /> }] : []),
   ];
 
@@ -139,8 +156,67 @@ export function TimeClockView() {
           />
         )}
 
+        {tab === 'online' && <WhoIsInTab online={onlineUsers} now={now} currentUid={uid} />}
+
         {tab === 'manage' && isAdmin && <ManageTab now={now} editorUid={uid} />}
       </div>
+    </div>
+  );
+}
+
+// ─── Who's In (live team presence) ─────────────────────────────────────────
+function WhoIsInTab({ online, now, currentUid }: { online: OnlineUser[]; now: number; currentUid: string }) {
+  const fmtSince = (since: TimeEntry['clockIn'] | null) =>
+    since ? since.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—';
+  const elapsed = (since: TimeEntry['clockIn'] | null) =>
+    since ? TC.fmtDuration(Math.max(0, now - since.toMillis())) : '';
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2.5 w-2.5">
+            {online.length > 0 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />}
+            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${online.length > 0 ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+          </span>
+          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Who's In</h2>
+          <span className="text-sm font-medium text-slate-400">{online.length} online</span>
+        </div>
+      </div>
+
+      {online.length === 0 ? (
+        <div className="text-center py-16 text-slate-400 dark:text-slate-500">
+          <UserCheck size={32} className="mx-auto mb-3 opacity-50" />
+          <p className="text-sm font-medium">No one is clocked in right now.</p>
+          <p className="text-xs mt-1">Punch in and you'll show up here.</p>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {online.map((u) => {
+            const dept = u.department && NEWS_DEPARTMENTS[u.department] ? NEWS_DEPARTMENTS[u.department] : '';
+            return (
+              <li key={u.uid} className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 shadow-sm">
+                <div className="relative shrink-0">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold" style={{ backgroundColor: avatarColor(u.name) }}>
+                    {initials(u.name)}
+                  </div>
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-slate-900 dark:text-white truncate">
+                    {u.name}{u.uid === currentUid && <span className="ml-1.5 text-xs text-slate-400">(you)</span>}
+                  </div>
+                  <div className="text-xs text-slate-500 truncate">{dept || u.email}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{elapsed(u.since)}</div>
+                  <div className="text-[11px] text-slate-400">since {fmtSince(u.since)}</div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

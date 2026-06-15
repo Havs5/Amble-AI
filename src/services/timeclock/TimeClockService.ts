@@ -19,6 +19,7 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  setDoc,
   getDocs,
   Timestamp,
 } from 'firebase/firestore';
@@ -45,6 +46,15 @@ export interface DirectoryUser {
   name: string;
   email: string;
   department?: string;
+}
+
+/** A teammate who is currently clocked in (from the `presence` mirror). */
+export interface OnlineUser {
+  uid: string;
+  name: string;
+  email?: string;
+  department?: string;
+  since: Timestamp | null; // when they clocked in
 }
 
 // ─── Week helpers (week runs Monday → Sunday) ──────────────────────────────
@@ -168,8 +178,8 @@ export function subscribeAllWeek(weekStart: Date, cb: (entries: TimeEntry[]) => 
 
 // ─── Mutations ─────────────────────────────────────────────────────────────
 
-export async function clockIn(p: { userId: string; userName: string; userEmail?: string; note?: string }) {
-  return addDoc(collection(db, COL), {
+export async function clockIn(p: { userId: string; userName: string; userEmail?: string; department?: string; note?: string }) {
+  const ref = await addDoc(collection(db, COL), {
     userId: p.userId,
     userName: p.userName,
     userEmail: p.userEmail || '',
@@ -178,10 +188,69 @@ export async function clockIn(p: { userId: string; userName: string; userEmail?:
     note: p.note || '',
     createdAt: Timestamp.now(),
   });
+  // Mirror to presence so teammates see the user as online (best-effort).
+  setPresence({ uid: p.userId, name: p.userName, email: p.userEmail, department: p.department, online: true }).catch(() => {});
+  return ref;
 }
 
-export async function clockOut(entryId: string) {
-  return updateDoc(doc(db, COL, entryId), { clockOut: Timestamp.now() });
+export async function clockOut(entryId: string, who?: { uid: string; name: string; email?: string; department?: string }) {
+  const res = await updateDoc(doc(db, COL, entryId), { clockOut: Timestamp.now() });
+  if (who?.uid) {
+    setPresence({ uid: who.uid, name: who.name, email: who.email, department: who.department, online: false }).catch(() => {});
+  }
+  return res;
+}
+
+// ─── Presence mirror (team "who's online") ─────────────────────────────────
+// Truth for "on the clock" is an open `time_entries` doc; `presence/{uid}` is a
+// world-readable mirror so non-admins can see the online board without reading
+// everyone's time entries. Each user writes only their own presence doc.
+
+export async function setPresence(p: {
+  uid: string; name: string; email?: string; department?: string; online: boolean; since?: Date;
+}) {
+  if (!db || !p.uid) return;
+  return setDoc(
+    doc(db, 'presence', p.uid),
+    {
+      uid: p.uid,
+      name: p.name || '',
+      email: p.email || '',
+      department: p.department || '',
+      online: p.online,
+      since: p.online ? Timestamp.fromDate(p.since || new Date()) : null,
+      updatedAt: Timestamp.now(),
+    },
+    { merge: true }
+  );
+}
+
+/** Everyone currently clocked in (presence.online == true). */
+export function subscribeOnlineUsers(cb: (users: OnlineUser[]) => void): () => void {
+  if (!db) return () => {};
+  const q = query(collection(db, 'presence'), where('online', '==', true));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const users = snap.docs
+        .map((d) => {
+          const u = d.data() as any;
+          return {
+            uid: u.uid || d.id,
+            name: u.name || 'User',
+            email: u.email || '',
+            department: u.department || '',
+            since: u.since || null,
+          } as OnlineUser;
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+      cb(users);
+    },
+    (err) => {
+      console.warn('[TimeClock] online-users subscription error', err);
+      cb([]);
+    }
+  );
 }
 
 /** Manager/self adjustment of an existing entry's times or note. */

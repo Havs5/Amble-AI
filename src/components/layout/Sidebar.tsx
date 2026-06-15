@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContextRefactored';
 import { can, isManagerOrAbove, roleLabel } from '@/lib/roles';
 import { OrgSwitcher } from '../organization/OrgSwitcher';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useClockStatus } from '@/hooks/useClockStatus';
 
 type ViewType = 'dashboard' | 'amble' | 'billing' | 'projects' | 'pharmacies' | 'knowledge' | 'clock';
 
@@ -38,6 +39,7 @@ export function Sidebar({
 }: SidebarProps) {
   const { user } = useAuth();
   const { currentOrg } = useOrganization();
+  const { online: clockedIn } = useClockStatus();
   const [showSettings, setShowSettings] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [profileMenuPos, setProfileMenuPos] = useState<{ bottom: number; left: number } | null>(null);
@@ -98,14 +100,14 @@ export function Sidebar({
       {/* Sidebar Header (Logo + Branding) */}
       <div className="h-16 flex items-center justify-between px-3 shrink-0">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0 relative">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shrink-0 relative transition-all ${clockedIn ? 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-indigo-500/20' : 'bg-slate-300 dark:bg-slate-700 grayscale shadow-none'}`}>
              <span className="text-white font-bold text-xl">A</span>
-             {/* Online indicator */}
-             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-[#0a0f1a]" />
+             {/* Clock-in status indicator */}
+             <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-[#0a0f1a] ${clockedIn ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500'}`} title={clockedIn ? 'Online (clocked in)' : 'Offline (clocked out)'} />
           </div>
           <div className={`transition-all duration-200 overflow-hidden ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
             <span className="font-bold text-lg tracking-tight text-slate-900 dark:text-white whitespace-nowrap">Amble AI</span>
-            <span className="block text-[10px] font-medium text-slate-400 dark:text-slate-500 -mt-0.5 tracking-wide">Healthcare Platform</span>
+            <span className={`block text-[10px] font-semibold -mt-0.5 tracking-wide ${clockedIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>{clockedIn ? 'Online' : 'Offline'}</span>
           </div>
         </div>
         {/* Mobile close button */}

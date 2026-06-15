@@ -209,7 +209,8 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - ✅ **Employee punch in/out** — live clock, IN/OUT status, optional note; one open `time_entries` doc until punch-out
 - ✅ **My Timecard** — weekly view (Mon–Sun), entries grouped by day with daily + week totals, week navigation, running time for open entries
 - ✅ **Manager panel** (admin/superadmin) — week view of all employees grouped with totals; **adjust** clock-in/out times (datetime pickers, `edited` flag), **add** manual entries for any employee, **delete** entries; **Department filter → Employee filter** (department from the user directory; employee list scopes to the chosen dept; per-employee dept badge)
-- ✅ Realtime via Firestore `onSnapshot`; secured by Firestore rules (own entries, or all for admins) + composite indexes `(userId+clockIn)`, `(userId+clockOut)`
+- ✅ **"Who's In" tab + team presence** — live board of everyone currently clocked in (avatar/dept/since/duration) via a world-readable `presence` mirror; **online = clocked in** reflected in the Dashboard greeting (Online/Offline) + sidebar Amble logo (greyscale + "Offline" when out) via `useClockStatus()`
+- ✅ Realtime via Firestore `onSnapshot`; secured by Firestore rules (own entries, or all for admins; `presence` readable by any authed user, writable by owner) + composite indexes `(userId+clockIn)`, `(userId+clockOut)`
 - 📌 Possible follow-ups: CSV/payroll export, approvals, overtime rules, TIP/BON/COM amount fields (per OnTheClock reference), break tracking
 
 ### Platform
@@ -258,6 +259,11 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-15 — Clock In/Out: team presence ("Who's In") + online status
+- **"Who's In" tab** (visible to everyone) — a live board of all teammates currently clocked in, with avatar, department, clocked-in-since time, and running duration, sourced from a new world-readable **`presence`** collection mirror.
+- **Online = clocked in, reflected everywhere.** New `useClockStatus()` hook subscribes to the current user's open `time_entries` doc (source of truth). The **Dashboard greeting indicator** now shows green **"Online"** when clocked in / grey **"Offline"** when not, and the **sidebar Amble logo** turns grey/greyscale with a grey dot + **"Offline"** subtitle when clocked out (gradient + green dot + "Online" when in).
+- **Presence mirror** — `clockIn`/`clockOut` upsert `presence/{uid}` `{online, since, name, department}`; `subscribeOnlineUsers` reads `online == true`. Rules: `presence` is readable by any authed user, writable only by its owner (so non-admins can see the board without reading everyone's time entries). Truth stays the open entry; presence is a denormalized mirror (a manager-forced clock-out self-heals on the user's next punch).
 
 ### 2026-06-15 — User Mgmt: layout regression, daily-trend chart, usage prefetch
 - **Layout regression fixed** — the list column only received its `lg:` width when a user was *selected*, so with **no selection** it stretched full-width and pushed the detail/empty-state off the right edge. Made the list a consistent `lg:w-80` sidebar (full-width only on mobile while browsing); empty-state detail is `lg`-only. Detail is always visible on desktop now. Also removed the dead AI-config content panel from `ProfileModal` (770→570 lines).

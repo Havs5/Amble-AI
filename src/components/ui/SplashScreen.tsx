@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { AmbleMark } from './AmbleMark';
 
 interface SplashScreenProps {
   onFinish?: () => void;
@@ -39,7 +40,7 @@ export function SplashScreen({ onFinish, minDuration = 1800 }: SplashScreenProps
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-pink-300/60" style={{ animation: 'orbit 4s linear infinite reverse' }} />
             </div>
             
-            <span className="text-white font-bold text-5xl tracking-tighter relative z-10">A</span>
+            <AmbleMark className="h-14 w-14 text-white relative z-10" />
           </div>
         </div>
 

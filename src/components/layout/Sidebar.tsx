@@ -5,6 +5,7 @@ import { can, isManagerOrAbove, roleLabel } from '@/lib/roles';
 import { OrgSwitcher } from '../organization/OrgSwitcher';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useClockStatus } from '@/hooks/useClockStatus';
+import { AmbleMark } from '@/components/ui/AmbleMark';
 
 type ViewType = 'dashboard' | 'amble' | 'billing' | 'projects' | 'pharmacies' | 'knowledge' | 'clock';
 
@@ -100,8 +101,8 @@ export function Sidebar({
       {/* Sidebar Header (Logo + Branding) */}
       <div className="h-16 flex items-center justify-between px-3 shrink-0">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shrink-0 relative transition-all ${clockedIn ? 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-indigo-500/20' : 'bg-slate-300 dark:bg-slate-700 grayscale shadow-none'}`}>
-             <span className="text-white font-bold text-xl">A</span>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shrink-0 relative transition-all ${clockedIn ? 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-indigo-500/20' : 'bg-slate-400 dark:bg-slate-700 shadow-none'}`}>
+             <AmbleMark className="h-6 w-6 text-white" />
              {/* Clock-in status indicator */}
              <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-[#0a0f1a] ${clockedIn ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-500'}`} title={clockedIn ? 'Online (clocked in)' : 'Offline (clocked out)'} />
           </div>

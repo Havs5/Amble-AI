@@ -262,6 +262,10 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-15 — Brand: Amble logo mark replaces the "A" + favicon
+- New **`AmbleMark`** component inlines `public/Amble-Logo.svg` as a `currentColor` path (recolorable). Swapped the plain "A" for it (white) in the **sidebar logo**, **login** (desktop + mobile), and **splash screen**. Offline sidebar square darkened to `slate-400` so the white mark reads.
+- **Favicon** rebuilt: `public/favicon.svg` is now the gradient rounded square + the white logo path (replacing the old "A" text). `.ico` fallback unchanged.
+
 ### 2026-06-15 — Clock In/Out: correction requests + manager range filter
 - **"Who's In" restricted to managers/IT** — the presence board tab (and its subscription) now only render for `manageTimeclock` holders.
 - **Staff correction requests** — on **My Timecard**, staff can **"Request fix"** (a missing punch) or hit the per-entry pencil to **request a correction** (propose new clock in/out + reason). Requests land in a new **`time_edit_requests`** collection; staff see their own requests + live status (pending/approved/rejected). Rules: a user creates/reads only their own (status forced `pending`); managers+ read all and update.

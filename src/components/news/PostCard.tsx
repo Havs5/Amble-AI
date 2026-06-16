@@ -278,15 +278,15 @@ export function PostCard({
   if (variant === 'featured') {
     return (
       <div
-        className="group relative rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col h-full min-w-0"
+        className="group relative rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col h-full min-w-0"
         onClick={() => onExpand?.(post.id)}
         style={{ animation: 'fade-in-up 0.3s ease-out both' }}
       >
         {/* Inner clip wrapper rounds the accent strip + image; the admin menu sits
             OUTSIDE it so its dropdown isn't clipped by overflow-hidden. */}
-        <div className="flex flex-col flex-1 min-w-0 rounded-xl overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 rounded-2xl overflow-hidden">
         {/* Department accent strip */}
-        <div className="h-1 shrink-0" style={{ backgroundColor: accent }} />
+        <div className="h-1.5 shrink-0" style={{ backgroundColor: accent }} />
 
         {/* Optional cover image (only when actually uploaded) */}
         {hasImage && (
@@ -338,17 +338,17 @@ export function PostCard({
   // ─── LIST VARIANT (default) ───────────────────────────────────────────
   return (
     <div
-      className="group relative flex flex-col h-full rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer min-w-0"
+      className="group relative flex flex-col h-full min-h-[160px] rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer min-w-0"
       onClick={() => onExpand?.(post.id)}
       style={{ animation: 'fade-in-up 0.2s ease-out both' }}
     >
       {/* Inner clip wrapper (rounds the accent strip); admin menu sits outside so
           its dropdown isn't clipped. */}
-      <div className="flex flex-col flex-1 min-w-0 rounded-xl overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 rounded-2xl overflow-hidden">
       {/* Department accent strip */}
-      <div className="h-1 shrink-0" style={{ backgroundColor: accent }} />
+      <div className="h-1.5 shrink-0" style={{ backgroundColor: accent }} />
 
-      <div className="flex flex-col flex-1 p-3 min-w-0">
+      <div className="flex flex-col flex-1 p-3.5 min-w-0">
         <div className="flex flex-wrap items-center gap-1 mb-1">
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: accent }}>
             {dept}

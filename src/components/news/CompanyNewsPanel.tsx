@@ -235,10 +235,10 @@ export function CompanyNewsPanel({
 
           {/* ─── Top rectangle: 1 big (left) + 2 medium stacked (right) ──── */}
           {(mainPosts.length > 0 || mediumPosts.length > 0) && (
-            <div className={`grid gap-3 ${editorOpen ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'}`}>
+            <div className={`grid gap-4 ${editorOpen ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'}`}>
               {/* Big — spans 2 of 3 columns */}
               {mainPosts.map((p) => (
-                <div key={p.id} className="lg:col-span-2 h-[230px] sm:h-[280px]">
+                <div key={p.id} className="lg:col-span-2 h-[260px] sm:h-[300px]">
                   <PostCard
                     post={p}
                     variant="hero"
@@ -252,7 +252,7 @@ export function CompanyNewsPanel({
               ))}
               {/* 2 medium — right column, stacked */}
               {mediumPosts.length > 0 && (
-                <div className="grid grid-rows-2 gap-3 sm:h-[280px]">
+                <div className="grid grid-rows-2 gap-4 sm:h-[300px]">
                   {mediumPosts.map((p) => (
                     <div key={p.id} className="min-h-0 h-[150px] sm:h-auto">
                       <PostCard
@@ -284,7 +284,7 @@ export function CompanyNewsPanel({
                 </span>
               </div>
 
-              <div className={`grid gap-3 items-stretch ${editorOpen ? 'grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'}`}>
+              <div className={`grid gap-4 items-stretch ${editorOpen ? 'grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'}`}>
                 {visibleFeed.map((p) => (
                   <PostCard
                     key={p.id}

@@ -262,6 +262,10 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-16 — News: full-panel post reader + card polish
+- **Post reader is now a full right-panel takeover** (`PostDetailModal`): fixed panel `inset-y-0 right-0 left-0 lg:left-[68px]` (clears the 68px icon sidebar), covering the page greeting. Top bar with Back + admin actions (Pin/Archive/Edit), a tall banner with overlaid badges + Zoom, and the article in a centered `max-w-3xl` reader. Replaces the small centered modal.
+- **Card polish:** `rounded-2xl`, softer border, `shadow-sm → hover:shadow-lg` + subtle `-translate-y-0.5` lift, thicker `h-1.5` department accent; small cards get `min-h-[160px]` (squarer), grid gaps `gap-3 → gap-4`, top block heights nudged so the 2 medium cards have room.
+
 ### 2026-06-16 — Slack auto-news LIVE + verbatim text, speed, thread-parent, hero+sidebar layout
 - **Slack → News is live end-to-end** (single app, relays to the Apps Script). `#news` auto-publishes; `#urgent`→CRITICAL, `#pin`→pinned; emoji reactions = acknowledgements; channel→department (#announcements→Operations, holly-and-homies→System Errors/Provider Coordination).
 - **Verbatim text (no AI):** owner wanted the *exact* Slack message, not a rewrite — the Gemini summarizer was inventing generic "Company News Update" boilerplate for low-text messages. Removed the AI path entirely; posts now use the raw message text (title = first line, body = full text). `@google/genai` is lazy-required so it no longer loads.

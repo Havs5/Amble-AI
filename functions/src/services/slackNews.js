@@ -36,9 +36,41 @@ const DEFAULT_CONFIG = {
   autoPublish: true,
   summarize: true,
   defaultDepartment: 'operations',
+  // Channel NAME → department key. Posts from a mapped channel use that
+  // department; anything else falls back to defaultDepartment. Add more here as
+  // the bot is invited to more channels (no redeploy needed — Firestore config).
+  channelDepartments: {
+    announcements: 'operations',
+    'holly-and-homies': 'systemErrorsProviderCoordination',
+  },
   ackInSlack: true,
   triggers: { create: '#news', urgent: '#urgent', pin: '#pin' },
 };
+
+/** Deterministic post id from the source Slack message, so reactions can find
+ *  the post directly and re-processing the same message is idempotent. */
+function slackDocId(channel, ts) {
+  return `slack-${channel}-${String(ts).replace(/\./g, '_')}`;
+}
+
+// In-memory channel-id → name cache (per warm instance).
+const _channelNameCache = new Map();
+async function resolveChannelName(botToken, channelId) {
+  if (!botToken || !channelId) return '';
+  if (_channelNameCache.has(channelId)) return _channelNameCache.get(channelId);
+  try {
+    const r = await fetch(`https://slack.com/api/conversations.info?channel=${encodeURIComponent(channelId)}`, {
+      headers: { Authorization: `Bearer ${botToken}` },
+    });
+    const j = await r.json();
+    const name = (j.ok && j.channel && (j.channel.name_normalized || j.channel.name)) || '';
+    _channelNameCache.set(channelId, name);
+    return name;
+  } catch (e) {
+    console.warn('[slackNews] conversations.info failed:', e.message);
+    return '';
+  }
+}
 
 // ─── Signature verification (replay-safe HMAC) ──────────────────────────────
 function verifySlackSignature(rawBody, timestamp, signature, signingSecret) {
@@ -176,9 +208,11 @@ async function processMessageEvent(adminDb, ev, cfg, botToken) {
     post = fallbackPost(cleanText);
   }
 
-  const department = post.department && DEPARTMENT_KEYS.includes(post.department)
-    ? post.department
-    : (cfg.defaultDepartment || 'operations');
+  // Department is decided by the SOURCE CHANNEL (per owner), not the AI:
+  // #announcements → operations, holly-and-homies → systemErrorsProviderCoordination, …
+  const channelName = await resolveChannelName(botToken, ev.channel);
+  const mapped = channelName && cfg.channelDepartments ? cfg.channelDepartments[channelName] : null;
+  const department = (mapped && DEPARTMENT_KEYS.includes(mapped)) ? mapped : (cfg.defaultDepartment || 'operations');
   const authorName = await resolveAuthor(botToken, ev.user);
 
   const now = admin.firestore.FieldValue.serverTimestamp();
@@ -201,6 +235,11 @@ async function processMessageEvent(adminDb, ev, cfg, botToken) {
     coverImage: null,
     link: null,
     source: 'slack',
+    // Slack source (lets reaction events find this exact post) + reactions map.
+    slackChannel: ev.channel || null,
+    slackChannelName: channelName || null,
+    slackTs: ev.ts || null,
+    reactions: {},
     createdAt: now,
     updatedAt: now,
     publishedAt: status === 'PUBLISHED' ? now : null,
@@ -208,7 +247,9 @@ async function processMessageEvent(adminDb, ev, cfg, botToken) {
     expiresAt: null,
   };
 
-  const ref = await adminDb.collection('news_posts').add(docData);
+  // Deterministic id keyed on the source message → idempotent + reaction-linkable.
+  const ref = adminDb.collection('news_posts').doc(slackDocId(ev.channel, ev.ts));
+  await ref.set(docData, { merge: true });
 
   try {
     await adminDb.collection('news_audit').add({
@@ -224,6 +265,21 @@ async function processMessageEvent(adminDb, ev, cfg, botToken) {
   if (cfg.ackInSlack) await ackInSlack(botToken, ev.channel, ev.thread_ts || ev.ts, docData.title, trig);
 
   return { posted: ref.id, priority: docData.priority, pinned: docData.pinned, department };
+}
+
+// ─── Reactions (acknowledgements) ───────────────────────────────────────────
+async function processReaction(adminDb, ev) {
+  if (!ev.item || ev.item.type !== 'message' || !ev.item.channel || !ev.item.ts) return;
+  const ref = adminDb.collection('news_posts').doc(slackDocId(ev.item.channel, ev.item.ts));
+  const snap = await ref.get();
+  if (!snap.exists) return; // reaction on a message that isn't an Amble news post
+  const name = (ev.reaction || '').split('::')[0]; // strip skin-tone variants (e.g. "+1::skin-tone-2")
+  if (!name) return;
+  const delta = ev.type === 'reaction_added' ? 1 : -1;
+  await ref.set({
+    reactions: { [name]: admin.firestore.FieldValue.increment(delta) },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
 }
 
 // ─── HTTP entry point ───────────────────────────────────────────────────────
@@ -250,17 +306,25 @@ async function handleSlackEvent(req, res, { adminDb, signingSecret, botToken }) 
   try {
     if (body.type !== 'event_callback' || !body.event) return;
     const ev = body.event;
-    if (ev.type !== 'message') return;
-    if (ev.bot_id) return;                              // never react to bot/our own messages (loop guard)
-    if (ev.subtype && ev.subtype !== 'file_share') return; // allow plain messages, replies, and image captions
 
-    // Dedupe on Slack's event_id (covers any duplicate delivery).
+    // Dedupe on Slack's event_id (covers any duplicate delivery) — all event types.
     const eventId = body.event_id;
     if (eventId) {
       const seen = adminDb.collection('slack_events_processed').doc(eventId);
       if ((await seen.get()).exists) return;
-      await seen.set({ at: admin.firestore.FieldValue.serverTimestamp(), channel: ev.channel || null });
+      await seen.set({ at: admin.firestore.FieldValue.serverTimestamp(), type: ev.type || null });
     }
+
+    // Emoji reactions = acknowledgements → update the linked post's reaction counts.
+    if (ev.type === 'reaction_added' || ev.type === 'reaction_removed') {
+      await processReaction(adminDb, ev);
+      return;
+    }
+
+    // Messages / replies → maybe create a post.
+    if (ev.type !== 'message') return;
+    if (ev.bot_id) return;                              // never react to bot/our own messages (loop guard)
+    if (ev.subtype && ev.subtype !== 'file_share') return; // allow plain messages, replies, and image captions
 
     const cfg = await loadConfig(adminDb);
     if (cfg.enabled === false) return;

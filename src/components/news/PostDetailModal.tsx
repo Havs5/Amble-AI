@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import type { NewsPost } from '@/types/news';
 import { NEWS_DEPARTMENTS } from '@/types/news';
-import { departmentGradients, departmentBadgeColors } from './PostCard';
+import { departmentGradients, departmentBadgeColors, ReactionsBar } from './PostCard';
 
 function formatDateLong(date: Date | null): string {
   if (!date) return '';
@@ -170,6 +170,14 @@ export function PostDetailModal({
           <div className="mt-4 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
             {post.body}
           </div>
+
+          {/* Acknowledgements (Slack reactions) */}
+          {post.reactions && Object.values(post.reactions).some((n) => (n || 0) > 0) && (
+            <div className="mt-5">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Acknowledgements</div>
+              <ReactionsBar reactions={post.reactions} />
+            </div>
+          )}
 
           {/* Tags */}
           {post.tags.length > 0 && (

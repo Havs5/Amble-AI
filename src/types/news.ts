@@ -26,7 +26,8 @@ export interface NewsPost {
   authorName: string;
   coverImage?: string;             // Cover image URL for visual cards
   link?: string;                   // Optional external link
-  source?: string;                 // Reserved for future integration (Slack, Jira, etc.)
+  source?: string;                 // Origin: 'manual' | 'slack' | …
+  reactions?: Record<string, number>; // Slack emoji acknowledgements: emoji name → count
   createdAt: Date | null;
   updatedAt: Date | null;
   publishedAt: Date | null;        // Set when first published; used for sort

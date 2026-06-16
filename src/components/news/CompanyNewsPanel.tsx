@@ -95,8 +95,8 @@ export function CompanyNewsPanel({
   // Drafts section visibility (admin only)
   const [showDrafts, setShowDrafts] = useState(true);
 
-  // Feed display limit
-  const [feedLimit, setFeedLimit] = useState(12);
+  // Feed display limit — first view shows 4 small cards; "Load more" reveals the rest.
+  const [feedLimit, setFeedLimit] = useState(4);
 
   const handleOpenEditor = useCallback((post?: NewsPost) => {
     setEditingPost(post ?? null);
@@ -136,10 +136,10 @@ export function CompanyNewsPanel({
     });
   }, [news.allPosts]);
 
-  // Magazine tiers: 2 main (large) · 3 medium · the rest small.
-  const mainPosts = useMemo(() => sortedPosts.slice(0, 2), [sortedPosts]);
-  const mediumPosts = useMemo(() => sortedPosts.slice(2, 5), [sortedPosts]);
-  const restPosts = useMemo(() => sortedPosts.slice(5), [sortedPosts]);
+  // Magazine tiers: 1 big · 2 medium · the rest small (first view shows 4 small).
+  const mainPosts = useMemo(() => sortedPosts.slice(0, 1), [sortedPosts]);
+  const mediumPosts = useMemo(() => sortedPosts.slice(1, 3), [sortedPosts]);
+  const restPosts = useMemo(() => sortedPosts.slice(3), [sortedPosts]);
 
   const visibleFeed = restPosts.slice(0, feedLimit);
   const hasMore = restPosts.length > feedLimit;
@@ -220,7 +220,7 @@ export function CompanyNewsPanel({
       <div className="flex-1 flex min-h-0">
         {/* ─── News Feed (center / left) ─────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto scrollbar-thin min-w-0">
-          <div className="px-5 sm:px-6 pb-16 space-y-6">
+          <div className="px-5 sm:px-6 pb-24 space-y-6">
 
           {/* Filters (collapsible) */}
           {showFilters && (
@@ -233,11 +233,11 @@ export function CompanyNewsPanel({
             </div>
           )}
 
-          {/* ─── Main stories (2 large) ─────────────────────────────────── */}
+          {/* ─── Main story (1 big) ─────────────────────────────────────── */}
           {mainPosts.length > 0 && (
-            <div className={`grid gap-3 ${editorOpen ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 lg:grid-cols-2'}`}>
+            <div className="grid grid-cols-1 gap-3">
               {mainPosts.map((p) => (
-                <div key={p.id} className="h-[300px] sm:h-[340px]">
+                <div key={p.id} className="h-[280px] sm:h-[320px]">
                   <PostCard
                     post={p}
                     variant="hero"
@@ -252,26 +252,25 @@ export function CompanyNewsPanel({
             </div>
           )}
 
-          {/* ─── Medium stories (up to 3) ───────────────────────────────── */}
+          {/* ─── Medium stories (2) ─────────────────────────────────────── */}
           {mediumPosts.length > 0 && (
-            <div className={`grid gap-3 ${editorOpen ? 'grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
+            <div className={`grid gap-3 items-stretch ${editorOpen ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
               {mediumPosts.map((p) => (
-                <div key={p.id} className="h-[240px]">
-                  <PostCard
-                    post={p}
-                    variant="featured"
-                    isAdmin={news.isAdmin}
-                    onEdit={(post) => handleOpenEditor(post)}
-                    onArchive={news.archivePost}
-                    onTogglePin={news.togglePin}
-                    onExpand={handleOpenPost}
-                  />
-                </div>
+                <PostCard
+                  key={p.id}
+                  post={p}
+                  variant="featured"
+                  isAdmin={news.isAdmin}
+                  onEdit={(post) => handleOpenEditor(post)}
+                  onArchive={news.archivePost}
+                  onTogglePin={news.togglePin}
+                  onExpand={handleOpenPost}
+                />
               ))}
             </div>
           )}
 
-          {/* ─── Latest Updates (the rest, small list cards) ────────────── */}
+          {/* ─── Latest Updates (the rest, 4-up small cards) ────────────── */}
           {visibleFeed.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -284,7 +283,7 @@ export function CompanyNewsPanel({
                 </span>
               </div>
 
-              <div className={`grid gap-3 ${editorOpen ? 'grid-cols-1 2xl:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
+              <div className={`grid gap-3 items-stretch ${editorOpen ? 'grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
                 {visibleFeed.map((p) => (
                   <PostCard
                     key={p.id}
@@ -337,7 +336,7 @@ export function CompanyNewsPanel({
           {hasMore && (
             <div className="text-center pt-2">
               <button
-                onClick={() => setFeedLimit((l) => l + 12)}
+                onClick={() => setFeedLimit((l) => l + 8)}
                 className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-xl transition-colors"
               >
                 Load more ({restPosts.length - feedLimit} remaining)

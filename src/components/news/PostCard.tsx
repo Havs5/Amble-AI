@@ -70,6 +70,53 @@ export const departmentBadgeColors: Record<string, string> = {
   leadership: 'bg-slate-600',
 };
 
+/** Per-department accent hex — covers the NEWS_DEPARTMENTS taxonomy used by posts
+ *  plus the legacy/test keys. Used as the accent on text-forward cards. */
+export const departmentHex: Record<string, string> = {
+  billing: '#f59e0b',
+  patientExperience: '#06b6d4',
+  pharmacyCoordination: '#10b981',
+  trainingDevelopment: '#8b5cf6',
+  systemErrorsProviderCoordination: '#ef4444',
+  sendblue: '#3b82f6',
+  operations: '#14b8a6',
+  // legacy keys seen on older posts
+  general: '#6366f1', engineering: '#3b82f6', clinical: '#f43f5e',
+  hr: '#8b5cf6', marketing: '#d946ef', leadership: '#475569',
+};
+export const deptColor = (id: string) => departmentHex[id] || '#6366f1';
+
+/** Common Slack reaction names → emoji char (acknowledgements). Falls back to :name:. */
+const REACTION_EMOJI: Record<string, string> = {
+  '+1': '👍', thumbsup: '👍', '-1': '👎', thumbsdown: '👎', heart: '❤️', tada: '🎉',
+  clap: '👏', raised_hands: '🙌', eyes: '👀', white_check_mark: '✅', heavy_check_mark: '✔️',
+  ballot_box_with_check: '☑️', fire: '🔥', rocket: '🚀', '100': '💯', pray: '🙏', ok_hand: '👌',
+  star: '⭐', star2: '🌟', warning: '⚠️', bell: '🔔', exclamation: '❗', question: '❓',
+  smile: '😄', joy: '😂', sob: '😭', thinking_face: '🤔', muscle: '💪', sparkles: '✨', wave: '👋',
+};
+const emojiChar = (name: string) => REACTION_EMOJI[name] || `:${name}:`;
+
+/** A row of emoji acknowledgement chips. `light` = white text for dark/gradient cards. */
+export function ReactionsBar({ reactions, light, className = '' }: { reactions?: Record<string, number>; light?: boolean; className?: string }) {
+  const entries = Object.entries(reactions || {}).filter(([, n]) => (n || 0) > 0).slice(0, 8);
+  if (entries.length === 0) return null;
+  return (
+    <div className={`flex flex-wrap items-center gap-1 ${className}`}>
+      {entries.map(([name, n]) => (
+        <span
+          key={name}
+          title={`:${name}: ${n}`}
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-medium ${
+            light ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+          }`}
+        >
+          <span className="text-xs leading-none">{emojiChar(name)}</span>{n}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 type PostCardVariant = 'hero' | 'featured' | 'list';
@@ -113,12 +160,12 @@ export function PostCard({
   const badgeColor = departmentBadgeColors[post.departmentId] ?? departmentBadgeColors.general;
   const hasImage = post.coverImage && !imgError;
 
-  // ─── Admin context menu (shared across variants) ──────────────────────
-  const adminMenu = isAdmin ? (
+  // ─── Admin context menu (shared; light trigger for colorful cards, dark for text cards) ──
+  const renderMenu = (triggerClass: string) => isAdmin ? (
     <div className="relative" ref={menuRef}>
       <button
         onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-        className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/20 transition-all opacity-0 group-hover:opacity-100"
+        className={`p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 ${triggerClass}`}
       >
         <MoreHorizontal size={16} />
       </button>
@@ -137,6 +184,9 @@ export function PostCard({
       )}
     </div>
   ) : null;
+  const adminMenu = renderMenu('text-white/70 hover:text-white hover:bg-white/20');
+  const darkMenu = renderMenu('text-slate-300 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60');
+  const accent = deptColor(post.departmentId);
 
   // ─── HERO VARIANT ─────────────────────────────────────────────────────
   if (variant === 'hero') {
@@ -216,70 +266,67 @@ export function PostCard({
                 <span className="text-sm text-white/60">{formatDateShort(post.publishedAt)}</span>
               </div>
             </div>
+
+            <ReactionsBar reactions={post.reactions} light className="mt-3" />
           </div>
         </div>
       </div>
     );
   }
 
-  // ─── FEATURED VARIANT (colorful tile — full-bleed gradient/image) ─────
+  // ─── FEATURED VARIANT (medium, text-forward with a department accent) ──
   if (variant === 'featured') {
     return (
       <div
-        className="relative rounded-xl overflow-hidden group cursor-pointer h-full min-h-[160px]"
+        className="group relative rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col h-full overflow-hidden min-w-0"
         onClick={() => onExpand?.(post.id)}
         style={{ animation: 'fade-in-up 0.3s ease-out both' }}
       >
-        {/* Background: cover image or department gradient (no placeholder icon) */}
-        {hasImage ? (
-          <img
-            src={post.coverImage!}
-            alt={post.title}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`}>
-            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' viewBox=\'0 0 40 40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.5\'%3E%3Cpath d=\'M0 38.59l2.83-2.83 1.41 1.41L1.41 40H0v-1.41zM0 1.4l2.83 2.83 1.41-1.41L1.41 0H0v1.41zM38.59 40l-2.83-2.83 1.41-1.41L40 38.59V40h-1.41zM40 1.41l-2.83 2.83-1.41-1.41L38.59 0H40v1.41z\'/%3E%3C/g%3E%3C/svg%3E")' }} />
+        {/* Department accent strip */}
+        <div className="h-1 shrink-0" style={{ backgroundColor: accent }} />
+
+        {/* Optional cover image (only when actually uploaded) */}
+        {hasImage && (
+          <div className="relative h-28 shrink-0 overflow-hidden">
+            <img
+              src={post.coverImage!}
+              alt={post.title}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              onError={() => setImgError(true)}
+            />
           </div>
         )}
 
-        {/* Readability overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+        {isAdmin && <div className="absolute top-2 right-2 z-10">{darkMenu}</div>}
 
-        {/* Admin menu */}
-        {isAdmin && (
-          <div className="absolute top-2.5 right-2.5 z-10">{adminMenu}</div>
-        )}
-
-        {/* Content overlay (bottom) */}
-        <div className="absolute bottom-0 left-0 right-0 p-4">
-          <div className="flex flex-wrap items-center gap-1.5 mb-2">
-            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white ${badgeColor}`}>
+        <div className="flex flex-col flex-1 p-4 min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: accent }}>
               {dept}
             </span>
             {post.priority === 'CRITICAL' && (
-              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-red-500">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
                 <AlertTriangle size={9} /> Critical
               </span>
             )}
             {post.pinned && (
-              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-amber-500">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                 <Pin size={9} /> Pinned
               </span>
             )}
           </div>
-          <h3 className="text-base font-bold text-white leading-snug mb-1 line-clamp-2">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-snug mb-1 line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
             {post.title}
           </h3>
-          <p className="text-xs text-white/75 line-clamp-2 leading-relaxed mb-2">
-            {post.summary || post.body.slice(0, 110)}
+          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed mb-2 flex-1">
+            {post.summary || post.body.slice(0, 160)}
           </p>
-          <div className="flex items-center gap-2 text-[11px] text-white/70">
-            <span className="flex items-center gap-1"><User size={10} /> {post.authorName}</span>
-            <span className="text-white/40">·</span>
-            <span className="flex items-center gap-1"><Clock size={10} /> {timeAgo(post.publishedAt)}</span>
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 min-w-0">
+            <span className="flex items-center gap-1 min-w-0"><User size={10} className="shrink-0" /> <span className="truncate">{post.authorName}</span></span>
+            <span className="shrink-0">·</span>
+            <span className="flex items-center gap-1 shrink-0"><Clock size={10} /> {timeAgo(post.publishedAt)}</span>
           </div>
+          <ReactionsBar reactions={post.reactions} className="mt-2" />
         </div>
       </div>
     );
@@ -288,115 +335,55 @@ export function PostCard({
   // ─── LIST VARIANT (default) ───────────────────────────────────────────
   return (
     <div
-      className="group flex gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border border-slate-100 dark:border-slate-700/40 bg-white dark:bg-slate-800/40 hover:border-slate-200 dark:hover:border-slate-600/50 hover:shadow-md transition-all duration-200 cursor-pointer min-w-0"
+      className="group relative flex flex-col h-full rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden min-w-0"
       onClick={() => onExpand?.(post.id)}
       style={{ animation: 'fade-in-up 0.2s ease-out both' }}
     >
-      {/* Media: cover image, or a colorful department swatch (no placeholder icon) */}
-      <div className="shrink-0 w-24 h-16 sm:w-32 sm:h-20 rounded-lg overflow-hidden relative">
-        {hasImage ? (
-          <>
-            <img
-              src={post.coverImage!}
-              alt={post.title}
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-              onError={() => setImgError(true)}
-            />
-            <div className="absolute bottom-1.5 left-1.5">
-              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider text-white ${badgeColor}`}>
-                {dept}
-              </span>
-            </div>
-          </>
-        ) : (
-          <div className={`absolute inset-0 bg-gradient-to-br ${gradient} flex items-center justify-center p-1`}>
-            <span className="text-white text-[10px] font-bold uppercase tracking-wider text-center leading-tight line-clamp-2">{dept}</span>
-          </div>
-        )}
-      </div>
+      {/* Department accent strip */}
+      <div className="h-1 shrink-0" style={{ backgroundColor: accent }} />
 
-      {/* Text content */}
-      <div className="flex-1 min-w-0 flex flex-col justify-between">
-        <div>
-          {/* Top row: badges */}
-          <div className="flex flex-wrap items-center gap-1.5 mb-1">
-            {post.priority === 'CRITICAL' && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-                <AlertTriangle size={9} /> Critical
-              </span>
-            )}
-            {post.pinned && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
-                <Pin size={9} /> Pinned
-              </span>
-            )}
-          </div>
+      {isAdmin && <div className="absolute top-1.5 right-1.5 z-10">{darkMenu}</div>}
 
-          {/* Title */}
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white leading-snug mb-1 line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-            {post.title}
-            {post.link && (
-              <a href={post.link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center ml-1 text-indigo-400 hover:text-indigo-500">
-                <ExternalLink size={11} />
-              </a>
-            )}
-          </h3>
-
-          {/* Summary */}
-          {!compact && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-1.5">
-              {post.summary || post.body.slice(0, 140)}
-            </p>
+      <div className="flex flex-col flex-1 p-3 min-w-0">
+        <div className="flex flex-wrap items-center gap-1 mb-1">
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: accent }}>
+            {dept}
+          </span>
+          {post.priority === 'CRITICAL' && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+              <AlertTriangle size={9} /> Critical
+            </span>
           )}
-        </div>
-
-        {/* Footer: author + time + tags. Wraps within the card so nothing spills outside. */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400 dark:text-slate-500 w-full min-w-0">
-          <span className="flex items-center gap-1 min-w-0 max-w-full">
-            <User size={10} className="shrink-0" /> <span className="truncate">{post.authorName}</span>
-          </span>
-          <span className="text-slate-300 dark:text-slate-600">·</span>
-          <span className="flex items-center gap-1 shrink-0">
-            <Clock size={10} /> {timeAgo(post.publishedAt)}
-          </span>
-          {post.tags.length > 0 && !compact && (
-            <span className="flex flex-wrap items-center gap-1 min-w-0 max-w-full">
-              {post.tags.slice(0, 2).map((t) => (
-                <span key={t} className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400 truncate max-w-full">
-                  {t}
-                </span>
-              ))}
+          {post.pinned && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+              <Pin size={9} /> Pinned
             </span>
           )}
         </div>
-      </div>
 
-      {/* Right: Admin menu */}
-      {isAdmin && (
-        <div className="shrink-0 self-start">
-          <div className="relative" ref={menuRef}>
-            <button
-              onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-              className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 opacity-0 group-hover:opacity-100 transition-all"
-            >
-              <MoreHorizontal size={16} />
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-8 z-50 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl py-1.5 text-sm" onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => { setMenuOpen(false); onEdit?.(post); }} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-left text-slate-700 dark:text-slate-200">
-                  <Pencil size={14} /> Edit
-                </button>
-                <button onClick={() => { setMenuOpen(false); onTogglePin?.(post.id, post.pinned); }} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-left text-slate-700 dark:text-slate-200">
-                  <Pin size={14} /> {post.pinned ? 'Unpin' : 'Pin'}
-                </button>
-                <button onClick={() => { setMenuOpen(false); onArchive?.(post.id); }} className="w-full flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-left">
-                  <Archive size={14} /> Archive
-                </button>
-              </div>
-            )}
-          </div>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white leading-snug mb-1 line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+          {post.title}
+          {post.link && (
+            <a href={post.link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center ml-1 text-indigo-400 hover:text-indigo-500">
+              <ExternalLink size={11} />
+            </a>
+          )}
+        </h3>
+
+        {!compact && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-1.5 flex-1">
+            {post.summary || post.body.slice(0, 120)}
+          </p>
+        )}
+
+        <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 min-w-0 mt-auto">
+          <span className="flex items-center gap-1 min-w-0"><User size={10} className="shrink-0" /> <span className="truncate">{post.authorName}</span></span>
+          <span className="shrink-0">·</span>
+          <span className="flex items-center gap-1 shrink-0"><Clock size={10} /> {timeAgo(post.publishedAt)}</span>
         </div>
-      )}
+
+        <ReactionsBar reactions={post.reactions} className="mt-2" />
+      </div>
     </div>
   );
 }

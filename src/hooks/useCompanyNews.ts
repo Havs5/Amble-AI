@@ -67,6 +67,7 @@ function docToPost(d: QueryDocumentSnapshot<DocumentData>): NewsPost {
     coverImage: data.coverImage ?? undefined,
     link: data.link ?? undefined,
     source: data.source ?? undefined,
+    reactions: data.reactions ?? {},
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
     publishedAt: toDate(data.publishedAt),

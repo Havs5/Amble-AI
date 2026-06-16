@@ -118,27 +118,12 @@ export function fmtDuration(ms: number): string {
 }
 
 // ─── Timezone: Eastern (America/New_York) is the canonical company time ─────
-// All punch times are stored as absolute Firestore Timestamps, so the entry's
-// instant is unambiguous. We *display* them anchored to Eastern (DST-aware, so
-// it shows EST in winter / EDT in summer automatically) regardless of where the
-// viewer is. When the viewer happens to be in a different timezone, the UI also
-// shows their *local* wall-clock time in a small muted aside (see fmtTimeLocal /
-// localTimeIfDifferent / viewerOffEastern below) so a remote teammate can read
-// both at a glance. No backfill needed — this is purely a formatting layer.
+// Punch times are stored as absolute Firestore Timestamps, so the instant is
+// unambiguous. We *display* them anchored to Eastern (DST-aware — shows EST in
+// winter / EDT in summer automatically) regardless of where the viewer is, by
+// passing an explicit timeZone to the formatters below. Purely a display layer;
+// no backfill needed.
 export const COMPANY_TZ = 'America/New_York';
-
-/** Eastern zone abbreviation for an instant: "EST" (winter) or "EDT" (summer). */
-export function etAbbrev(ts: Timestamp | Date | null = new Date()): string {
-  const d = ts instanceof Timestamp ? ts.toDate() : (ts || new Date());
-  try {
-    const part = new Intl.DateTimeFormat('en-US', { timeZone: COMPANY_TZ, timeZoneName: 'short' })
-      .formatToParts(d)
-      .find((p) => p.type === 'timeZoneName');
-    return part?.value || 'ET';
-  } catch {
-    return 'ET';
-  }
-}
 
 /** Time-of-day rendered in Eastern, e.g. "9:18 PM". */
 export function fmtTime(ts: Timestamp | null): string {
@@ -150,34 +135,6 @@ export function fmtTime(ts: Timestamp | null): string {
 export function fmtDateTime(ts: Timestamp | null): string {
   if (!ts) return '—';
   return ts.toDate().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: COMPANY_TZ });
-}
-
-/** Time-of-day rendered in the VIEWER's local timezone, e.g. "6:18 PM". */
-export function fmtTimeLocal(ts: Timestamp | null): string {
-  if (!ts) return '—';
-  return ts.toDate().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-/**
- * The viewer's local time-of-day for `ts`, but ONLY when it differs from the
- * Eastern rendering (i.e. the viewer is off Eastern). Returns "" on Eastern so
- * ET viewers — the majority — see no secondary clutter.
- */
-export function localTimeIfDifferent(ts: Timestamp | null): string {
-  if (!ts) return '';
-  const local = fmtTimeLocal(ts);
-  return local === fmtTime(ts) ? '' : local;
-}
-
-/**
- * True when the viewer's wall clock differs from Eastern right now (so local
- * asides add value). Compared on the current instant, which captures DST too.
- * Call this client-side only (depends on the browser timezone) to avoid SSR
- * hydration mismatches.
- */
-export function viewerOffEastern(): boolean {
-  const now = Timestamp.now();
-  return fmtTimeLocal(now) !== fmtTime(now);
 }
 
 function mapDoc(d: any): TimeEntry {

@@ -58,6 +58,8 @@ const TAVILY_API_KEY = defineSecret('TAVILY_API_KEY');
 const GOOGLE_SEARCH_API_KEY = defineSecret('GOOGLE_SEARCH_API_KEY');
 const GOOGLE_SEARCH_CX = defineSecret('GOOGLE_SEARCH_CX');
 const SMTP_APP_PASSWORD = defineSecret('SMTP_APP_PASSWORD');
+const SLACK_SIGNING_SECRET = defineSecret('SLACK_SIGNING_SECRET');
+const SLACK_BOT_TOKEN = defineSecret('SLACK_BOT_TOKEN');
 
 // ============================================================================
 // Next.js App
@@ -260,6 +262,37 @@ exports.kbReindexSchedule = onSchedule(
       console.log('[kbReindexSchedule] done:', JSON.stringify(summary));
     } catch (e) {
       console.error('[kbReindexSchedule] failed:', e?.message);
+    }
+  }
+);
+
+// ============================================================================
+// Slack → Company News (Events API). Reuses the existing Slack app: a message
+// with #news (+ optional #urgent / #pin) in an invited channel auto-publishes a
+// news post. Signature-verified; config in Firestore `config/slackNews`.
+// Slack Request URL = this function's URL. Subscribe to `message.channels`.
+// ============================================================================
+
+exports.slackEvents = onRequest(
+  {
+    region: 'us-central1',
+    memory: '512MiB',
+    timeoutSeconds: 60,
+    secrets: [SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN],
+  },
+  async (req, res) => {
+    try {
+      ensureAdmin();
+      const adminDb = admin.firestore();
+      const { handleSlackEvent } = require('./src/services/slackNews');
+      return await handleSlackEvent(req, res, {
+        adminDb,
+        signingSecret: SLACK_SIGNING_SECRET.value(),
+        botToken: SLACK_BOT_TOKEN.value(),
+      });
+    } catch (e) {
+      console.error('[slackEvents] fatal:', e?.message);
+      if (!res.headersSent) res.status(500).send('error');
     }
   }
 );

@@ -454,8 +454,8 @@ Move Gemini usage from the **Gemini Developer API** (API-key) to **Vertex AI** (
 ### 2. Near-term tech debt (from §6)
 System-prompt consolidation, route de-dup (Functions vs Next), auth on admin endpoints, prune `functions/package.json`.
 
-### 2b. 🔜 Company News upgrade — Phase 2: Slack auto-news (BUILD NEXT)
-Owner decisions locked: **reuse the existing Slack app via Events API**, **auto-publish** triggered posts, image-less cards already shipped as **colorful tiles** (Phase 1, 2026-06-16). The remaining build:
+### 2b. 🔜 Company News upgrade — Phase 2: Slack auto-news (CODE DONE, pending deploy)
+**Status (2026-06-16): function written + syntax-checked; BLOCKED on `firebase login --reauth` (CLI token expired) to set secrets + deploy.** Built: `functions/src/services/slackNews.js` + `slackEvents` export in `functions/index.js` (defineSecret `SLACK_SIGNING_SECRET` + `SLACK_BOT_TOKEN`). Owner already provided both secret values. **Remaining: reauth → `firebase functions:secrets:set` both → `npm run deploy` → take the `slackEvents` function URL → set it as the Slack Event Subscriptions Request URL (subscribe `message.channels`) → `/invite` the bot to #announcements → test a real `#news` message.** Owner decisions locked: reuse the existing Slack app via Events API, **auto-publish**, channel = #announcements for now (config `channels: []` = any channel the bot is in, so adding more later "just works"). Spec:
 - **New Cloud Function `slackEvents`** (HTTP). (a) Answer Slack's `url_verification` challenge; (b) verify the `x-slack-signature` (v0 HMAC over `v0:{timestamp}:{rawBody}` with `SLACK_SIGNING_SECRET`, reject >5 min skew); (c) ack 200 within 3 s, do work async; (d) for `event_callback` `message` events (ignore bot/edits), if `channel ∈ allowlist`, scan text for the **hashtag triggers** below.
 - **Hashtag triggers (all case-insensitive — `#news`/`#NEWS`/`#nEws` all match):**
   - **`#news`** → create + **auto-publish** a `news_posts` doc (this is the create trigger).

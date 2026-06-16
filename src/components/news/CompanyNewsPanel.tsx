@@ -22,11 +22,9 @@ import {
   Sparkles,
   Plus,
   Filter,
-  Tag as TagIcon,
   TrendingUp,
   ChevronRight,
   ChevronDown,
-  X,
   FileText,
   Send,
   Archive,
@@ -35,6 +33,7 @@ import { useCompanyNews } from '@/hooks/useCompanyNews';
 import type { NewsPost } from '@/types/news';
 import { NEWS_DEPARTMENTS } from '@/types/news';
 import { PostCard } from './PostCard';
+import { PostDetailModal } from './PostDetailModal';
 import { NewsFiltersBar } from './NewsFiltersBar';
 import { PostEditor } from './PostEditor';
 
@@ -87,8 +86,8 @@ export function CompanyNewsPanel({
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<NewsPost | null>(null);
 
-  // Expanded post state (for reading full body)
-  const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
+  // Selected post — opens the full-post reader in a centered modal popup.
+  const [selectedPost, setSelectedPost] = useState<NewsPost | null>(null);
 
   // Filter bar visibility
   const [showFilters, setShowFilters] = useState(false);
@@ -122,10 +121,6 @@ export function CompanyNewsPanel({
     [news],
   );
 
-  const handleExpandToggle = useCallback((postId: string) => {
-    setExpandedPostId((prev) => (prev === postId ? null : postId));
-  }, []);
-
   // ── Derived data ──────────────────────────────────────────────────────────
 
   // Sorted: critical → pinned → newest
@@ -141,17 +136,21 @@ export function CompanyNewsPanel({
     });
   }, [news.allPosts]);
 
-  // Top 3 featured posts (banner row)
-  const topPosts = useMemo(() => sortedPosts.slice(0, 3), [sortedPosts]);
+  // Magazine tiers: 2 main (large) · 3 medium · the rest small.
+  const mainPosts = useMemo(() => sortedPosts.slice(0, 2), [sortedPosts]);
+  const mediumPosts = useMemo(() => sortedPosts.slice(2, 5), [sortedPosts]);
+  const restPosts = useMemo(() => sortedPosts.slice(5), [sortedPosts]);
 
-  // Everything else goes into the grid below
-  const allRemainingPosts = useMemo(() => {
-    const topIds = new Set(topPosts.map((p) => p.id));
-    return sortedPosts.filter((p) => !topIds.has(p.id));
-  }, [sortedPosts, topPosts]);
+  const visibleFeed = restPosts.slice(0, feedLimit);
+  const hasMore = restPosts.length > feedLimit;
 
-  const visibleFeed = allRemainingPosts.slice(0, feedLimit);
-  const hasMore = allRemainingPosts.length > feedLimit;
+  // Open the full-post reader (modal) for a clicked card.
+  const handleOpenPost = useCallback(
+    (postId: string) => {
+      setSelectedPost(sortedPosts.find((p) => p.id === postId) ?? null);
+    },
+    [sortedPosts],
+  );
 
   // Quick stats for admin
   const draftCount = news.drafts.filter((d) => d.status === 'DRAFT').length;
@@ -234,90 +233,45 @@ export function CompanyNewsPanel({
             </div>
           )}
 
-          {/* ─── Top Stories Banner (up to 3) ────────────────────────────── */}
-          {topPosts.length > 0 && (
-            <div>
-              {topPosts.length === 1 ? (
-                /* Single post — full-width hero */
-                <PostCard
-                  post={topPosts[0]}
-                  variant="hero"
-                  isAdmin={news.isAdmin}
-                  onEdit={(p) => handleOpenEditor(p)}
-                  onArchive={news.archivePost}
-                  onTogglePin={news.togglePin}
-                  onExpand={handleExpandToggle}
-                />
-              ) : (
-                /* 2-3 posts — inline flex with first card larger */
-                <div style={{ display: 'flex', gap: '12px', height: '500px' }}>
-                  {/* Main feature (58% width) — hero variant so text overlays the image */}
-                  <div style={{ flex: topPosts.length >= 3 ? '0 0 58%' : '0 0 50%', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: '12px' }}>
-                    <PostCard
-                      post={topPosts[0]}
-                      variant="hero"
-                      isAdmin={news.isAdmin}
-                      onEdit={(p) => handleOpenEditor(p)}
-                      onArchive={news.archivePost}
-                      onTogglePin={news.togglePin}
-                      onExpand={handleExpandToggle}
-                    />
-                  </div>
-                  {/* Right side: stacked cards */}
-                  <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {topPosts.slice(1, 3).map((p) => (
-                      <div key={p.id} style={{ flex: '1', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                        <PostCard
-                          post={p}
-                          variant="featured"
-                          isAdmin={news.isAdmin}
-                          onEdit={() => handleOpenEditor(p)}
-                          onArchive={news.archivePost}
-                          onTogglePin={news.togglePin}
-                          onExpand={handleExpandToggle}
-                        />
-                      </div>
-                    ))}
-                  </div>
+          {/* ─── Main stories (2 large) ─────────────────────────────────── */}
+          {mainPosts.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {mainPosts.map((p) => (
+                <div key={p.id} className="h-[300px] sm:h-[340px]">
+                  <PostCard
+                    post={p}
+                    variant="hero"
+                    isAdmin={news.isAdmin}
+                    onEdit={(post) => handleOpenEditor(post)}
+                    onArchive={news.archivePost}
+                    onTogglePin={news.togglePin}
+                    onExpand={handleOpenPost}
+                  />
                 </div>
-              )}
-
-              {/* Expanded body for any top post */}
-              {topPosts.map((tp) =>
-                expandedPostId === tp.id ? (
-                  <div
-                    key={`exp-${tp.id}`}
-                    className="mt-3 rounded-xl border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/40 p-5 sm:p-6"
-                    style={{ animation: 'fade-in-up 0.2s ease-out both' }}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{tp.title}</h3>
-                      <button
-                        onClick={() => setExpandedPostId(null)}
-                        className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                    <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                      {tp.body}
-                    </div>
-                    {tp.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-4 pt-3 border-t border-slate-200 dark:border-slate-700/50">
-                        {tp.tags.map((t) => (
-                          <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400">
-                            <TagIcon size={9} /> {t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : null,
-              )}
+              ))}
             </div>
           )}
 
-          {/* ─── All Posts Grid ──────────────────────────────────────── */}
+          {/* ─── Medium stories (up to 3) ───────────────────────────────── */}
+          {mediumPosts.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {mediumPosts.map((p) => (
+                <div key={p.id} className="h-[240px]">
+                  <PostCard
+                    post={p}
+                    variant="featured"
+                    isAdmin={news.isAdmin}
+                    onEdit={(post) => handleOpenEditor(post)}
+                    onArchive={news.archivePost}
+                    onTogglePin={news.togglePin}
+                    onExpand={handleOpenPost}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ─── Latest Updates (the rest, small list cards) ────────────── */}
           {visibleFeed.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -326,60 +280,29 @@ export function CompanyNewsPanel({
                   Latest Updates
                 </h3>
                 <span className="text-xs text-slate-400">
-                  {allRemainingPosts.length} {allRemainingPosts.length === 1 ? 'post' : 'posts'}
+                  {restPosts.length} {restPosts.length === 1 ? 'post' : 'posts'}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {visibleFeed.map((p) => (
-                  <div key={p.id}>
-                    <PostCard
-                      post={p}
-                      variant="list"
-                      isAdmin={news.isAdmin}
-                      onEdit={() => handleOpenEditor(p)}
-                      onArchive={news.archivePost}
-                      onTogglePin={news.togglePin}
-                      onExpand={handleExpandToggle}
-                    />
-
-                    {/* Expanded body */}
-                    {expandedPostId === p.id && (
-                      <div
-                        className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/40 p-4"
-                        style={{ animation: 'fade-in-up 0.15s ease-out both' }}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Full Post</span>
-                          <button
-                            onClick={() => setExpandedPostId(null)}
-                            className="p-0.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                        <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                          {p.body}
-                        </div>
-                        {p.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-200 dark:border-slate-700/50">
-                            {p.tags.map((t) => (
-                              <span key={t} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400">
-                                {t}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <PostCard
+                    key={p.id}
+                    post={p}
+                    variant="list"
+                    isAdmin={news.isAdmin}
+                    onEdit={(post) => handleOpenEditor(post)}
+                    onArchive={news.archivePost}
+                    onTogglePin={news.togglePin}
+                    onExpand={handleOpenPost}
+                  />
                 ))}
               </div>
             </div>
           )}
 
           {/* ─── Empty State ─────────────────────────────────────────────── */}
-          {topPosts.length === 0 && allRemainingPosts.length === 0 && (
+          {sortedPosts.length === 0 && (
             <div
               className="text-center py-20"
               style={{ animation: 'fade-in-up 0.4s ease-out both' }}
@@ -417,7 +340,7 @@ export function CompanyNewsPanel({
                 onClick={() => setFeedLimit((l) => l + 12)}
                 className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-xl transition-colors"
               >
-                Load more ({allRemainingPosts.length - feedLimit} remaining)
+                Load more ({restPosts.length - feedLimit} remaining)
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -530,6 +453,18 @@ export function CompanyNewsPanel({
         )}
       </div>
       {/* ── End of main flex row ── */}
+
+      {/* ─── Full-post reader (popup) ──────────────────────────────────── */}
+      {selectedPost && (
+        <PostDetailModal
+          post={selectedPost}
+          isAdmin={news.isAdmin}
+          onClose={() => setSelectedPost(null)}
+          onEdit={(p) => handleOpenEditor(p)}
+          onArchive={news.archivePost}
+          onTogglePin={news.togglePin}
+        />
+      )}
     </div>
   );
 }

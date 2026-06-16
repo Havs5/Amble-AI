@@ -1,6 +1,6 @@
 # Amble AI — Source of Truth (SOT)
 
-> **Last updated:** 2026-06-15
+> **Last updated:** 2026-06-16
 > **Companion doc:** [ARCHITECTURE.md](./ARCHITECTURE.md) — how the system is built (with flowcharts).
 > **Status:** This is the **living** record for Amble AI. Every feature, upgrade, decision, and deployment is tracked here from idea → plan → build → ship. If it isn't in this file, it isn't "done."
 
@@ -261,6 +261,13 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-16 — Company News: popup reader, tier layout, tag-overflow fix
+- **Click a post → opens a full-post popup modal** (`PostDetailModal`) instead of the old inline "expanded body below the card". Centered, backdrop+blur, Escape/×/click-out to close, cover-image-or-gradient banner with department/critical/pinned badges, full body + tags, and admin actions (Pin/Archive/Edit). Removed the inline-expand state (`expandedPostId`) entirely.
+- **Magazine tier layout:** first view is now **2 main (large hero)** + **3 medium (featured)** + **the rest as small list cards** ("Latest Updates"), replacing the old 1-hero + 2-stacked banner. `sortedPosts` sliced 0–2 / 2–5 / 5+.
+- **Tag-overflow fix:** the list-card footer (`author · time · tags`) was a non-wrapping flex row, so when the **New Post editor** opened and the feed column narrowed, tags spilled outside the cards. Footer now wraps (`flex-wrap` + `min-w-0` + truncation).
+- `departmentGradients` / `departmentBadgeColors` exported from `PostCard` for reuse by the modal.
+- **Next:** owner flagged a "major upgrade" to News coming after this — pending their spec.
 
 ### 2026-06-15 — Clock In/Out: Eastern (EST/EDT) canonical time + Punch local reference
 - **All punch times display in Eastern Time (America/New_York, DST-aware)** as the canonical company time — identical for every viewer regardless of their own timezone. `TimeClockService.fmtTime`/`fmtDateTime` pass an explicit `timeZone: COMPANY_TZ` (also makes them SSR-deterministic). Absolute `Timestamp`s already stored, so this is a pure display change — no backfill.

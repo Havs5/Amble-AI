@@ -49,7 +49,7 @@ function formatDateShort(date: Date | null): string {
 }
 
 /** Department-themed gradient for posts without a cover image */
-const departmentGradients: Record<string, string> = {
+export const departmentGradients: Record<string, string> = {
   general: 'from-indigo-500 to-purple-600',
   engineering: 'from-blue-500 to-cyan-600',
   operations: 'from-emerald-500 to-teal-600',
@@ -60,7 +60,7 @@ const departmentGradients: Record<string, string> = {
   leadership: 'from-slate-600 to-gray-700',
 };
 
-const departmentBadgeColors: Record<string, string> = {
+export const departmentBadgeColors: Record<string, string> = {
   general: 'bg-indigo-500',
   engineering: 'bg-blue-500',
   operations: 'bg-emerald-500',
@@ -373,24 +373,23 @@ export function PostCard({
           )}
         </div>
 
-        {/* Footer: author + time + tags */}
-        <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
-          <span className="flex items-center gap-1">
-            <User size={10} /> {post.authorName}
+        {/* Footer: author + time + tags (wraps so tags never spill outside the card) */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400 dark:text-slate-500 min-w-0">
+          <span className="flex items-center gap-1 min-w-0">
+            <User size={10} className="shrink-0" /> <span className="truncate">{post.authorName}</span>
           </span>
           <span className="text-slate-300 dark:text-slate-600">·</span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 shrink-0">
             <Clock size={10} /> {timeAgo(post.publishedAt)}
           </span>
           {post.tags.length > 0 && !compact && (
-            <>
-              <span className="text-slate-300 dark:text-slate-600">·</span>
+            <span className="flex flex-wrap items-center gap-1 min-w-0">
               {post.tags.slice(0, 2).map((t) => (
-                <span key={t} className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400">
+                <span key={t} className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400 truncate max-w-[100px]">
                   {t}
                 </span>
               ))}
-            </>
+            </span>
           )}
         </div>
       </div>

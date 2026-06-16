@@ -37,6 +37,16 @@ const fmtWeekRange = (start: Date) => {
 
 // All punch times display anchored to Eastern (canonical company time) via the
 // ET-anchored TC.fmtTime / TC.fmtDateTime helpers — same for every viewer.
+//
+// The live Punch clock additionally shows the viewer's *own* local time as a
+// small reference line when it differs from Eastern. The hook resolves the
+// browser timezone AFTER mount so this never causes an SSR hydration mismatch
+// (the Eastern clock is deterministic and renders first).
+function useOffEastern(): boolean {
+  const [off, setOff] = useState(false);
+  useEffect(() => { setOff(TC.viewerOffEastern()); }, []);
+  return off;
+}
 
 export function TimeClockView() {
   const { user } = useAuth();
@@ -279,6 +289,7 @@ function PunchTab({
   const nowDate = new Date(now);
   const clockedIn = !!openEntry;
   const todayMs = todayEntries.reduce((sum, e) => sum + TC.entryDurationMs(e, now), 0);
+  const off = useOffEastern();
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -300,9 +311,15 @@ function PunchTab({
         <p className="text-xs font-medium text-slate-400 dark:text-slate-500 tracking-wide">
           {nowDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: TC.COMPANY_TZ })}
         </p>
-        <p className="text-5xl font-bold tabular-nums text-slate-800 dark:text-slate-100 my-3">
+        <p className="text-5xl font-bold tabular-nums text-slate-800 dark:text-slate-100 mt-3 mb-1">
           {nowDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: TC.COMPANY_TZ })}
         </p>
+        {off && (
+          <p className="mb-3 text-sm text-slate-400 dark:text-slate-500 tabular-nums">
+            Your local time: {nowDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+          </p>
+        )}
+        {!off && <div className="mb-3" />}
 
         {clockedIn && openEntry ? (
           <>

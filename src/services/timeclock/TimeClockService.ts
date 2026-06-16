@@ -137,6 +137,23 @@ export function fmtDateTime(ts: Timestamp | null): string {
   return ts.toDate().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: COMPANY_TZ });
 }
 
+/** Time-of-day rendered in the VIEWER's local timezone, e.g. "6:18 PM". */
+export function fmtTimeLocal(ts: Timestamp | null): string {
+  if (!ts) return '—';
+  return ts.toDate().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+/**
+ * True when the viewer's wall clock differs from Eastern right now (so a "your
+ * local time" reference is worth showing). Compares the current instant rendered
+ * both ways, so it tracks DST. Call client-side only (depends on browser tz) to
+ * avoid SSR hydration mismatches.
+ */
+export function viewerOffEastern(): boolean {
+  const now = Timestamp.now();
+  return fmtTimeLocal(now) !== fmtTime(now);
+}
+
 function mapDoc(d: any): TimeEntry {
   return { id: d.id, ...(d.data() as Omit<TimeEntry, 'id'>) };
 }

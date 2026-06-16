@@ -18,7 +18,9 @@
 
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const { GoogleGenAI } = require('@google/genai');
+// NOTE: posts use the VERBATIM Slack text (owner preference) — the AI summarizer
+// below is kept but no longer called, so @google/genai is required lazily inside
+// it to avoid loading the heavy SDK on the hot/cold path.
 
 const VERTEX_PROJECT = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'amble-ai';
 const VERTEX_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'global';
@@ -156,6 +158,56 @@ async function ackInSlack(botToken, channel, threadTs, title, trig) {
   }
 }
 
+/** Fetch a single Slack message (e.g. the thread parent) WITH its reactions + files. */
+async function fetchMessage(botToken, channel, ts) {
+  if (!botToken || !channel || !ts) return null;
+  try {
+    const url = `https://slack.com/api/conversations.replies?channel=${encodeURIComponent(channel)}&ts=${encodeURIComponent(ts)}&limit=1&inclusive=true`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${botToken}` } });
+    const j = await r.json();
+    if (j.ok && Array.isArray(j.messages) && j.messages.length) return j.messages[0];
+    if (!j.ok) console.warn('[slackNews] conversations.replies not ok:', j.error);
+  } catch (e) {
+    console.warn('[slackNews] conversations.replies failed:', e.message);
+  }
+  return null;
+}
+
+/** Download a Slack image file (needs `files:read`) and store it as the post cover. */
+async function uploadSlackImage(botToken, file, docId) {
+  if (!botToken || !file || !file.url_private || !/^image\//.test(file.mimetype || '')) return null;
+  try {
+    const r = await fetch(file.url_private, { headers: { Authorization: `Bearer ${botToken}` } });
+    if (!r.ok) { console.warn('[slackNews] image download failed:', r.status); return null; }
+    const buf = Buffer.from(await r.arrayBuffer());
+    const bucket = admin.storage().bucket();
+    const ext = file.filetype || (file.mimetype.split('/')[1] || 'png');
+    const path = `news/slack/${docId}.${ext}`;
+    const token = crypto.randomUUID();
+    await bucket.file(path).save(buf, {
+      contentType: file.mimetype,
+      resumable: false,
+      metadata: { metadata: { firebaseStorageDownloadTokens: token } },
+    });
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
+  } catch (e) {
+    console.warn('[slackNews] image upload failed:', e.message);
+    return null;
+  }
+}
+
+/** Seed the reactions map from a Slack message's current reactions (e.g. the 👀 already on it). */
+function seedReactions(message) {
+  const out = {};
+  if (message && Array.isArray(message.reactions)) {
+    for (const rx of message.reactions) {
+      const name = (rx && rx.name || '').split('::')[0];
+      if (name) out[name] = (out[name] || 0) + (rx.count || 0);
+    }
+  }
+  return out;
+}
+
 // ─── Summarization (Vertex Gemini, ADC) ─────────────────────────────────────
 function fallbackPost(cleanText) {
   const firstLine = (cleanText.split('\n').map((s) => s.trim()).find(Boolean)) || 'Company update';
@@ -164,6 +216,7 @@ function fallbackPost(cleanText) {
 }
 
 async function summarize(cleanText) {
+  const { GoogleGenAI } = require('@google/genai');
   const ai = new GoogleGenAI({ vertexai: true, project: VERTEX_PROJECT, location: VERTEX_LOCATION });
   const prompt = `Convert this raw Slack message into a concise internal company-news post.
 Return STRICT JSON only (no markdown), with keys:
@@ -190,30 +243,55 @@ Slack message:
 
 // ─── Core: build + publish a post from one message event ────────────────────
 async function processMessageEvent(adminDb, ev, cfg, botToken) {
-  const text = ev.text || '';
-  const trig = detectTriggers(text);
+  const triggerText = ev.text || '';
+  const trig = detectTriggers(triggerText);
   if (!trig.any) return { skipped: 'no-trigger' };
 
   if (Array.isArray(cfg.channels) && cfg.channels.length > 0 && !cfg.channels.includes(ev.channel)) {
     return { skipped: 'channel-not-allowed' };
   }
 
-  const cleanText = stripTriggers(text) || text.trim();
+  // If #news was typed as a THREAD REPLY, the post's CONTENT comes from the
+  // PARENT message (its text, image, author, existing reactions). A top-level
+  // #news uses the message itself. The #urgent/#pin flags come from wherever
+  // the hashtags were typed (the trigger message).
+  // Resolve the thread parent (if a reply) and the channel name in PARALLEL.
+  const isReply = ev.thread_ts && ev.thread_ts !== ev.ts;
+  const [parent, channelName] = await Promise.all([
+    isReply ? fetchMessage(botToken, ev.channel, ev.thread_ts) : Promise.resolve(null),
+    resolveChannelName(botToken, ev.channel),
+  ]);
+  const source = parent || ev;
 
-  let post;
-  if (cfg.summarize) {
-    try { post = await summarize(cleanText); }
-    catch (e) { console.warn('[slackNews] summarize failed, using raw:', e.message); post = fallbackPost(cleanText); }
-  } else {
-    post = fallbackPost(cleanText);
-  }
+  const sourceTs = source.ts || ev.ts;
+  const docId = slackDocId(ev.channel, sourceTs);
 
-  // Department is decided by the SOURCE CHANNEL (per owner), not the AI:
+  const sourceText = source.text || '';
+  const cleanText = stripTriggers(sourceText) || sourceText.trim();
+
+  // Cover image (first image file) + author resolution in PARALLEL.
+  const imgFile = Array.isArray(source.files) ? source.files.find((f) => /^image\//.test(f.mimetype || '')) : null;
+  const [coverImage, authorName] = await Promise.all([
+    imgFile ? uploadSlackImage(botToken, imgFile, docId) : Promise.resolve(null),
+    resolveAuthor(botToken, source.user || ev.user),
+  ]);
+
+  // VERBATIM message text — owner wants the exact Slack text, NOT an AI rewrite.
+  // Title = first non-empty line; body = the full message text; summary = the rest.
+  const lines = cleanText.split('\n').map((s) => s.trim()).filter(Boolean);
+  const title = lines[0]
+    ? (lines[0].length > 90 ? lines[0].slice(0, 87) + '…' : lines[0])
+    : ((imgFile && (imgFile.title || imgFile.name)) || 'Company update');
+  const rest = lines.slice(1).join(' ').trim();
+  const post = { title, body: cleanText, summary: rest ? rest.slice(0, 200) : '' };
+
+  // Department is decided by the SOURCE CHANNEL (per owner):
   // #announcements → operations, holly-and-homies → systemErrorsProviderCoordination, …
-  const channelName = await resolveChannelName(botToken, ev.channel);
   const mapped = channelName && cfg.channelDepartments ? cfg.channelDepartments[channelName] : null;
   const department = (mapped && DEPARTMENT_KEYS.includes(mapped)) ? mapped : (cfg.defaultDepartment || 'operations');
-  const authorName = await resolveAuthor(botToken, ev.user);
+
+  // Existing reactions (e.g. 👀 already on the message) from the SOURCE.
+  const reactions = seedReactions(source);
 
   const now = admin.firestore.FieldValue.serverTimestamp();
   const status = cfg.autoPublish ? 'PUBLISHED' : 'DRAFT';
@@ -230,16 +308,15 @@ async function processMessageEvent(adminDb, ev, cfg, botToken) {
     visibility: 'ALL',
     allowedDepartmentIds: [],
     allowedUserIds: [],
-    authorId: `slack:${ev.user || 'unknown'}`,
+    authorId: `slack:${source.user || ev.user || 'unknown'}`,
     authorName,
-    coverImage: null,
+    coverImage,
     link: null,
     source: 'slack',
-    // Slack source (lets reaction events find this exact post) + reactions map.
     slackChannel: ev.channel || null,
     slackChannelName: channelName || null,
-    slackTs: ev.ts || null,
-    reactions: {},
+    slackTs: sourceTs, // SOURCE (parent) ts → reactions on it link back here
+    reactions,
     createdAt: now,
     updatedAt: now,
     publishedAt: status === 'PUBLISHED' ? now : null,
@@ -247,8 +324,7 @@ async function processMessageEvent(adminDb, ev, cfg, botToken) {
     expiresAt: null,
   };
 
-  // Deterministic id keyed on the source message → idempotent + reaction-linkable.
-  const ref = adminDb.collection('news_posts').doc(slackDocId(ev.channel, ev.ts));
+  const ref = adminDb.collection('news_posts').doc(docId);
   await ref.set(docData, { merge: true });
 
   try {
@@ -258,13 +334,13 @@ async function processMessageEvent(adminDb, ev, cfg, botToken) {
       actorId: `slack:${ev.user || 'unknown'}`,
       actorName: authorName,
       timestamp: now,
-      diff: `Created from Slack${trig.urgent ? ' (#urgent)' : ''}${trig.pin ? ' (#pin)' : ''}`,
+      diff: `Created from Slack${isReply ? ' (thread reply → parent)' : ''}${trig.urgent ? ' (#urgent)' : ''}${trig.pin ? ' (#pin)' : ''}`,
     });
   } catch {/* audit best-effort */}
 
   if (cfg.ackInSlack) await ackInSlack(botToken, ev.channel, ev.thread_ts || ev.ts, docData.title, trig);
 
-  return { posted: ref.id, priority: docData.priority, pinned: docData.pinned, department };
+  return { posted: ref.id, fromParent: isReply, hasImage: !!coverImage, priority: docData.priority, pinned: docData.pinned, department };
 }
 
 // ─── Relay (keep the other tool working) ────────────────────────────────────

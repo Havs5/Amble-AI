@@ -318,7 +318,7 @@ export function PostCard({
           <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-snug mb-1 line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
             {post.title}
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed mb-2 flex-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-2 flex-1">
             {post.summary || post.body.slice(0, 160)}
           </p>
           <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 min-w-0">

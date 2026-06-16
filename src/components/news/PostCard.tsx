@@ -310,12 +310,12 @@ export function PostCard({
   // ─── LIST VARIANT (default) ───────────────────────────────────────────
   return (
     <div
-      className="group flex gap-4 p-4 rounded-xl border border-slate-100 dark:border-slate-700/40 bg-white dark:bg-slate-800/40 hover:border-slate-200 dark:hover:border-slate-600/50 hover:shadow-md transition-all duration-200 cursor-pointer"
+      className="group flex gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border border-slate-100 dark:border-slate-700/40 bg-white dark:bg-slate-800/40 hover:border-slate-200 dark:hover:border-slate-600/50 hover:shadow-md transition-all duration-200 cursor-pointer min-w-0"
       onClick={() => onExpand?.(post.id)}
       style={{ animation: 'fade-in-up 0.2s ease-out both' }}
     >
       {/* Thumbnail */}
-      <div className="shrink-0 w-28 h-20 sm:w-36 sm:h-24 rounded-lg overflow-hidden relative">
+      <div className="shrink-0 w-24 h-16 sm:w-32 sm:h-20 rounded-lg overflow-hidden relative">
         {hasImage ? (
           <img
             src={post.coverImage!}
@@ -373,9 +373,9 @@ export function PostCard({
           )}
         </div>
 
-        {/* Footer: author + time + tags (wraps so tags never spill outside the card) */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400 dark:text-slate-500 min-w-0">
-          <span className="flex items-center gap-1 min-w-0">
+        {/* Footer: author + time + tags. Wraps within the card so nothing spills outside. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400 dark:text-slate-500 w-full min-w-0">
+          <span className="flex items-center gap-1 min-w-0 max-w-full">
             <User size={10} className="shrink-0" /> <span className="truncate">{post.authorName}</span>
           </span>
           <span className="text-slate-300 dark:text-slate-600">·</span>
@@ -383,9 +383,9 @@ export function PostCard({
             <Clock size={10} /> {timeAgo(post.publishedAt)}
           </span>
           {post.tags.length > 0 && !compact && (
-            <span className="flex flex-wrap items-center gap-1 min-w-0">
+            <span className="flex flex-wrap items-center gap-1 min-w-0 max-w-full">
               {post.tags.slice(0, 2).map((t) => (
-                <span key={t} className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400 truncate max-w-[100px]">
+                <span key={t} className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400 truncate max-w-full">
                   {t}
                 </span>
               ))}

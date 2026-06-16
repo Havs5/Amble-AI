@@ -235,7 +235,7 @@ export function CompanyNewsPanel({
 
           {/* ─── Main stories (2 large) ─────────────────────────────────── */}
           {mainPosts.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className={`grid gap-3 ${editorOpen ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 lg:grid-cols-2'}`}>
               {mainPosts.map((p) => (
                 <div key={p.id} className="h-[300px] sm:h-[340px]">
                   <PostCard
@@ -254,7 +254,7 @@ export function CompanyNewsPanel({
 
           {/* ─── Medium stories (up to 3) ───────────────────────────────── */}
           {mediumPosts.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className={`grid gap-3 ${editorOpen ? 'grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
               {mediumPosts.map((p) => (
                 <div key={p.id} className="h-[240px]">
                   <PostCard
@@ -284,7 +284,7 @@ export function CompanyNewsPanel({
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className={`grid gap-3 ${editorOpen ? 'grid-cols-1 2xl:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
                 {visibleFeed.map((p) => (
                   <PostCard
                     key={p.id}

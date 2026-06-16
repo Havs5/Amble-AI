@@ -262,6 +262,10 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-16 — Fix: deploys not reaching users (1-year HTML cache)
+- **Root cause:** `src/app/page.tsx` (the SPA shell) was statically prerendered, so the SSR function served it with `Cache-Control: s-maxage=31536000` + `X-Nextjs-Cache: HIT`. Firebase's CDN cached the HTML for a **year**, so new deploys (e.g. the colorful-tiles redesign) never reached browsers — they kept getting old HTML referencing old JS chunks. This is why "the cards never changed."
+- **Fix:** `export const dynamic = 'force-dynamic'` on the home route → Next emits `no-store` for the shell, so every deploy is live immediately (home route flipped `○ Static` → `ƒ Dynamic`). Also added `Cache-Control: public, max-age=31536000, immutable` for `/_next/static/**` (content-hashed, safe) and bumped the hosting config to force a CDN refresh. **Note for the future: any "deployed but not showing" symptom is almost always this caching layer.**
+
 ### 2026-06-16 — Company News upgrade, Phase 1: colorful tiles + image zoom
 - **No more wasted placeholder image block.** Most posts have no cover image, so the featured (medium) cards are now **full-bleed colorful tiles** — the department gradient (or the cover image when present) fills the card with the title/summary/badges overlaid, matching the hero look. The small list cards drop the building-icon placeholder for a **solid department-color swatch with the department label**; an uploaded cover shows as the thumbnail.
 - **Click-to-zoom images.** In the post popup (`PostDetailModal`), a cover image shows a "Zoom" affordance and opens a **fullscreen lightbox** (Esc / click-out / × to close).
@@ -452,9 +456,15 @@ System-prompt consolidation, route de-dup (Functions vs Next), auth on admin end
 
 ### 2b. 🔜 Company News upgrade — Phase 2: Slack auto-news (BUILD NEXT)
 Owner decisions locked: **reuse the existing Slack app via Events API**, **auto-publish** triggered posts, image-less cards already shipped as **colorful tiles** (Phase 1, 2026-06-16). The remaining build:
-- **New Cloud Function `slackEvents`** (HTTP). (a) Answer Slack's `url_verification` challenge; (b) verify the `x-slack-signature` (v0 HMAC over `v0:{timestamp}:{rawBody}` with `SLACK_SIGNING_SECRET`, reject >5 min skew); (c) ack 200 within 3 s, do work async; (d) for `event_callback` `message` events (ignore bot/subtype/edits), if `channel ∈ allowlist` **and** the text contains **≥ N trigger keywords** (owner said "2 or 3"; default N=2), create a **published** `news_posts` doc.
-- **AI summarization** (owner default = on): run the Slack text through Gemini-Flash to produce `{title, summary, body, departmentId, priority}`; fall back to raw text + first line as title if the model is unavailable.
-- **Config in Firestore** `config/slackNews` (editable without redeploy): `{ channels: string[], keywords: string[], minKeywords: number, autoPublish: true, summarize: true }`.
+- **New Cloud Function `slackEvents`** (HTTP). (a) Answer Slack's `url_verification` challenge; (b) verify the `x-slack-signature` (v0 HMAC over `v0:{timestamp}:{rawBody}` with `SLACK_SIGNING_SECRET`, reject >5 min skew); (c) ack 200 within 3 s, do work async; (d) for `event_callback` `message` events (ignore bot/edits), if `channel ∈ allowlist`, scan text for the **hashtag triggers** below.
+- **Hashtag triggers (all case-insensitive — `#news`/`#NEWS`/`#nEws` all match):**
+  - **`#news`** → create + **auto-publish** a `news_posts` doc (this is the create trigger).
+  - **`#urgent`** → set `priority: 'CRITICAL'`.
+  - **`#pin`** → set `pinned: true`.
+  - **Thread replies/comments count too:** a reply on the message containing a hashtag triggers the same behaviour (e.g. a `#pin` comment creates + pins the post). Match on reply text; resolve the parent via `thread_ts`.
+  - Posts remain **fully editable inside Amble AI** after creation.
+- **AI summarization** (owner confirmed = on): run the Slack text through Gemini-Flash to produce `{title, summary, body, departmentId}`; fall back to raw text + first line as title if the model is unavailable. `#urgent`/`#pin` flags applied on top.
+- **Config in Firestore** `config/slackNews` (editable without redeploy): `{ channels: string[], triggers: { create:'#news', urgent:'#urgent', pin:'#pin' }, autoPublish: true, summarize: true }`. **One channel now; adding the bot to more channels later "just works" with the same triggers** (add the channel ID to `channels`).
 - **Secrets (owner-provided, NEVER committed):** `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN` (bot token only needed to resolve channel/user names + dedupe). Set via `firebase functions:secrets:set`.
 - **Slack-side setup (owner):** in the existing app → Event Subscriptions → Request URL = the deployed `slackEvents` URL; subscribe to `message.channels`; add scopes `channels:history` (+ `groups:history` for private); reinstall; **invite the bot** to each target channel.
 - Dedupe on Slack `event_id` (store processed IDs) so retries don't double-post.

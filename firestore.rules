@@ -139,6 +139,22 @@ service cloud.firestore {
       );
     }
 
+    // ─── Time-edit requests (staff → manager review) ────────────────────────
+    // A staff user creates/reads their own pending requests; managers+ read all
+    // and approve/reject (update). Owners or managers may delete.
+    match /time_edit_requests/{reqId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid || isManagerOrAbove()
+      );
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if request.auth != null && isManagerOrAbove();
+      allow delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid || isManagerOrAbove()
+      );
+    }
+
     // ─── Presence (team "who's online") ─────────────────────────────────────
     // World-readable mirror of clock-in status; a user writes only their own.
     match /presence/{uid} {

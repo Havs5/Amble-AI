@@ -209,7 +209,9 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - ✅ **Employee punch in/out** — live clock, IN/OUT status, optional note; one open `time_entries` doc until punch-out
 - ✅ **My Timecard** — weekly view (Mon–Sun), entries grouped by day with daily + week totals, week navigation, running time for open entries
 - ✅ **Manager panel** (admin/superadmin) — week view of all employees grouped with totals; **adjust** clock-in/out times (datetime pickers, `edited` flag), **add** manual entries for any employee, **delete** entries; **Department filter → Employee filter** (department from the user directory; employee list scopes to the chosen dept; per-employee dept badge)
-- ✅ **"Who's In" tab + team presence** — live board of everyone currently clocked in (avatar/dept/since/duration) via a world-readable `presence` mirror; **online = clocked in** reflected in the Dashboard greeting (Online/Offline) + sidebar Amble logo (greyscale + "Offline" when out) via `useClockStatus()`
+- ✅ **"Who's In" tab (managers/IT only) + team presence** — live board of everyone currently clocked in (avatar/dept/since/duration) via a world-readable `presence` mirror; **online = clocked in** reflected in the Dashboard greeting (Online/Offline) + sidebar Amble logo (greyscale + "Offline" when out) via `useClockStatus()`
+- ✅ **Correction requests** — staff "Request fix" (missing) or per-entry correction (`time_edit_requests`) with reason; manager **Pending requests** queue approves (applies to `time_entries`) / rejects; staff see live status
+- ✅ **Manager date-range filter** — From/To inputs (`subscribeRange`) + live filtered total (respects dept/employee filters) to pull anyone's hours over a custom range
 - ✅ Realtime via Firestore `onSnapshot`; secured by Firestore rules (own entries, or all for admins; `presence` readable by any authed user, writable by owner) + composite indexes `(userId+clockIn)`, `(userId+clockOut)`
 - 📌 Possible follow-ups: CSV/payroll export, approvals, overtime rules, TIP/BON/COM amount fields (per OnTheClock reference), break tracking
 
@@ -259,6 +261,12 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-15 — Clock In/Out: correction requests + manager range filter
+- **"Who's In" restricted to managers/IT** — the presence board tab (and its subscription) now only render for `manageTimeclock` holders.
+- **Staff correction requests** — on **My Timecard**, staff can **"Request fix"** (a missing punch) or hit the per-entry pencil to **request a correction** (propose new clock in/out + reason). Requests land in a new **`time_edit_requests`** collection; staff see their own requests + live status (pending/approved/rejected). Rules: a user creates/reads only their own (status forced `pending`); managers+ read all and update.
+- **Manager review queue** — the **Manage** tab shows a **Pending correction requests** panel (current→proposed diff + reason); **Approve** applies the change to `time_entries` (`updateEntry` for edits, `addManualEntry` for adds) then marks it approved, **Reject** records an optional note. `approveRequest`/`rejectRequest`/`subscribePendingRequests` in the service.
+- **Manager date-range filter** — Manage tab gained **From/To date inputs** (`subscribeRange`) that override the week view, plus a live **filtered total** that respects the department + employee filters — so a manager can pull one person's hours over any range.
 
 ### 2026-06-15 — Clock In/Out: team presence ("Who's In") + online status
 - **"Who's In" tab** (visible to everyone) — a live board of all teammates currently clocked in, with avatar, department, clocked-in-since time, and running duration, sourced from a new world-readable **`presence`** collection mirror.

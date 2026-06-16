@@ -57,6 +57,26 @@ export interface OnlineUser {
   since: Timestamp | null; // when they clocked in
 }
 
+/** A staff-submitted request to correct (edit) or add a punch, for manager review. */
+export interface EditRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  entryId?: string | null;            // existing entry (edit) or null (add)
+  type: 'edit' | 'add';
+  currentClockIn?: Timestamp | null;  // snapshot for context
+  currentClockOut?: Timestamp | null;
+  proposedClockIn: Timestamp;
+  proposedClockOut: Timestamp | null;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: Timestamp;
+  reviewedBy?: string;
+  reviewedAt?: Timestamp | null;
+  reviewNote?: string;
+}
+
 // ─── Week helpers (week runs Monday → Sunday) ──────────────────────────────
 export function startOfWeek(d: Date): Date {
   const x = new Date(d);
@@ -99,6 +119,11 @@ export function fmtDuration(ms: number): string {
 export function fmtTime(ts: Timestamp | null): string {
   if (!ts) return '—';
   return ts.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+export function fmtDateTime(ts: Timestamp | null): string {
+  if (!ts) return '—';
+  return ts.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function mapDoc(d: any): TimeEntry {
@@ -171,6 +196,25 @@ export function subscribeAllWeek(weekStart: Date, cb: (entries: TimeEntry[]) => 
     (snap) => cb(snap.docs.map(mapDoc)),
     (err) => {
       console.warn('[TimeClock] all-week subscription error', err);
+      cb([]);
+    }
+  );
+}
+
+/** Every user's entries within an arbitrary [start, end] range (manager view). */
+export function subscribeRange(start: Date, end: Date, cb: (entries: TimeEntry[]) => void): () => void {
+  if (!db) return () => {};
+  const q = query(
+    collection(db, COL),
+    where('clockIn', '>=', Timestamp.fromDate(start)),
+    where('clockIn', '<=', Timestamp.fromDate(end)),
+    orderBy('clockIn', 'asc')
+  );
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map(mapDoc)),
+    (err) => {
+      console.warn('[TimeClock] range subscription error', err);
       cb([]);
     }
   );
@@ -292,6 +336,89 @@ export async function addManualEntry(p: {
 
 export async function deleteEntry(entryId: string) {
   return deleteDoc(doc(db, COL, entryId));
+}
+
+// ─── Time-edit requests (staff → manager) ──────────────────────────────────
+const REQ = 'time_edit_requests';
+
+function mapReq(d: any): EditRequest {
+  return { id: d.id, ...(d.data() as Omit<EditRequest, 'id'>) };
+}
+
+/** Staff submits a correction (edit an entry) or addition (missing punch). */
+export async function createEditRequest(p: {
+  userId: string; userName: string; userEmail?: string;
+  entryId?: string | null; type: 'edit' | 'add';
+  currentClockIn?: Timestamp | null; currentClockOut?: Timestamp | null;
+  proposedClockIn: Date; proposedClockOut: Date | null; reason: string;
+}) {
+  return addDoc(collection(db, REQ), {
+    userId: p.userId,
+    userName: p.userName,
+    userEmail: p.userEmail || '',
+    entryId: p.entryId || null,
+    type: p.type,
+    currentClockIn: p.currentClockIn || null,
+    currentClockOut: p.currentClockOut || null,
+    proposedClockIn: Timestamp.fromDate(p.proposedClockIn),
+    proposedClockOut: p.proposedClockOut ? Timestamp.fromDate(p.proposedClockOut) : null,
+    reason: p.reason || '',
+    status: 'pending',
+    createdAt: Timestamp.now(),
+  });
+}
+
+/** A user's own correction requests (newest first). */
+export function subscribeMyRequests(userId: string, cb: (reqs: EditRequest[]) => void): () => void {
+  if (!db || !userId) return () => {};
+  const q = query(collection(db, REQ), where('userId', '==', userId));
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map(mapReq).sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())),
+    (err) => { console.warn('[TimeClock] my-requests error', err); cb([]); }
+  );
+}
+
+/** All pending requests (manager review queue, oldest first). */
+export function subscribePendingRequests(cb: (reqs: EditRequest[]) => void): () => void {
+  if (!db) return () => {};
+  const q = query(collection(db, REQ), where('status', '==', 'pending'));
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map(mapReq).sort((a, b) => a.createdAt.toMillis() - b.createdAt.toMillis())),
+    (err) => { console.warn('[TimeClock] pending-requests error', err); cb([]); }
+  );
+}
+
+/** Manager approves: apply the change to time_entries, then mark approved. */
+export async function approveRequest(req: EditRequest, reviewerUid: string) {
+  if (req.type === 'add') {
+    await addManualEntry({
+      userId: req.userId,
+      userName: req.userName,
+      userEmail: req.userEmail,
+      clockIn: req.proposedClockIn.toDate(),
+      clockOut: req.proposedClockOut ? req.proposedClockOut.toDate() : null,
+      note: 'Approved correction request',
+      editorUid: reviewerUid,
+    });
+  } else if (req.entryId) {
+    await updateEntry(
+      req.entryId,
+      { clockIn: req.proposedClockIn.toDate(), clockOut: req.proposedClockOut ? req.proposedClockOut.toDate() : null },
+      reviewerUid
+    );
+  }
+  return updateDoc(doc(db, REQ, req.id), {
+    status: 'approved', reviewedBy: reviewerUid, reviewedAt: Timestamp.now(),
+  });
+}
+
+/** Manager rejects with an optional note. */
+export async function rejectRequest(reqId: string, reviewerUid: string, note?: string) {
+  return updateDoc(doc(db, REQ, reqId), {
+    status: 'rejected', reviewedBy: reviewerUid, reviewedAt: Timestamp.now(), reviewNote: note || '',
+  });
 }
 
 /** Directory of users for the manager's "add entry for employee" picker. */

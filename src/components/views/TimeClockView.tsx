@@ -8,7 +8,7 @@ import {
 import { useAuth } from '../auth/AuthContextRefactored';
 import { auth as fbAuth } from '@/lib/firebase';
 import * as TC from '@/services/timeclock/TimeClockService';
-import type { TimeEntry, DirectoryUser, OnlineUser } from '@/services/timeclock/TimeClockService';
+import type { TimeEntry, DirectoryUser, OnlineUser, EditRequest } from '@/services/timeclock/TimeClockService';
 import { can } from '@/lib/roles';
 import { NEWS_DEPARTMENTS } from '@/types/news';
 
@@ -95,15 +95,20 @@ export function TimeClockView() {
     }
   };
 
-  // Live team presence (everyone currently clocked in).
+  // Live team presence (everyone currently clocked in). Managers/IT only.
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
-  useEffect(() => TC.subscribeOnlineUsers(setOnlineUsers), []);
+  useEffect(() => {
+    if (!isAdmin) return;
+    return TC.subscribeOnlineUsers(setOnlineUsers);
+  }, [isAdmin]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'punch', label: 'Punch', icon: <Clock size={15} /> },
     { id: 'timecard', label: 'My Timecard', icon: <CalendarDays size={15} /> },
-    { id: 'online', label: "Who's In", icon: <UserCheck size={15} /> },
-    ...(isAdmin ? [{ id: 'manage' as Tab, label: 'Manage', icon: <Users size={15} /> }] : []),
+    ...(isAdmin ? [
+      { id: 'online' as Tab, label: "Who's In", icon: <UserCheck size={15} /> },
+      { id: 'manage' as Tab, label: 'Manage', icon: <Users size={15} /> },
+    ] : []),
   ];
 
   return (
@@ -153,10 +158,13 @@ export function TimeClockView() {
             weekStart={myWeekStart}
             setWeekStart={setMyWeekStart}
             now={now}
+            uid={uid}
+            userName={userName}
+            userEmail={userEmail}
           />
         )}
 
-        {tab === 'online' && <WhoIsInTab online={onlineUsers} now={now} currentUid={uid} />}
+        {tab === 'online' && isAdmin && <WhoIsInTab online={onlineUsers} now={now} currentUid={uid} />}
 
         {tab === 'manage' && isAdmin && <ManageTab now={now} editorUid={uid} />}
       </div>
@@ -359,12 +367,15 @@ function WeekNav({ weekStart, setWeekStart }: { weekStart: Date; setWeekStart: (
 
 // ─── Employee weekly timecard ──────────────────────────────────────────────
 function TimecardTab({
-  entries, weekStart, setWeekStart, now,
+  entries, weekStart, setWeekStart, now, uid, userName, userEmail,
 }: {
   entries: TimeEntry[];
   weekStart: Date;
   setWeekStart: (d: Date) => void;
   now: number;
+  uid: string;
+  userName: string;
+  userEmail: string;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => TC.addDays(weekStart, i));
   const byDay = useMemo(() => {
@@ -377,13 +388,30 @@ function TimecardTab({
   }, [entries]);
   const weekMs = entries.reduce((s, e) => s + TC.entryDurationMs(e, now), 0);
 
+  const [reqModal, setReqModal] = useState<{ mode: 'edit' | 'add'; entry: TimeEntry | null } | null>(null);
+  const [myRequests, setMyRequests] = useState<EditRequest[]>([]);
+  useEffect(() => {
+    if (!uid) return;
+    return TC.subscribeMyRequests(uid, setMyRequests);
+  }, [uid]);
+  const pendingCount = myRequests.filter((r) => r.status === 'pending').length;
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between gap-3 mb-4">
         <WeekNav weekStart={weekStart} setWeekStart={setWeekStart} />
-        <div className="text-right">
-          <div className="text-xs text-slate-400 dark:text-slate-500">Week total</div>
-          <div className="text-lg font-bold text-slate-800 dark:text-slate-100">{TC.fmtDuration(weekMs)}</div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setReqModal({ mode: 'add', entry: null })}
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium"
+            title="Request a correction or a missing punch"
+          >
+            <Plus size={15} /> Request fix
+          </button>
+          <div className="text-right">
+            <div className="text-xs text-slate-400 dark:text-slate-500">Week total</div>
+            <div className="text-lg font-bold text-slate-800 dark:text-slate-100">{TC.fmtDuration(weekMs)}</div>
+          </div>
         </div>
       </div>
 
@@ -402,13 +430,22 @@ function TimecardTab({
               ) : (
                 <ul className="space-y-1">
                   {dayEntries.map((e) => (
-                    <li key={e.id} className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-300">
-                      <span className="flex items-center gap-2">
+                    <li key={e.id} className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-300 group">
+                      <span className="flex items-center gap-2 min-w-0">
                         {TC.fmtTime(e.clockIn)} → {e.clockOut ? TC.fmtTime(e.clockOut) : <span className="text-emerald-600 dark:text-emerald-400">in progress</span>}
                         {e.edited && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">edited</span>}
-                        {e.note && <span className="text-xs text-slate-400 italic">· {e.note}</span>}
+                        {e.note && <span className="text-xs text-slate-400 italic truncate">· {e.note}</span>}
                       </span>
-                      <span className="tabular-nums text-slate-500 dark:text-slate-400">{TC.fmtDuration(TC.entryDurationMs(e, now))}</span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="tabular-nums text-slate-500 dark:text-slate-400">{TC.fmtDuration(TC.entryDurationMs(e, now))}</span>
+                        <button
+                          onClick={() => setReqModal({ mode: 'edit', entry: e })}
+                          className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition"
+                          title="Request a correction"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -416,6 +453,121 @@ function TimecardTab({
             </div>
           );
         })}
+      </div>
+
+      {/* My correction requests + their status */}
+      {myRequests.length > 0 && (
+        <div className="mt-6">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+            My correction requests
+            {pendingCount > 0 && <span className="ml-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">· {pendingCount} pending</span>}
+          </h3>
+          <ul className="space-y-2">
+            {myRequests.slice(0, 8).map((r) => (
+              <li key={r.id} className="flex items-start justify-between gap-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-2.5">
+                <div className="min-w-0">
+                  <div className="text-sm text-slate-700 dark:text-slate-200">
+                    <span className="text-slate-400">{r.type === 'add' ? 'Add' : 'Edit'}:</span>{' '}
+                    {TC.fmtDateTime(r.proposedClockIn)} → {r.proposedClockOut ? TC.fmtDateTime(r.proposedClockOut) : '—'}
+                  </div>
+                  {r.reason && <div className="text-xs text-slate-400 italic truncate">"{r.reason}"</div>}
+                </div>
+                <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full capitalize ${
+                  r.status === 'pending' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                    : r.status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                    : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+                }`}>{r.status}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {reqModal && (
+        <RequestEditModal
+          mode={reqModal.mode}
+          entry={reqModal.entry}
+          uid={uid}
+          userName={userName}
+          userEmail={userEmail}
+          onClose={() => setReqModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Staff: request a correction / missing punch ───────────────────────────
+function RequestEditModal({
+  mode, entry, uid, userName, userEmail, onClose,
+}: {
+  mode: 'edit' | 'add';
+  entry: TimeEntry | null;
+  uid: string;
+  userName: string;
+  userEmail: string;
+  onClose: () => void;
+}) {
+  const base = entry ? entry.clockIn.toDate() : (() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d; })();
+  const baseOut = entry?.clockOut ? entry.clockOut.toDate() : (entry ? null : new Date(base.getTime() + 8 * 3600_000));
+  const [clockIn, setClockIn] = useState(toLocalInput(base));
+  const [clockOut, setClockOut] = useState(baseOut ? toLocalInput(baseOut) : '');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const submit = async () => {
+    if (!clockIn) { setErr('Clock-in time is required.'); return; }
+    if (!reason.trim()) { setErr('Please add a short reason for the manager.'); return; }
+    setSaving(true);
+    try {
+      await TC.createEditRequest({
+        userId: uid, userName, userEmail,
+        entryId: mode === 'edit' ? entry?.id : null,
+        type: mode,
+        currentClockIn: entry?.clockIn ?? null,
+        currentClockOut: entry?.clockOut ?? null,
+        proposedClockIn: new Date(clockIn),
+        proposedClockOut: clockOut ? new Date(clockOut) : null,
+        reason: reason.trim(),
+      });
+      onClose();
+    } catch (e) {
+      console.error('[TimeClock] request failed', e);
+      setErr('Could not submit. Please try again.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">{mode === 'edit' ? 'Request a correction' : 'Request missing time'}</h3>
+          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={18} /></button>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+          A manager will review and apply this change.
+          {mode === 'edit' && entry && (
+            <span className="block mt-1 text-slate-400">Current: {TC.fmtTime(entry.clockIn)} → {entry.clockOut ? TC.fmtTime(entry.clockOut) : '—'}</span>
+          )}
+        </p>
+        {err && <div className="mb-3 text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg px-3 py-2">{err}</div>}
+        <div className="space-y-3">
+          <label className="block text-xs text-slate-500 dark:text-slate-400">Correct clock in
+            <input type="datetime-local" value={clockIn} onChange={(e) => setClockIn(e.target.value)} className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
+          </label>
+          <label className="block text-xs text-slate-500 dark:text-slate-400">Correct clock out (blank = still open)
+            <input type="datetime-local" value={clockOut} onChange={(e) => setClockOut(e.target.value)} className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
+          </label>
+          <label className="block text-xs text-slate-500 dark:text-slate-400">Reason
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="e.g. Forgot to clock out after my shift" className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 resize-none" />
+          </label>
+        </div>
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onClose} className="text-sm px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+          <button onClick={submit} disabled={saving} className="text-sm px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium">{saving ? 'Submitting…' : 'Submit request'}</button>
+        </div>
       </div>
     </div>
   );
@@ -430,11 +582,25 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
   const [filterUser, setFilterUser] = useState<string>('all');
   const [editing, setEditing] = useState<{ id: string; clockIn: string; clockOut: string } | null>(null);
   const [adding, setAdding] = useState(false);
+  // Custom date range — overrides the week view when both ends are set.
+  const [rangeStart, setRangeStart] = useState<string>('');
+  const [rangeEnd, setRangeEnd] = useState<string>('');
+  const customRange = !!(rangeStart && rangeEnd);
+  const [pendingReqs, setPendingReqs] = useState<EditRequest[]>([]);
 
-  useEffect(() => TC.subscribeAllWeek(weekStart, setEntries), [weekStart]);
+  useEffect(() => {
+    if (customRange) {
+      const s = new Date(rangeStart + 'T00:00:00');
+      const e = new Date(rangeEnd + 'T23:59:59');
+      return TC.subscribeRange(s, e, setEntries);
+    }
+    return TC.subscribeAllWeek(weekStart, setEntries);
+  }, [weekStart, customRange, rangeStart, rangeEnd]);
+
   useEffect(() => {
     TC.fetchUsers().then(setUsers).catch((e) => console.warn('[TimeClock] fetchUsers', e));
   }, []);
+  useEffect(() => TC.subscribePendingRequests(setPendingReqs), []);
 
   // uid → department, plus the distinct department list (from the user directory).
   const deptByUid = useMemo(() => {
@@ -481,10 +647,53 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
     setEditing(null);
   };
 
+  const approve = async (req: EditRequest) => {
+    try { await TC.approveRequest(req, editorUid); } catch (e) { console.error('[TimeClock] approve failed', e); }
+  };
+  const reject = async (req: EditRequest) => {
+    const note = window.prompt('Reason for rejecting (optional):') ?? '';
+    try { await TC.rejectRequest(req.id, editorUid, note); } catch (e) { console.error('[TimeClock] reject failed', e); }
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <WeekNav weekStart={weekStart} setWeekStart={setWeekStart} />
+      {/* Pending correction requests */}
+      {pendingReqs.length > 0 && (
+        <div className="mb-5 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-900/30 p-4">
+          <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-3 flex items-center gap-2">
+            <Pencil size={15} /> Pending correction requests <span className="text-xs font-medium">· {pendingReqs.length}</span>
+          </h3>
+          <ul className="space-y-2">
+            {pendingReqs.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 px-4 py-2.5">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                    {r.userName} <span className="text-slate-400 font-normal">· {r.type === 'add' ? 'add punch' : 'edit'}</span>
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    {r.type === 'edit' && r.currentClockIn && (
+                      <span className="line-through mr-1 text-slate-400">{TC.fmtDateTime(r.currentClockIn)} → {r.currentClockOut ? TC.fmtDateTime(r.currentClockOut) : '—'}</span>
+                    )}
+                    <span className="text-indigo-600 dark:text-indigo-400 font-medium">{TC.fmtDateTime(r.proposedClockIn)} → {r.proposedClockOut ? TC.fmtDateTime(r.proposedClockOut) : '—'}</span>
+                  </div>
+                  {r.reason && <div className="text-xs text-slate-400 italic truncate">"{r.reason}"</div>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => approve(r)} className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"><Check size={13} /> Approve</button>
+                  <button onClick={() => reject(r)} className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={13} /> Reject</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        {customRange ? (
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">{rangeStart} → {rangeEnd}</div>
+        ) : (
+          <WeekNav weekStart={weekStart} setWeekStart={setWeekStart} />
+        )}
         <div className="flex items-center gap-2">
           {departments.length > 0 && (
             <select
@@ -515,6 +724,22 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
             <Plus size={15} /> Add entry
           </button>
         </div>
+      </div>
+
+      {/* Custom date-range filter + total for the current selection */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <CalendarDays size={15} className="text-slate-400" />
+        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Date range:</span>
+        <input type="date" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="text-sm px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
+        <span className="text-slate-400">→</span>
+        <input type="date" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="text-sm px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
+        {customRange && (
+          <button onClick={() => { setRangeStart(''); setRangeEnd(''); }} className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">Clear → week</button>
+        )}
+        <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+          {filterUser !== 'all' ? 'Selected total' : 'Filtered total'}:{' '}
+          <strong className="text-slate-800 dark:text-slate-100 tabular-nums">{TC.fmtDuration(visible.reduce((s, e) => s + TC.entryDurationMs(e, now), 0))}</strong>
+        </span>
       </div>
 
       {adding && (

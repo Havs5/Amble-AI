@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Clock, LogIn, LogOut, ChevronLeft, ChevronRight, Pencil, Trash2, Plus,
-  Check, X, CalendarDays, Users, UserCheck,
+  Check, X, CalendarDays, Users, UserCheck, AlertTriangle, Search,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContextRefactored';
 import { auth as fbAuth } from '@/lib/firebase';
@@ -180,17 +180,46 @@ function WhoIsInTab({ online, now, currentUid }: { online: OnlineUser[]; now: nu
   const elapsed = (since: TimeEntry['clockIn'] | null) =>
     since ? TC.fmtDuration(Math.max(0, now - since.toMillis())) : '';
 
+  const [search, setSearch] = useState('');
+  const [deptFilter, setDeptFilter] = useState('all');
+  const departments = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of online) { const d = (u.department || '').trim(); if (d) s.add(d); }
+    return Array.from(s).sort();
+  }, [online]);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return online.filter((u) =>
+      (deptFilter === 'all' || (u.department || '') === deptFilter) &&
+      (!q || u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
+    );
+  }, [online, search, deptFilter]);
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
             {online.length > 0 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />}
             <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${online.length > 0 ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
           </span>
           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Who's In</h2>
-          <span className="text-sm font-medium text-slate-400">{online.length} online</span>
+          <span className="text-sm font-medium text-slate-400">{filtered.length}{filtered.length !== online.length ? ` of ${online.length}` : ''} online</span>
         </div>
+        {online.length > 0 && (
+          <div className="flex items-center gap-2">
+            {departments.length > 0 && (
+              <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+                <option value="all">All departments</option>
+                {departments.map((d) => <option key={d} value={d}>{NEWS_DEPARTMENTS[d] || d}</option>)}
+              </select>
+            )}
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name…" className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 w-44" />
+            </div>
+          </div>
+        )}
       </div>
 
       {online.length === 0 ? (
@@ -199,9 +228,11 @@ function WhoIsInTab({ online, now, currentUid }: { online: OnlineUser[]; now: nu
           <p className="text-sm font-medium">No one is clocked in right now.</p>
           <p className="text-xs mt-1">Punch in and you'll show up here.</p>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-slate-400 dark:text-slate-500 text-sm">No one matches your filters.</div>
       ) : (
         <ul className="space-y-2">
-          {online.map((u) => {
+          {filtered.map((u) => {
             const dept = u.department && NEWS_DEPARTMENTS[u.department] ? NEWS_DEPARTMENTS[u.department] : '';
             return (
               <li key={u.uid} className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 shadow-sm">
@@ -660,8 +691,13 @@ function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: 
     setEditing(null);
   };
 
-  const doDelete = async (e: TimeEntry) => {
-    if (!confirm('Delete this entry?')) return;
+  const [confirmDelete, setConfirmDelete] = useState<TimeEntry | null>(null);
+  const [rejectReq, setRejectReq] = useState<EditRequest | null>(null);
+
+  const confirmDeleteEntry = async () => {
+    const e = confirmDelete;
+    if (!e) return;
+    setConfirmDelete(null);
     await TC.deleteEntry(e.id);
     await TC.logAudit({
       action: 'delete_entry', actor: editor,
@@ -683,8 +719,8 @@ function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: 
       });
     } catch (e) { console.error('[TimeClock] approve failed', e); }
   };
-  const reject = async (req: EditRequest) => {
-    const note = window.prompt('Reason for rejecting (optional):') ?? '';
+  const doReject = async (req: EditRequest, note: string) => {
+    setRejectReq(null);
     try {
       await TC.rejectRequest(req.id, editor.uid, note);
       await TC.logAudit({
@@ -737,7 +773,7 @@ function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: 
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => approve(r)} className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"><Check size={13} /> Approve</button>
-                  <button onClick={() => reject(r)} className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={13} /> Reject</button>
+                  <button onClick={() => setRejectReq(r)} className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={13} /> Reject</button>
                 </div>
               </li>
             ))}
@@ -883,7 +919,7 @@ function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: 
                                 <Pencil size={15} />
                               </button>
                               <button
-                                onClick={() => doDelete(e)}
+                                onClick={() => setConfirmDelete(e)}
                                 className="p-1.5 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20"
                                 title="Delete"
                               >
@@ -903,6 +939,64 @@ function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: 
       )}
       </>
       )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete this entry?"
+          message="This removes the punch record. The change is recorded in the Change Log."
+          confirmLabel="Delete"
+          danger
+          onConfirm={confirmDeleteEntry}
+          onClose={() => setConfirmDelete(null)}
+        />
+      )}
+      {rejectReq && (
+        <RejectDialog req={rejectReq} onReject={(note) => doReject(rejectReq, note)} onClose={() => setRejectReq(null)} />
+      )}
+    </div>
+  );
+}
+
+// ─── Styled confirm + reject dialogs ────────────────────────────────────────
+function ConfirmDialog({ title, message, confirmLabel = 'Confirm', danger, onConfirm, onClose }: { title: string; message: string; confirmLabel?: string; danger?: boolean; onConfirm: () => void; onClose: () => void; }) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 mb-4">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${danger ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400' : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'}`}>
+            <AlertTriangle size={20} />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">{title}</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{message}</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-sm px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium">Cancel</button>
+          <button onClick={onConfirm} className={`text-sm px-4 py-1.5 rounded-lg text-white font-medium shadow-lg ${danger ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'}`}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RejectDialog({ req, onReject, onClose }: { req: EditRequest; onReject: (note: string) => void; onClose: () => void; }) {
+  const [note, setNote] = useState('');
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">Reject {req.userName}'s request</h3>
+          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={18} /></button>
+        </div>
+        <label className="block text-xs text-slate-500 dark:text-slate-400">Reason (optional — shared with the employee)
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="e.g. Times don't match the schedule" className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 resize-none" />
+        </label>
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onClose} className="text-sm px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium">Cancel</button>
+          <button onClick={() => onReject(note.trim())} className="text-sm px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-lg shadow-rose-500/20">Reject request</button>
+        </div>
+      </div>
     </div>
   );
 }

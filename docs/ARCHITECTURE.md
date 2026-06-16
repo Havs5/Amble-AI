@@ -415,7 +415,7 @@ The Amble AI chat answer path (`/api/chat → handleChat`) is now **semantic vec
 flowchart TD
     Q["User message (Amble tab)"] --> RF["reformulateQuery() (multi-turn coref)"]
     RF --> EMB["embedQuery — Vertex gemini-embedding-001 @1536 (RETRIEVAL_QUERY)"]
-    EMB --> KNN["Firestore findNearest(kb_vectors, COSINE, top 40)"]
+    EMB --> KNN["Firestore findNearest(kb_vectors, COSINE, top 60)"]
     KNN --> RRF["Lexical re-score + Reciprocal Rank Fusion (k=60)"]
     RRF --> RR["Gemini-Flash rerank → top 6 chunks"]
     RR --> FLOOR{"maxScore ≥ MIN_SCORE (0.35)?"}
@@ -436,9 +436,10 @@ Drive walk (`listAllKbFiles`) → extract (reuse `extractFileContent`: Workspace
 | Layer | Where | Accuracy role |
 |-------|-------|---------------|
 | Embeddings | `embeddingService.js` (Vertex `gemini-embedding-001` @1536, COSINE, asymmetric task types) | semantic recall |
-| Vector KNN | `kbRetrieval.vectorCandidates` (`findNearest` top 40) | recall pool |
+| Vector KNN | `kbRetrieval.vectorCandidates` (`findNearest` top 60) | recall pool |
+| Doc diversity | `vectorRetrieve` per-doc cap (`maxPerDoc=3`, limit 8) | each doc/product reliably represented in multi-entity queries |
 | Hybrid fusion | `kbRetrieval.rrfFuse` (semantic ⨁ lexical, RRF k=60) | lexical precision |
-| Rerank | `kbRetrieval.rerank` (Gemini-Flash, top 6) | precision (biggest jump) |
+| Rerank | `kbRetrieval.rerank` (Gemini-Flash, pool 20 → top 8) | precision (biggest jump) |
 | Grounded gen | `chat.buildSystemPrompt` grounding contract + `[n]` citations | faithfulness |
 | Abstention | `MIN_SCORE` floor + "say you don't have it" rule | no hallucination |
 | Groundedness post-check | `kbRetrieval.verifyGroundedness` (Gemini-Flash judge, **borderline confidence < 0.55 only**, fail-open, env `KB_GROUNDEDNESS_CHECK`) | flags/caveats unsupported claims |

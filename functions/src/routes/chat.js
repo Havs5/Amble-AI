@@ -508,7 +508,7 @@ async function handleChat(req, res, { adminDb, writeJson, readJsonBody }) {
       // paraphrases) instead of brittle keyword matching. Chunk-level + reranked.
       let vec = { chunks: [], maxScore: 0 };
       try {
-        vec = await vectorRetrieve(adminDb, reformulatedQuery, { limit: 6 });
+        vec = await vectorRetrieve(adminDb, reformulatedQuery, { limit: 8, maxPerDoc: 3 });
       } catch (e) {
         console.warn('[Chat] vectorRetrieve error:', e.message);
       }

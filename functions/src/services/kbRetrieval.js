@@ -16,8 +16,8 @@ const { GoogleGenAI } = require('@google/genai');
 const { embedQuery } = require('./embeddingService');
 
 const COL = 'kb_vectors';   // Gemini-embedded company KB (separate from legacy OpenAI knowledge_vectors)
-const CANDIDATE_K = 40;     // semantic recall pool
-const RERANK_POOL = 15;     // how many candidates we send to the reranker
+const CANDIDATE_K = 60;     // semantic recall pool
+const RERANK_POOL = 20;     // how many candidates we send to the reranker
 const RRF_K = 60;           // standard RRF constant
 const MIN_SCORE = parseFloat(process.env.KB_MIN_RELEVANCE_SCORE || '0.35');
 
@@ -133,7 +133,8 @@ async function rerank(query, chunks) {
  * @param {object} opts { limit=6, rerank=true }
  */
 async function vectorRetrieve(adminDb, query, opts = {}) {
-  const limit = opts.limit || 6;
+  const limit = opts.limit || 8;
+  const maxPerDoc = opts.maxPerDoc || 3;
   const useRerank = opts.rerank !== false;
   try {
     const queryVec = await embedQuery(query);
@@ -145,7 +146,31 @@ async function vectorRetrieve(adminDb, query, opts = {}) {
     const fused = rrfFuse(candidates, query);
     const ordered = useRerank ? await rerank(query, fused) : fused;
 
-    const chunks = ordered.slice(0, limit).map((c) => ({
+    // Document-diversity selection: spread the final picks across documents so a
+    // single multi-chunk doc can't crowd out other docs. This makes multi-entity
+    // queries (e.g. "Tirzepatide and Semaglutide pricing") reliably return each
+    // product's doc instead of one product filling every slot.
+    const perDoc = new Map();
+    const selected = [];
+    for (const c of ordered) {
+      const key = c.fileId || c.title;
+      const n = perDoc.get(key) || 0;
+      if (n >= maxPerDoc) continue;
+      perDoc.set(key, n + 1);
+      selected.push(c);
+      if (selected.length >= limit) break;
+    }
+    // Backfill if the per-doc cap left us short of `limit`.
+    if (selected.length < limit) {
+      const chosen = new Set(selected);
+      for (const c of ordered) {
+        if (chosen.has(c)) continue;
+        selected.push(c);
+        if (selected.length >= limit) break;
+      }
+    }
+
+    const chunks = selected.map((c) => ({
       title: c.title,
       department: c.department,
       text: c.text,

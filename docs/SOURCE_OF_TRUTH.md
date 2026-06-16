@@ -262,6 +262,14 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-15 — KB accuracy, logo sizing, styled dialogs, Who's In filters, usage perf
+- **KB retrieval hardened for accuracy (the "Semaglutide not found" fix).** Root cause: the doc *was* indexed, but for **multi-product queries** one product's chunks crowded out the other (non-deterministic). Fixes in `kbRetrieval.js`: candidate pool 40→**60**, rerank pool 15→**20**, injected chunks 6→**8**, and a new **document-diversity selection** (`maxPerDoc=3`) so each doc/product is reliably represented. Verified: "Tirzepatide and Semaglutide pricing" now returns **both**. (Re-ran a full reindex: 43 files → 83 chunks, 0 errors.)
+- **Usage Report speed** (deployed earlier this session) — fetch-once + in-memory time-range filter (instant range switches, no re-query) + **parallel** user-name resolution + capped query; stats derived via memo.
+- **COOP** → `same-origin-allow-popups` (fixes the Google sign-in `window.close` console warning). The "message channel closed" console error is a **browser extension**, not app code.
+- **Brand logo** — `AmbleMark` now also in the chat welcome screen + app header; **marks made a bit smaller inside every square** and the **sidebar logo square reduced** `w-10→w-9`; favicon mark scaled down. Sidebar **nav icons** bumped `19→21` for fuller presence.
+- **Styled dialogs** — replaced the native browser `confirm()`/`prompt()` in Clock In/Out Manage with designed **ConfirmDialog** (delete) + **RejectDialog** (reject-with-reason) modals.
+- **Who's In filters** — added a **department dropdown** + **name search box** to the presence board.
+
 ### 2026-06-15 — Clock In/Out: immutable Change Log (audit trail)
 - **Manage tab now has a Records / Change Log toggle.** The **Change Log** records every manager action — **Added / Edited / Deleted** entries and **Approved / Rejected** correction requests — to a new **`time_audit`** collection. Columns: **When · Action · Employee · Change (before→after) · By (name + role badge incl. IT) · Note**.
 - **Tamper-proof by design** — rules allow managers+ to **read and append only**, the recorded `actorUid` must equal the caller, and `update`/`delete` are **denied to everyone (including IT/super admin)** — so the trail can't be altered. `logAudit`/`subscribeAudit` in the service; `ManageTab` now receives `editor {uid,name,role}` and logs on each action (best-effort).
@@ -418,8 +426,9 @@ Move Gemini usage from the **Gemini Developer API** (API-key) to **Vertex AI** (
 ### 2. Near-term tech debt (from §6)
 System-prompt consolidation, route de-dup (Functions vs Next), auth on admin endpoints, prune `functions/package.json`.
 
-### 3. Time clock follow-ups (optional)
-CSV/payroll export, approvals, overtime rules, TIP/BON/COM amount fields, break tracking.
+### 3. Time clock follow-ups
+- 🔜 **NEXT (requested 2026-06-15): Timezone handling.** The Punch/Timecard times currently render in the **viewer's local** timezone (`toLocaleTimeString` with no tz). The owner wants Clock In/Out anchored to **EST/EDT** (America/New_York, DST-aware) as the canonical company time, AND — when a team member is in a **different timezone** — also show *their* local time in a small secondary label next to the EST time (a compact "9:18 PM ET · 6:18 PM local" style). Plan: store the entry's timezone (or just rely on the absolute `Timestamp`), add a `fmtTimeET(ts)` helper (Intl `timeZone:'America/New_York'`) used across Punch/Timecard/Manage/Who's In, and a small muted secondary local-time span when the viewer's tz ≠ ET. `time_entries` already store absolute `Timestamp`s so no backfill needed — purely a formatting layer. Find the cleanest spot to fit the secondary time without clutter (under or beside the primary time).
+- Other (optional): CSV/payroll export, overtime rules, TIP/BON/COM amount fields, break tracking.
 
 ### 5. 🔎 KB Search — vector RAG (✅ SHIPPED 2026-06-14)
 

@@ -9,7 +9,7 @@ import {
   MessageSquare, Image, Video, Search, AlertTriangle
 } from 'lucide-react';
 import { db } from '../../lib/firebase';
-import { collection, query, getDocs, orderBy, where, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, where, deleteDoc, doc, getDoc, updateDoc, limit } from 'firebase/firestore';
 import { UsageManager } from '../../lib/usageManager';
 import { Toast } from '../ui/Toast';
 
@@ -68,9 +68,7 @@ function getModelCategory(modelId: string): 'text' | 'image' | 'video' | 'audio'
 }
 
 export function UsageReport() {
-  const [logs, setLogs] = useState<UsageLog[]>([]);
-  const [userStats, setUserStats] = useState<UserUsage[]>([]);
-  const [modelStats, setModelStats] = useState<ModelStats[]>([]);
+  const [logs, setLogs] = useState<UsageLog[]>([]); // ALL raw logs (time range applied in-memory)
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -84,169 +82,82 @@ export function UsageReport() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
-  // Fetch user display names from Firestore - enhanced to check users_by_uid mapping
+  // Resolve user display names from Firestore (checks users, then users_by_uid
+  // mapping). Cached, and resolved IN PARALLEL across users to avoid a slow
+  // sequential chain of round-trips.
   const fetchUserNames = async (userIds: string[]) => {
-    const namesMap: Record<string, { name: string; email?: string; mappedFrom?: string }> = { ...userNamesCache };
-    const uncachedIds = userIds.filter(id => !namesMap[id]);
-    
-    for (const userId of uncachedIds) {
+    const uncachedIds = userIds.filter(id => !userNamesCache[id]);
+    if (uncachedIds.length === 0) return userNamesCache;
+
+    const fallback = (id: string) => ({ name: id.length > 20 ? id.slice(0, 20) + '...' : id });
+    const pick = (data: any) => ({
+      name: data.name || data.displayName || data.email?.split('@')[0] || 'Unknown User',
+      email: data.email,
+    });
+
+    const resolved = await Promise.all(uncachedIds.map(async (userId) => {
       try {
-        // First check if userId is directly in users collection
         const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          namesMap[userId] = { 
-            name: data.name || data.displayName || data.email?.split('@')[0] || 'Unknown User',
-            email: data.email
-          };
-        } else {
-          // Check if this is a Firebase Auth UID that maps to a user
-          const uidDoc = await getDoc(doc(db, 'users_by_uid', userId));
-          if (uidDoc.exists()) {
-            const mappedUserId = uidDoc.data()?.userId;
-            if (mappedUserId) {
-              const mappedUserDoc = await getDoc(doc(db, 'users', mappedUserId));
-              if (mappedUserDoc.exists()) {
-                const data = mappedUserDoc.data();
-                namesMap[userId] = { 
-                  name: data.name || data.displayName || data.email?.split('@')[0] || 'Unknown User',
-                  email: data.email,
-                  mappedFrom: mappedUserId
-                };
-              } else {
-                namesMap[userId] = { name: userId.length > 20 ? userId.slice(0, 20) + '...' : userId };
-              }
-            }
-          } else {
-            // This is an orphaned user ID - no user document found
-            namesMap[userId] = { name: userId.length > 20 ? userId.slice(0, 20) + '...' : userId };
-          }
+        if (userDoc.exists()) return [userId, pick(userDoc.data())] as const;
+        const uidDoc = await getDoc(doc(db, 'users_by_uid', userId));
+        const mappedUserId = uidDoc.exists() ? uidDoc.data()?.userId : null;
+        if (mappedUserId) {
+          const mappedUserDoc = await getDoc(doc(db, 'users', mappedUserId));
+          if (mappedUserDoc.exists()) return [userId, pick(mappedUserDoc.data())] as const;
         }
+        return [userId, fallback(userId)] as const;
       } catch {
-        namesMap[userId] = { name: userId.length > 20 ? userId.slice(0, 20) + '...' : userId };
+        return [userId, fallback(userId)] as const;
       }
-    }
-    
-    setUserNamesCache(namesMap);
-    return namesMap;
+    }));
+
+    setUserNamesCache((prev) => {
+      const next = { ...prev };
+      for (const [id, val] of resolved) next[id] = val;
+      return next;
+    });
+    return userNamesCache;
   };
 
   const fetchUsage = async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
     else setIsLoading(true);
     setFetchError(null);
-    
+
     try {
       const usageRef = collection(db, 'usage_logs');
-      const q = query(usageRef, orderBy('timestamp', 'desc'));
-      
-      // Apply time filter
-      const now = Date.now();
-      let startTime = 0;
-      if (timeRange === 'day') startTime = now - 24 * 60 * 60 * 1000;
-      else if (timeRange === 'week') startTime = now - 7 * 24 * 60 * 60 * 1000;
-      else if (timeRange === 'month') startTime = now - 30 * 24 * 60 * 60 * 1000;
+      // Fetch ALL logs ONCE (newest first, capped). The time range is applied
+      // in-memory (see timeFilteredLogs) so switching ranges never re-queries.
+      let snapshot = await getDocs(query(usageRef, orderBy('timestamp', 'desc'), limit(20000)));
+      if (snapshot.empty) snapshot = await getDocs(usageRef);
 
-      let snapshot = await getDocs(q);
-
-      if (snapshot.empty) {
-        snapshot = await getDocs(collection(db, 'usage_logs'));
-      }
-      
       const fetchedLogs: UsageLog[] = [];
-      const statsMap = new Map<string, UserUsage>();
-      const modelMap = new Map<string, ModelStats>();
+      const userIdSet = new Set<string>();
 
-      snapshot.forEach(doc => {
-        const data = doc.data() as UsageLog;
+      snapshot.forEach((d) => {
+        const data = d.data() as UsageLog;
         if (!data || !data.userId) return;
-        
-        // Skip invalid/anonymous user entries (empty string, 'anonymous', 'undefined', etc.)
         const uid = data.userId.trim().toLowerCase();
         if (!uid || uid === 'anonymous' || uid === 'undefined' || uid === 'null' || uid.length < 10) return;
-        
-        // Time filter
-        if (startTime > 0 && data.timestamp < startTime) return;
 
-        // Calculate cost from tokens if not stored, using UsageManager
         const inputTokens = Number(data.inputTokens) || 0;
         const outputTokens = Number(data.outputTokens) || 0;
         const modelId = data.modelId || 'unknown';
-        
-        // Use stored cost if available, otherwise recalculate from tokens
         const isImage = modelId.includes('dall-e') || modelId.includes('imagen');
         const isVideo = modelId.includes('veo') || modelId.includes('sora');
         const calculatedCost = Number(data.cost) || UsageManager.calculateCost(modelId, inputTokens, outputTokens, isImage, isVideo);
-        
-        // Create log entry with calculated cost
-        const logEntry: UsageLog = {
-          ...data,
-          cost: calculatedCost,
-          inputTokens,
-          outputTokens
-        };
-        
-        fetchedLogs.push(logEntry);
 
-        // User stats - use calculated cost
-        const current: UserUsage = statsMap.get(data.userId) || { 
-          userId: data.userId,
-          displayName: data.userId,
-          email: undefined,
-          totalCost: 0, 
-          totalRequests: 0, 
-          totalTokens: 0,
-          lastActive: 0,
-          modelBreakdown: {} as Record<string, { cost: number; requests: number; tokens: number }>
-        };
-
-        current.totalCost += calculatedCost;
-        current.totalTokens += inputTokens + outputTokens;
-        current.totalRequests += 1;
-        current.lastActive = Math.max(current.lastActive || 0, data.timestamp || 0);
-        
-        // Model breakdown per user
-        if (!current.modelBreakdown[modelId]) {
-          current.modelBreakdown[modelId] = { cost: 0, requests: 0, tokens: 0 };
-        }
-        current.modelBreakdown[modelId].cost += calculatedCost;
-        current.modelBreakdown[modelId].requests += 1;
-        current.modelBreakdown[modelId].tokens += inputTokens + outputTokens;
-        
-        statsMap.set(data.userId, current);
-
-        // Model stats aggregation - use calculated cost
-        const modelCurrent = modelMap.get(modelId) || {
-          modelId,
-          displayName: UsageManager.getModelDisplayName(modelId),
-          category: getModelCategory(modelId),
-          totalCost: 0,
-          totalRequests: 0,
-          totalTokens: 0,
-        };
-        modelCurrent.totalCost += calculatedCost;
-        modelCurrent.totalRequests += 1;
-        modelCurrent.totalTokens += inputTokens + outputTokens;
-        modelMap.set(modelId, modelCurrent);
+        fetchedLogs.push({ ...data, cost: calculatedCost, inputTokens, outputTokens });
+        userIdSet.add(data.userId);
       });
 
-      // Fetch user display names
-      const userIds = Array.from(statsMap.keys());
-      const namesMap = await fetchUserNames(userIds);
-      
-      // Enhance user stats with display names
-      const enhancedUserStats = Array.from(statsMap.values()).map(stat => ({
-        ...stat,
-        displayName: namesMap[stat.userId]?.name || stat.userId,
-        email: namesMap[stat.userId]?.email
-      }));
-
       setLogs(fetchedLogs);
-      setUserStats(enhancedUserStats.sort((a, b) => b.totalCost - a.totalCost));
-      setModelStats(Array.from(modelMap.values()).sort((a, b) => b.totalCost - a.totalCost));
+      // Resolve names in the background (parallel + cached) — don't block the
+      // numbers from painting; userStats re-derives when names arrive.
+      fetchUserNames(Array.from(userIdSet)).catch(() => {});
     } catch (error: any) {
       console.error("Error fetching usage logs:", error);
-      const msg = error?.code === 'permission-denied' 
+      const msg = error?.code === 'permission-denied'
         ? 'Permission denied. Firestore rules may need updating for the usage_logs collection.'
         : error?.message || 'Failed to load usage data. Please try again.';
       setFetchError(msg);
@@ -256,9 +167,46 @@ export function UsageReport() {
     }
   };
 
+  // Fetch once on mount (and on manual Refresh). Time-range changes are in-memory.
   useEffect(() => {
     fetchUsage();
-  }, [timeRange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── In-memory time-range filter + per-user aggregation (instant on change) ──
+  const timeFilteredLogs = useMemo(() => {
+    const now = Date.now();
+    let startTime = 0;
+    if (timeRange === 'day') startTime = now - 24 * 60 * 60 * 1000;
+    else if (timeRange === 'week') startTime = now - 7 * 24 * 60 * 60 * 1000;
+    else if (timeRange === 'month') startTime = now - 30 * 24 * 60 * 60 * 1000;
+    return startTime > 0 ? logs.filter((l) => (l.timestamp || 0) >= startTime) : logs;
+  }, [logs, timeRange]);
+
+  const userStats = useMemo<UserUsage[]>(() => {
+    const statsMap = new Map<string, UserUsage>();
+    for (const log of timeFilteredLogs) {
+      const cur: UserUsage = statsMap.get(log.userId) || {
+        userId: log.userId, displayName: log.userId, email: undefined,
+        totalCost: 0, totalRequests: 0, totalTokens: 0, lastActive: 0, modelBreakdown: {},
+      };
+      const tokens = (Number(log.inputTokens) || 0) + (Number(log.outputTokens) || 0);
+      const cost = Number(log.cost) || 0;
+      cur.totalCost += cost;
+      cur.totalTokens += tokens;
+      cur.totalRequests += 1;
+      cur.lastActive = Math.max(cur.lastActive || 0, log.timestamp || 0);
+      const modelId = log.modelId || 'unknown';
+      if (!cur.modelBreakdown[modelId]) cur.modelBreakdown[modelId] = { cost: 0, requests: 0, tokens: 0 };
+      cur.modelBreakdown[modelId].cost += cost;
+      cur.modelBreakdown[modelId].requests += 1;
+      cur.modelBreakdown[modelId].tokens += tokens;
+      statsMap.set(log.userId, cur);
+    }
+    return Array.from(statsMap.values())
+      .map((s) => ({ ...s, displayName: userNamesCache[s.userId]?.name || s.userId, email: userNamesCache[s.userId]?.email }))
+      .sort((a, b) => b.totalCost - a.totalCost);
+  }, [timeFilteredLogs, userNamesCache]);
 
   const handleClearTestData = async () => {
     if (!confirm('Are you sure you want to delete all data for "debug_test_user"?')) return;
@@ -297,10 +245,8 @@ export function UsageReport() {
         await Promise.all(batch.map(doc => deleteDoc(doc.ref)));
       }
       
-      // Clear local state
+      // Clear local state (userStats/modelStats derive from logs via memo).
       setLogs([]);
-      setUserStats([]);
-      setModelStats([]);
       setUserNamesCache({});
       
       setToast({ message: `Successfully deleted ${docs.length} usage logs. Starting fresh!`, type: 'success' });
@@ -328,7 +274,7 @@ export function UsageReport() {
   const filteredModelStats = useMemo(() => {
     const modelMap = new Map<string, ModelStats>();
     
-    logs.forEach(log => {
+    timeFilteredLogs.forEach(log => {
       // Filter by selected user
       if (selectedUser !== 'all' && log.userId !== selectedUser) return;
       
@@ -353,12 +299,12 @@ export function UsageReport() {
     });
     
     return Array.from(modelMap.values()).sort((a, b) => b.totalCost - a.totalCost);
-  }, [logs, selectedUser, selectedCategory]);
+  }, [timeFilteredLogs, selectedUser, selectedCategory]);
 
   // Calculate totals - respect both user filter and category filter
   const totals = useMemo(() => {
-    let filteredLogs = logs;
-    
+    let filteredLogs = timeFilteredLogs;
+
     // Filter by user
     if (selectedUser !== 'all') {
       filteredLogs = filteredLogs.filter(log => log.userId === selectedUser);
@@ -377,13 +323,13 @@ export function UsageReport() {
       tokens: filteredLogs.reduce((acc, log) => acc + (Number(log.inputTokens) || 0) + (Number(log.outputTokens) || 0), 0),
       users: uniqueUsers.size,
     };
-  }, [logs, selectedUser, selectedCategory]);
+  }, [timeFilteredLogs, selectedUser, selectedCategory]);
 
   // Prepare chart data - respect both filters
   const dailyTrendData = useMemo(() => {
     const dailyMap = new Map<string, { date: string; cost: number; requests: number }>();
     
-    logs.forEach(log => {
+    timeFilteredLogs.forEach(log => {
       // Filter by selected user
       if (selectedUser !== 'all' && log.userId !== selectedUser) return;
       
@@ -401,13 +347,13 @@ export function UsageReport() {
     return Array.from(dailyMap.values())
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(-14); // Last 14 days
-  }, [logs, selectedUser, selectedCategory]);
+  }, [timeFilteredLogs, selectedUser, selectedCategory]);
 
   // Category breakdown - respect user filter
   const categoryData = useMemo(() => {
     const catMap = new Map<string, { category: string; cost: number; requests: number }>();
     
-    logs.forEach(log => {
+    timeFilteredLogs.forEach(log => {
       // Filter by selected user
       if (selectedUser !== 'all' && log.userId !== selectedUser) return;
       
@@ -423,7 +369,7 @@ export function UsageReport() {
     });
 
     return Array.from(catMap.values());
-  }, [logs, selectedUser, selectedCategory]);
+  }, [timeFilteredLogs, selectedUser, selectedCategory]);
 
   const exportData = () => {
     const csv = [

@@ -6,6 +6,7 @@ import { Toaster, toast as sonnerToast } from 'sonner';
 
 // Core Components (load immediately)
 import { Sidebar } from './layout/Sidebar';
+import { AmbleMark } from './ui/AmbleMark';
 import { CapabilitiesDock } from './ai/CapabilitiesDock';
 import Login from './auth/LoginRefactored';
 import { SplashScreen } from './ui/SplashScreen';
@@ -382,7 +383,7 @@ function AmbleAppContent() {
           </button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">A</span>
+              <AmbleMark className="h-4 w-4 text-white" />
             </div>
             <span className="font-bold text-base tracking-tight">Amble AI</span>
           </div>

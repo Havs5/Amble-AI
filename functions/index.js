@@ -162,8 +162,11 @@ exports.ssrambleai = onRequest(
     
     console.log(`[Request] ${method} ${path}`);
 
-    // Set COOP header on ALL responses from this function (API + SSR)
-    res.set('Cross-Origin-Opener-Policy', 'unsafe-none');
+    // COOP on ALL responses (API + SSR). `same-origin-allow-popups` lets the
+    // Firebase Auth Google sign-in popup retain its opener and close cleanly —
+    // fixes the "Cross-Origin-Opener-Policy would block the window.close call"
+    // console warning — while keeping the page isolated from cross-origin windows.
+    res.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
 
     // Shared context for handlers
     const context = {

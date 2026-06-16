@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Clock, LogIn, LogOut, ChevronLeft, ChevronRight, Pencil, Trash2, Plus,
-  Check, X, CalendarDays, Users, UserCheck, AlertTriangle, Search,
+  Check, X, CalendarDays, Users, UserCheck, AlertTriangle, Search, Globe,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContextRefactored';
 import { auth as fbAuth } from '@/lib/firebase';
@@ -34,6 +34,47 @@ const fmtWeekRange = (start: Date) => {
   const end = TC.addDays(start, 6);
   return `${start.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
 };
+
+// All punch times display in Eastern (canonical company time). When the viewer
+// is in another timezone we add a small muted "· 6:18 PM local" aside. The hook
+// resolves the browser timezone after mount so the secondary asides never cause
+// an SSR hydration mismatch (the ET primary is deterministic and renders first).
+function useOffEastern(): boolean {
+  const [off, setOff] = useState(false);
+  useEffect(() => { setOff(TC.viewerOffEastern()); }, []);
+  return off;
+}
+
+/** Tiny muted "· 6:18 PM local" aside, rendered only for off-Eastern viewers. */
+function LocalAside({ ts, off, block = false }: { ts: Timestamp | null; off: boolean; block?: boolean }) {
+  if (!off || !ts) return null;
+  return (
+    <span className={`${block ? 'block' : 'ml-1'} text-[11px] text-slate-400 dark:text-slate-500`}>
+      {block ? '' : '· '}{TC.fmtTimeLocal(ts)} local
+    </span>
+  );
+}
+
+/** Muted local "in → out" aside for a punch row, only for off-Eastern viewers. */
+function LocalRangeAside({ ci, co, off }: { ci: Timestamp | null; co: Timestamp | null; off: boolean }) {
+  if (!off || !ci) return null;
+  return (
+    <span className="block text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+      {TC.fmtTimeLocal(ci)} → {co ? TC.fmtTimeLocal(co) : '…'} local
+    </span>
+  );
+}
+
+/** "Eastern Time · EDT" anchor badge shown once per tab. */
+function ZoneBadge({ off }: { off: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+      <Globe size={12} />
+      Eastern Time · {TC.etAbbrev()}
+      {off && <span className="text-slate-300 dark:text-slate-600">· local times shown in muted text</span>}
+    </span>
+  );
+}
 
 export function TimeClockView() {
   const { user } = useAuth();
@@ -175,8 +216,7 @@ export function TimeClockView() {
 
 // ─── Who's In (live team presence) ─────────────────────────────────────────
 function WhoIsInTab({ online, now, currentUid }: { online: OnlineUser[]; now: number; currentUid: string }) {
-  const fmtSince = (since: TimeEntry['clockIn'] | null) =>
-    since ? since.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—';
+  const off = useOffEastern();
   const elapsed = (since: TimeEntry['clockIn'] | null) =>
     since ? TC.fmtDuration(Math.max(0, now - since.toMillis())) : '';
 
@@ -205,6 +245,7 @@ function WhoIsInTab({ online, now, currentUid }: { online: OnlineUser[]; now: nu
           </span>
           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Who's In</h2>
           <span className="text-sm font-medium text-slate-400">{filtered.length}{filtered.length !== online.length ? ` of ${online.length}` : ''} online</span>
+          <span className="hidden sm:inline-flex ml-1"><ZoneBadge off={off} /></span>
         </div>
         {online.length > 0 && (
           <div className="flex items-center gap-2">
@@ -250,7 +291,8 @@ function WhoIsInTab({ online, now, currentUid }: { online: OnlineUser[]; now: nu
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{elapsed(u.since)}</div>
-                  <div className="text-[11px] text-slate-400">since {fmtSince(u.since)}</div>
+                  <div className="text-[11px] text-slate-400">since {TC.fmtTime(u.since)}</div>
+                  {off && u.since && <div className="text-[11px] text-slate-400 dark:text-slate-500">{TC.fmtTimeLocal(u.since)} local</div>}
                 </div>
               </li>
             );
@@ -278,6 +320,7 @@ function PunchTab({
   const nowDate = new Date(now);
   const clockedIn = !!openEntry;
   const todayMs = todayEntries.reduce((sum, e) => sum + TC.entryDurationMs(e, now), 0);
+  const off = useOffEastern();
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -297,16 +340,25 @@ function PunchTab({
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-8 text-center">
         <p className="text-xs font-medium text-slate-400 dark:text-slate-500 tracking-wide">
-          {nowDate.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          {nowDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: TC.COMPANY_TZ })}
         </p>
-        <p className="text-5xl font-bold tabular-nums text-slate-800 dark:text-slate-100 my-3">
-          {nowDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+        <p className="text-5xl font-bold tabular-nums text-slate-800 dark:text-slate-100 mt-3 mb-1">
+          {nowDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: TC.COMPANY_TZ })}
         </p>
+        <div className="mb-3 flex flex-col items-center gap-0.5">
+          <ZoneBadge off={off} />
+          {off && (
+            <p className="text-xs text-slate-400 dark:text-slate-500 tabular-nums">
+              {nowDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' })} your local time
+            </p>
+          )}
+        </div>
 
         {clockedIn && openEntry ? (
           <>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
-              Clocked in at <strong>{TC.fmtTime(openEntry.clockIn)}</strong> · running{' '}
+              Clocked in at <strong>{TC.fmtTime(openEntry.clockIn)}</strong>
+              <LocalAside ts={openEntry.clockIn} off={off} /> · running{' '}
               <strong className="text-emerald-600 dark:text-emerald-400">
                 {TC.fmtDuration(TC.entryDurationMs(openEntry, now))}
               </strong>
@@ -352,6 +404,7 @@ function PunchTab({
               <li key={e.id} className="flex items-center justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-300">
                   {TC.fmtTime(e.clockIn)} → {e.clockOut ? TC.fmtTime(e.clockOut) : <span className="text-emerald-600 dark:text-emerald-400">in progress</span>}
+                  <LocalRangeAside ci={e.clockIn} co={e.clockOut} off={off} />
                 </span>
                 <span className="tabular-nums text-slate-500 dark:text-slate-400">{TC.fmtDuration(TC.entryDurationMs(e, now))}</span>
               </li>
@@ -409,6 +462,7 @@ function TimecardTab({
   userName: string;
   userEmail: string;
 }) {
+  const off = useOffEastern();
   const days = Array.from({ length: 7 }, (_, i) => TC.addDays(weekStart, i));
   const byDay = useMemo(() => {
     const m = new Map<string, TimeEntry[]>();
@@ -446,6 +500,7 @@ function TimecardTab({
           </div>
         </div>
       </div>
+      <div className="mb-3"><ZoneBadge off={off} /></div>
 
       <div className="space-y-2">
         {days.map((d) => {
@@ -463,8 +518,9 @@ function TimecardTab({
                 <ul className="space-y-1">
                   {dayEntries.map((e) => (
                     <li key={e.id} className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-300 group">
-                      <span className="flex items-center gap-2 min-w-0">
-                        {TC.fmtTime(e.clockIn)} → {e.clockOut ? TC.fmtTime(e.clockOut) : <span className="text-emerald-600 dark:text-emerald-400">in progress</span>}
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
+                        <span>{TC.fmtTime(e.clockIn)} → {e.clockOut ? TC.fmtTime(e.clockOut) : <span className="text-emerald-600 dark:text-emerald-400">in progress</span>}</span>
+                        <LocalRangeAside ci={e.clockIn} co={e.clockOut} off={off} />
                         {e.edited && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">edited</span>}
                         {e.note && <span className="text-xs text-slate-400 italic truncate">· {e.note}</span>}
                       </span>
@@ -542,6 +598,7 @@ function RequestEditModal({
 }) {
   const base = entry ? entry.clockIn.toDate() : (() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d; })();
   const baseOut = entry?.clockOut ? entry.clockOut.toDate() : (entry ? null : new Date(base.getTime() + 8 * 3600_000));
+  const off = useOffEastern();
   const [clockIn, setClockIn] = useState(toLocalInput(base));
   const [clockOut, setClockOut] = useState(baseOut ? toLocalInput(baseOut) : '');
   const [reason, setReason] = useState('');
@@ -595,6 +652,11 @@ function RequestEditModal({
           <label className="block text-xs text-slate-500 dark:text-slate-400">Reason
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="e.g. Forgot to clock out after my shift" className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 resize-none" />
           </label>
+          {off && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <Globe size={12} /> Enter times in your local timezone — your manager reviews them in Eastern.
+            </p>
+          )}
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <button onClick={onClose} className="text-sm px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
@@ -607,6 +669,7 @@ function RequestEditModal({
 
 // ─── Manager view ──────────────────────────────────────────────────────────
 function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: string; role: string } }) {
+  const off = useOffEastern();
   const [manageView, setManageView] = useState<'records' | 'log'>('records');
   const [auditRows, setAuditRows] = useState<AuditEntry[]>([]);
   useEffect(() => {
@@ -734,16 +797,19 @@ function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
       {/* Records / Change Log toggle */}
-      <div className="flex items-center gap-1 mb-4 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
-        {([['records', 'Records'], ['log', 'Change Log']] as const).map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setManageView(id)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${manageView === id ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
+          {([['records', 'Records'], ['log', 'Change Log']] as const).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setManageView(id)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${manageView === id ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <ZoneBadge off={off} />
       </div>
 
       {manageView === 'log' ? (
@@ -897,9 +963,13 @@ function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: 
                         </>
                       ) : (
                         <>
-                          <td className="px-2 py-2 text-slate-600 dark:text-slate-300">{TC.fmtTime(e.clockIn)}</td>
+                          <td className="px-2 py-2 text-slate-600 dark:text-slate-300">
+                            {TC.fmtTime(e.clockIn)}
+                            {off && <span className="block text-[11px] text-slate-400 dark:text-slate-500">{TC.fmtTimeLocal(e.clockIn)} local</span>}
+                          </td>
                           <td className="px-2 py-2 text-slate-600 dark:text-slate-300">
                             {e.clockOut ? TC.fmtTime(e.clockOut) : <span className="text-emerald-600 dark:text-emerald-400">in progress</span>}
+                            {off && e.clockOut && <span className="block text-[11px] text-slate-400 dark:text-slate-500">{TC.fmtTimeLocal(e.clockOut)} local</span>}
                           </td>
                           <td className="px-2 py-2 tabular-nums text-slate-500 dark:text-slate-400">
                             {TC.fmtDuration(TC.entryDurationMs(e, now))}
@@ -1072,6 +1142,7 @@ function AddEntryForm({
 }) {
   const base = new Date(defaultDate);
   base.setHours(9, 0, 0, 0);
+  const off = useOffEastern();
   const [userId, setUserId] = useState(users[0]?.uid || '');
   const [clockIn, setClockIn] = useState(toLocalInput(base));
   const [clockOut, setClockOut] = useState(toLocalInput(new Date(base.getTime() + 8 * 3600_000)));
@@ -1137,6 +1208,11 @@ function AddEntryForm({
           <input type="datetime-local" value={clockOut} onChange={(e) => setClockOut(e.target.value)} className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
         </label>
       </div>
+      {off && (
+        <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+          <Globe size={12} /> Times you enter are read in your local timezone, not Eastern.
+        </p>
+      )}
       <div className="flex justify-end gap-2 mt-4">
         <button onClick={onClose} className="text-sm px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
         <button onClick={save} disabled={saving || !userId} className="text-sm px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium">Save entry</button>

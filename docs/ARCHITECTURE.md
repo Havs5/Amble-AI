@@ -500,9 +500,11 @@ flowchart TD
 
 > Employee views (`subscribeOpenEntry`, `subscribeUserWeek`) query by `userId` equality only (single auto index) and filter the week/open-state in the client — so they work without waiting on composite-index builds. The admin `subscribeAllWeek` uses a `clockIn` range (single-field index).
 
-**Service:** `services/timeclock/TimeClockService.ts` (Firestore ops + Mon–Sun week/duration utils). **View:** `components/views/TimeClockView.tsx` (tabs: Punch · My Timecard · Manage[admin]). Sidebar item **Clock In/Out** (`clock` view id) is visible to all authenticated users; the **Manage** tab is admin-only and additionally enforced by rules.
+**Service:** `services/timeclock/TimeClockService.ts` (Firestore ops + Mon–Sun week/duration utils). **View:** `components/views/TimeClockView.tsx` (tabs: Punch · My Timecard · Who's In[admin] · Manage[admin]). Sidebar item **Clock In/Out** (`clock` view id) is visible to all authenticated users; the **Manage** tab is admin-only and additionally enforced by rules.
 
 > **Manage filters:** a **Department** dropdown (shown only when ≥1 user has a `department`) narrows to that department, then the **Employee** dropdown is scoped to employees within the selected department; each employee group shows a department badge. Department is derived from the `users` directory (`fetchUsers()` returns `department`; `uid → department` map) — `time_entries` docs are *not* re-stamped, so re-assigning a user's department reflects immediately with no backfill.
+
+> **Timezone (Eastern is canonical):** punches store absolute Firestore `Timestamp`s; the UI displays them anchored to **America/New_York (EST/EDT, DST-aware)** via `fmtTime`/`fmtDateTime` (which pass an explicit `timeZone`, so they're SSR-deterministic and identical for every viewer). For a viewer in another timezone, a mount-resolved `useOffEastern()` hook adds a muted **"· 6:18 PM local"** aside (`<LocalAside>` / `<LocalRangeAside>`) and an amber input hint on the manual edit/add forms; ET viewers see neither. `etAbbrev()` renders the live EST/EDT label. **Caveat:** day/week bucketing still uses the viewer's local calendar day (`startOfWeek`/`dayKey`), so a near-midnight punch can bucket on the adjacent day for off-ET viewers — acceptable for an ET-based org.
 
 ---
 

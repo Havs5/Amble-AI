@@ -278,10 +278,13 @@ export function PostCard({
   if (variant === 'featured') {
     return (
       <div
-        className="group relative rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col h-full overflow-hidden min-w-0"
+        className="group relative rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col h-full min-w-0"
         onClick={() => onExpand?.(post.id)}
         style={{ animation: 'fade-in-up 0.3s ease-out both' }}
       >
+        {/* Inner clip wrapper rounds the accent strip + image; the admin menu sits
+            OUTSIDE it so its dropdown isn't clipped by overflow-hidden. */}
+        <div className="flex flex-col flex-1 min-w-0 rounded-xl overflow-hidden">
         {/* Department accent strip */}
         <div className="h-1 shrink-0" style={{ backgroundColor: accent }} />
 
@@ -296,8 +299,6 @@ export function PostCard({
             />
           </div>
         )}
-
-        {isAdmin && <div className="absolute top-2 right-2 z-10">{darkMenu}</div>}
 
         <div className="flex flex-col flex-1 p-4 min-w-0">
           <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
@@ -328,6 +329,8 @@ export function PostCard({
           </div>
           <ReactionsBar reactions={post.reactions} className="mt-2" />
         </div>
+        </div>
+        {isAdmin && <div className="absolute top-2 right-2 z-20">{darkMenu}</div>}
       </div>
     );
   }
@@ -335,14 +338,15 @@ export function PostCard({
   // ─── LIST VARIANT (default) ───────────────────────────────────────────
   return (
     <div
-      className="group relative flex flex-col h-full rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden min-w-0"
+      className="group relative flex flex-col h-full rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:shadow-md transition-all duration-200 cursor-pointer min-w-0"
       onClick={() => onExpand?.(post.id)}
       style={{ animation: 'fade-in-up 0.2s ease-out both' }}
     >
+      {/* Inner clip wrapper (rounds the accent strip); admin menu sits outside so
+          its dropdown isn't clipped. */}
+      <div className="flex flex-col flex-1 min-w-0 rounded-xl overflow-hidden">
       {/* Department accent strip */}
       <div className="h-1 shrink-0" style={{ backgroundColor: accent }} />
-
-      {isAdmin && <div className="absolute top-1.5 right-1.5 z-10">{darkMenu}</div>}
 
       <div className="flex flex-col flex-1 p-3 min-w-0">
         <div className="flex flex-wrap items-center gap-1 mb-1">
@@ -384,6 +388,8 @@ export function PostCard({
 
         <ReactionsBar reactions={post.reactions} className="mt-2" />
       </div>
+      </div>
+      {isAdmin && <div className="absolute top-1.5 right-1.5 z-20">{darkMenu}</div>}
     </div>
   );
 }

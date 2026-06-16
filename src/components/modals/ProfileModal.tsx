@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Shield, User, LogOut, Key, Users, Plus, Bot, FileText, Trash2, Upload, Sliders, MessageSquare, Zap, BarChart2, DollarSign, Calendar, TrendingUp, AlertTriangle, Settings } from 'lucide-react';
+import { X, Shield, User, LogOut, Users, Plus, Bot, FileText, Trash2, Upload, Sliders, MessageSquare, Zap, BarChart2, DollarSign, Calendar, TrendingUp, AlertTriangle, Settings, Moon, Sun, Palette, Mail, Check, Clock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContextRefactored';
 import { UsageManager, TokenUsage, UsageLimits } from '../../lib/usageManager';
 import { UserCapabilityKey } from '../../lib/capabilities';
+import { NEWS_DEPARTMENTS } from '../../types/news';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { auth } from '../../lib/firebase';
@@ -36,6 +37,10 @@ interface ProfileModalProps {
   onSaveCxConfig?: (config: { temperature: number; maxTokens: number }) => void;
   onSaveCxSettings?: (prompt: string, policies: string[], config: { temperature: number; maxTokens: number }) => void;
   onOpenUserManagement?: () => void;
+
+  // Appearance (wired to the app-level theme in AmbleApp)
+  isDarkMode?: boolean;
+  setIsDarkMode?: (dark: boolean) => void;
 }
 
 export function ProfileModal({ 
@@ -60,10 +65,12 @@ export function ProfileModal({
   cxConfig,
   onSaveCxConfig,
   onSaveCxSettings,
-  onOpenUserManagement
+  onOpenUserManagement,
+  isDarkMode,
+  setIsDarkMode,
 }: ProfileModalProps) {
-  const { user, logout, resetPassword, addUser, users, updateProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'users' | 'amble-config' | 'cx-config' | 'premium' | 'usage'>(initialTab);
+  const { user, logout, addUser, users, updateProfile } = useAuth();
+  const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'security' | 'users' | 'amble-config' | 'cx-config' | 'premium' | 'usage'>(initialTab);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   // Use user.name directly from auth context, fall back to prop
   const [tempUserName, setTempUserName] = useState(user?.name || userName);
@@ -110,11 +117,6 @@ export function ProfileModal({
   const [maxTokens, setMaxTokens] = useState(2048);
   const [files, setFiles] = useState<File[]>([]);
 
-  // Password Reset State
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordMessage, setPasswordMessage] = useState('');
-
   // Add User State
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
@@ -147,7 +149,6 @@ export function ProfileModal({
         setActiveTab(initialTab);
       }
       setProfileMessage('');
-      setPasswordMessage('');
       setAddUserMessage('');
       setAiConfigMessage('');
     }
@@ -368,25 +369,19 @@ export function ProfileModal({
     }
   };
 
-  const handlePasswordReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setPasswordMessage('Passwords do not match');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setPasswordMessage('Password must be at least 6 characters');
-      return;
-    }
-    const success = await resetPassword(newPassword);
-    if (success) {
-      setPasswordMessage('Password updated successfully');
-      setNewPassword('');
-      setConfirmPassword('');
-    } else {
-      setPasswordMessage('Failed to update password');
-    }
+  // Real account metadata from Firebase Auth (Google sign-in).
+  const fmtMetaDate = (iso?: string | null) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
+  const signInEmail = auth?.currentUser?.email || user?.email || '';
+  const memberSince = fmtMetaDate(auth?.currentUser?.metadata?.creationTime);
+  const lastSignIn = fmtMetaDate(auth?.currentUser?.metadata?.lastSignInTime);
+  const photoURL = auth?.currentUser?.photoURL || '';
+  const userDepartment = (user as any)?.department || '';
+  const rolePretty = ((user?.role as string) || 'user').replace(/^superadmin$/, 'IT');
 
   const [isAddingUser, setIsAddingUser] = useState(false);
 
@@ -445,11 +440,18 @@ export function ProfileModal({
               Profile
             </button>
             <button
+              onClick={() => setActiveTab('appearance')}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'appearance' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
+            >
+              <Palette size={18} />
+              Appearance
+            </button>
+            <button
               onClick={() => setActiveTab('security')}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'security' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
             >
               <Shield size={18} />
-              Security
+              Account &amp; Security
             </button>
             {/* AI / Customer Experience configuration is managed centrally in
                 User Management (IT only) — no longer a per-user editor here. */}
@@ -487,16 +489,37 @@ export function ProfileModal({
 
           {activeTab === 'profile' && (
             <div className="space-y-6 w-full max-w-md mx-auto">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Profile Information</h3>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Profile</h3>
               {profileMessage && (
                 <div className={`p-3 rounded-lg text-sm ${profileMessage.includes('success') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
                   {profileMessage}
                 </div>
               )}
+
+              {/* Avatar + identity */}
+              <div className="flex items-center gap-4">
+                {photoURL ? (
+                  <img src={photoURL} alt={tempUserName} className="w-16 h-16 rounded-full object-cover ring-2 ring-indigo-500/20" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
+                    {(tempUserName || 'U').trim().charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-900 dark:text-white truncate">{tempUserName || 'User'}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 capitalize">{rolePretty}</span>
+                    {userDepartment && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{NEWS_DEPARTMENTS[userDepartment] || userDepartment}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Display Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={tempUserName}
                   onChange={(e) => setTempUserName(e.target.value)}
                   className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-900 dark:text-slate-100"
@@ -505,15 +528,19 @@ export function ProfileModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email Address</label>
-                <input 
-                  type="email" 
-                  value={tempEmail}
-                  onChange={(e) => setTempEmail(e.target.value)}
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-900 dark:text-slate-100"
-                  placeholder="Enter your email"
-                />
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="email"
+                    value={signInEmail}
+                    readOnly
+                    disabled
+                    className="w-full pl-10 pr-4 p-3 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-slate-400">Managed by your Google account — sign in with Google to change it.</p>
               </div>
-              <button 
+              <button
                 onClick={handleUpdateProfile}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
               >
@@ -522,45 +549,95 @@ export function ProfileModal({
             </div>
           )}
 
+          {activeTab === 'appearance' && (
+            <div className="space-y-6 w-full max-w-md mx-auto">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Appearance</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Choose how Amble looks on this device.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Theme</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { id: 'light', label: 'Light', icon: <Sun size={18} />, active: !isDarkMode, onClick: () => setIsDarkMode?.(false) },
+                    { id: 'dark', label: 'Dark', icon: <Moon size={18} />, active: !!isDarkMode, onClick: () => setIsDarkMode?.(true) },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={opt.onClick}
+                      className={`relative flex flex-col items-start gap-3 p-4 rounded-xl border-2 transition-all ${opt.active ? 'border-indigo-500 bg-indigo-50/60 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}
+                    >
+                      {opt.active && (
+                        <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center">
+                          <Check size={12} />
+                        </span>
+                      )}
+                      <span className={`w-9 h-9 rounded-lg flex items-center justify-center ${opt.id === 'dark' ? 'bg-slate-900 text-amber-300' : 'bg-amber-100 text-amber-500'}`}>
+                        {opt.icon}
+                      </span>
+                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-slate-400">Your choice is saved on this browser.</p>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'security' && (
             <div className="space-y-6 w-full max-w-md mx-auto">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Change Password</h3>
-              <form onSubmit={handlePasswordReset} className="space-y-4">
-                {passwordMessage && (
-                  <div className={`p-3 rounded-lg text-sm ${passwordMessage.includes('success') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                    {passwordMessage}
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Account &amp; Security</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Your sign-in is handled by Google — there's no separate password to manage here.</p>
+              </div>
+
+              {/* Sign-in method */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3">
+                <span className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                  </svg>
+                </span>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Signed in with Google</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{signInEmail || '—'}</div>
+                </div>
+                <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 shrink-0">
+                  <Check size={11} /> Active
+                </span>
+              </div>
+
+              {/* Account details */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><Shield size={14} /> Role</span>
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100 capitalize">{rolePretty}</span>
+                </div>
+                {userDepartment && (
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><Users size={14} /> Department</span>
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{NEWS_DEPARTMENTS[userDepartment] || userDepartment}</span>
                   </div>
                 )}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">New Password</label>
-                  <div className="relative">
-                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input 
-                      type="password" 
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-900 dark:text-slate-100"
-                      placeholder="New password"
-                    />
-                  </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><Calendar size={14} /> Member since</span>
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{memberSince}</span>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Confirm Password</label>
-                  <div className="relative">
-                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input 
-                      type="password" 
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-slate-900 dark:text-slate-100"
-                      placeholder="Confirm new password"
-                    />
-                  </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><Clock size={14} /> Last sign-in</span>
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{lastSignIn}</span>
                 </div>
-                <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium">
-                  Update Password
-                </button>
-              </form>
+              </div>
+
+              <button
+                onClick={logout}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 border border-red-200 dark:border-red-900/40 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                <LogOut size={16} /> Sign out
+              </button>
             </div>
           )}
         </div>

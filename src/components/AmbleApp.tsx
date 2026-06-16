@@ -479,6 +479,9 @@ function AmbleAppContent() {
           nav.setShowProfileModal(false);
           nav.setShowUserManagementModal(true);
         }}
+
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode}
       />
 
       <UserManagementModal

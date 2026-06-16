@@ -262,6 +262,12 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-16 — Settings: drop password, add Appearance + real Account info
+- **Removed "Change Password"** from Settings → the app authenticates with **Google**, so there's no app-managed password. Deleted the reset form, password state, and the `resetPassword` call from `ProfileModal`.
+- **Profile tab** — now shows the Google **avatar**, **role** + **department** badges; display name stays editable; **email is read-only** ("Managed by your Google account").
+- **New Appearance tab** — Light/Dark **theme switcher** wired to the existing app-level theme (`isDarkMode`/`setIsDarkMode` passed from `AmbleApp`; persists in `amble_theme`, flips the `dark` class live).
+- **Account & Security tab** (replaces Change Password) — "Signed in with Google" + email, role/department, and **real Member-since / Last-sign-in** from `auth.currentUser.metadata`, plus a Sign out button. All values are live, not placeholders.
+
 ### 2026-06-16 — Company News: popup reader, tier layout, tag-overflow fix
 - **Click a post → opens a full-post popup modal** (`PostDetailModal`) instead of the old inline "expanded body below the card". Centered, backdrop+blur, Escape/×/click-out to close, cover-image-or-gradient banner with department/critical/pinned badges, full body + tags, and admin actions (Pin/Archive/Edit). Removed the inline-expand state (`expandedPostId`) entirely.
 - **Magazine tier layout:** first view is now **2 main (large hero)** + **3 medium (featured)** + **the rest as small list cards** ("Latest Updates"), replacing the old 1-hero + 2-stacked banner. `sortedPosts` sliced 0–2 / 2–5 / 5+.

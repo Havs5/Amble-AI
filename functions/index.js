@@ -60,6 +60,7 @@ const GOOGLE_SEARCH_CX = defineSecret('GOOGLE_SEARCH_CX');
 const SMTP_APP_PASSWORD = defineSecret('SMTP_APP_PASSWORD');
 const SLACK_SIGNING_SECRET = defineSecret('SLACK_SIGNING_SECRET');
 const SLACK_BOT_TOKEN = defineSecret('SLACK_BOT_TOKEN');
+const SLACK_RELAY_URL = defineSecret('SLACK_RELAY_URL'); // other tool's Slack event URL (relay target)
 
 // ============================================================================
 // Next.js App
@@ -278,7 +279,7 @@ exports.slackEvents = onRequest(
     region: 'us-central1',
     memory: '512MiB',
     timeoutSeconds: 60,
-    secrets: [SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN],
+    secrets: [SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN, SLACK_RELAY_URL],
   },
   async (req, res) => {
     try {
@@ -289,6 +290,7 @@ exports.slackEvents = onRequest(
         adminDb,
         signingSecret: SLACK_SIGNING_SECRET.value(),
         botToken: SLACK_BOT_TOKEN.value(),
+        relayUrl: SLACK_RELAY_URL.value(),
       });
     } catch (e) {
       console.error('[slackEvents] fatal:', e?.message);

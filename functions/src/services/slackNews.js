@@ -267,6 +267,32 @@ async function processMessageEvent(adminDb, ev, cfg, botToken) {
   return { posted: ref.id, priority: docData.priority, pinned: docData.pinned, department };
 }
 
+// ─── Relay (keep the other tool working) ────────────────────────────────────
+// Our function is the single Slack Request URL; we forward each event to the
+// other tool VERBATIM — same raw body + signature headers — so its own Slack
+// signature check still passes (same app, same signing secret). Fire-and-forget.
+async function relayToTool(relayUrl, rawBody, headers) {
+  if (!relayUrl) return;
+  try {
+    await fetch(relayUrl, {
+      method: 'POST',
+      // Apps Script /exec 302-redirects its RESPONSE to googleusercontent; doPost
+      // has already executed by then, so don't follow it (avoids a stray GET).
+      redirect: 'manual',
+      headers: {
+        'Content-Type': headers['content-type'] || 'application/json',
+        'X-Slack-Signature': headers['x-slack-signature'] || '',
+        'X-Slack-Request-Timestamp': headers['x-slack-request-timestamp'] || '',
+        'X-Slack-Retry-Num': headers['x-slack-retry-num'] || '',
+        'X-Slack-Retry-Reason': headers['x-slack-retry-reason'] || '',
+      },
+      body: rawBody, // exact bytes Slack sent → downstream signature verifies
+    });
+  } catch (e) {
+    console.warn('[slackNews] relay to other tool failed:', e.message);
+  }
+}
+
 // ─── Reactions (acknowledgements) ───────────────────────────────────────────
 async function processReaction(adminDb, ev) {
   if (!ev.item || ev.item.type !== 'message' || !ev.item.channel || !ev.item.ts) return;
@@ -283,7 +309,7 @@ async function processReaction(adminDb, ev) {
 }
 
 // ─── HTTP entry point ───────────────────────────────────────────────────────
-async function handleSlackEvent(req, res, { adminDb, signingSecret, botToken }) {
+async function handleSlackEvent(req, res, { adminDb, signingSecret, botToken, relayUrl }) {
   const rawBody = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body || {});
   const ts = req.get('x-slack-request-timestamp');
   const sig = req.get('x-slack-signature');
@@ -314,6 +340,10 @@ async function handleSlackEvent(req, res, { adminDb, signingSecret, botToken }) 
       if ((await seen.get()).exists) return;
       await seen.set({ at: admin.firestore.FieldValue.serverTimestamp(), type: ev.type || null });
     }
+
+    // Forward EVERY event to the other tool (not just Amble-relevant ones), so its
+    // integration keeps receiving exactly what Slack would have sent it.
+    await relayToTool(relayUrl, rawBody, req.headers);
 
     // Emoji reactions = acknowledgements → update the linked post's reaction counts.
     if (ev.type === 'reaction_added' || ev.type === 'reaction_removed') {

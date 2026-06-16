@@ -19,6 +19,7 @@ import {
   Building2,
   Pencil,
   Archive,
+  ZoomIn,
 } from 'lucide-react';
 import type { NewsPost } from '@/types/news';
 import { NEWS_DEPARTMENTS } from '@/types/news';
@@ -52,13 +53,18 @@ export function PostDetailModal({
   onTogglePin,
 }: PostDetailModalProps) {
   const [imgError, setImgError] = React.useState(false);
+  const [zoomed, setZoomed] = React.useState(false);
 
-  // Close on Escape
+  // Close on Escape (lightbox first, then the modal)
   React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (zoomed) setZoomed(false);
+      else onClose();
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, zoomed]);
 
   const dept = NEWS_DEPARTMENTS[post.departmentId] ?? post.departmentId;
   const gradient = departmentGradients[post.departmentId] ?? departmentGradients.general;
@@ -66,6 +72,7 @@ export function PostDetailModal({
   const hasImage = post.coverImage && !imgError;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6"
       onClick={onClose}
@@ -78,12 +85,22 @@ export function PostDetailModal({
         {/* ── Banner (cover image or department gradient) ── */}
         <div className="relative h-44 sm:h-52 shrink-0">
           {hasImage ? (
-            <img
-              src={post.coverImage!}
-              alt={post.title}
-              className="absolute inset-0 w-full h-full object-cover"
-              onError={() => setImgError(true)}
-            />
+            <>
+              <img
+                src={post.coverImage!}
+                alt={post.title}
+                className="absolute inset-0 w-full h-full object-cover cursor-zoom-in"
+                onClick={(e) => { e.stopPropagation(); setZoomed(true); }}
+                onError={() => setImgError(true)}
+              />
+              <button
+                onClick={(e) => { e.stopPropagation(); setZoomed(true); }}
+                className="absolute top-3 left-3 z-10 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-black/35 text-white/90 hover:text-white hover:bg-black/55 backdrop-blur-sm text-[11px] font-medium transition-colors"
+                title="Zoom image"
+              >
+                <ZoomIn size={13} /> Zoom
+              </button>
+            </>
           ) : (
             <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`}>
               <div className="absolute inset-0 flex items-center justify-center">
@@ -194,5 +211,29 @@ export function PostDetailModal({
         )}
       </div>
     </div>
+
+    {/* ── Image lightbox (zoom) ── */}
+    {zoomed && hasImage && (
+      <div
+        className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-4 cursor-zoom-out"
+        onClick={() => setZoomed(false)}
+        style={{ animation: 'fade-in-up 0.12s ease-out both' }}
+      >
+        <img
+          src={post.coverImage!}
+          alt={post.title}
+          className="max-w-full max-h-full object-contain rounded-lg"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <button
+          onClick={() => setZoomed(false)}
+          className="absolute top-4 right-4 p-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+          aria-label="Close zoom"
+        >
+          <X size={20} />
+        </button>
+      </div>
+    )}
+    </>
   );
 }

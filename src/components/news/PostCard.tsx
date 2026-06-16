@@ -16,7 +16,6 @@ import {
   ExternalLink,
   Clock,
   Tag,
-  Building2,
   User,
   MoreHorizontal,
   Archive,
@@ -223,84 +222,63 @@ export function PostCard({
     );
   }
 
-  // ─── FEATURED VARIANT ─────────────────────────────────────────────────
+  // ─── FEATURED VARIANT (colorful tile — full-bleed gradient/image) ─────
   if (variant === 'featured') {
     return (
       <div
-        className="group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/60 hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col h-full"
+        className="relative rounded-xl overflow-hidden group cursor-pointer h-full min-h-[160px]"
         onClick={() => onExpand?.(post.id)}
         style={{ animation: 'fade-in-up 0.3s ease-out both' }}
       >
-        {/* Image */}
-        <div className="relative flex-1 min-h-[60px] overflow-hidden">
-          {hasImage ? (
-            <img
-              src={post.coverImage!}
-              alt={post.title}
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              onError={() => setImgError(true)}
-            />
-          ) : (
-            <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-90`}>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Building2 size={32} className="text-white/30" />
-              </div>
-            </div>
-          )}
+        {/* Background: cover image or department gradient (no placeholder icon) */}
+        {hasImage ? (
+          <img
+            src={post.coverImage!}
+            alt={post.title}
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`}>
+            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' viewBox=\'0 0 40 40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.5\'%3E%3Cpath d=\'M0 38.59l2.83-2.83 1.41 1.41L1.41 40H0v-1.41zM0 1.4l2.83 2.83 1.41-1.41L1.41 0H0v1.41zM38.59 40l-2.83-2.83 1.41-1.41L40 38.59V40h-1.41zM40 1.41l-2.83 2.83-1.41-1.41L38.59 0H40v1.41z\'/%3E%3C/g%3E%3C/svg%3E")' }} />
+          </div>
+        )}
 
-          {/* Department badge overlay */}
-          <div className="absolute top-3 left-3">
+        {/* Readability overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+
+        {/* Admin menu */}
+        {isAdmin && (
+          <div className="absolute top-2.5 right-2.5 z-10">{adminMenu}</div>
+        )}
+
+        {/* Content overlay (bottom) */}
+        <div className="absolute bottom-0 left-0 right-0 p-4">
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
             <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white ${badgeColor}`}>
               {dept}
             </span>
-          </div>
-
-          {/* Admin menu */}
-          {isAdmin && (
-            <div className="absolute top-2 right-2 z-10">
-              {adminMenu}
-            </div>
-          )}
-
-          {/* Priority indicator */}
-          {post.priority === 'CRITICAL' && (
-            <div className="absolute top-3 right-3">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 block animate-pulse" />
-            </div>
-          )}
-        </div>
-
-        {/* Text content */}
-        <div className="shrink-0" style={{ padding: '12px 16px 18px 16px' }}>
-          {/* Priority / Pinned badges */}
-          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
             {post.priority === 'CRITICAL' && (
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-white bg-red-500">
+              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-red-500">
                 <AlertTriangle size={9} /> Critical
               </span>
             )}
             {post.pinned && (
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-white bg-amber-500">
+              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-amber-500">
                 <Pin size={9} /> Pinned
               </span>
             )}
           </div>
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-snug mb-1 line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+          <h3 className="text-base font-bold text-white leading-snug mb-1 line-clamp-2">
             {post.title}
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-2">
-            {post.summary || post.body.slice(0, 120)}
+          <p className="text-xs text-white/75 line-clamp-2 leading-relaxed mb-2">
+            {post.summary || post.body.slice(0, 110)}
           </p>
-
-          {/* Footer */}
-          <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
-            <span className="flex items-center gap-1">
-              <User size={10} /> {post.authorName}
-            </span>
-            <span className="text-slate-300 dark:text-slate-600">·</span>
-            <span className="flex items-center gap-1">
-              <Clock size={10} /> {timeAgo(post.publishedAt)}
-            </span>
+          <div className="flex items-center gap-2 text-[11px] text-white/70">
+            <span className="flex items-center gap-1"><User size={10} /> {post.authorName}</span>
+            <span className="text-white/40">·</span>
+            <span className="flex items-center gap-1"><Clock size={10} /> {timeAgo(post.publishedAt)}</span>
           </div>
         </div>
       </div>
@@ -314,28 +292,27 @@ export function PostCard({
       onClick={() => onExpand?.(post.id)}
       style={{ animation: 'fade-in-up 0.2s ease-out both' }}
     >
-      {/* Thumbnail */}
+      {/* Media: cover image, or a colorful department swatch (no placeholder icon) */}
       <div className="shrink-0 w-24 h-16 sm:w-32 sm:h-20 rounded-lg overflow-hidden relative">
         {hasImage ? (
-          <img
-            src={post.coverImage!}
-            alt={post.title}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-85`}>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Building2 size={20} className="text-white/40" />
+          <>
+            <img
+              src={post.coverImage!}
+              alt={post.title}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+              onError={() => setImgError(true)}
+            />
+            <div className="absolute bottom-1.5 left-1.5">
+              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider text-white ${badgeColor}`}>
+                {dept}
+              </span>
             </div>
+          </>
+        ) : (
+          <div className={`absolute inset-0 bg-gradient-to-br ${gradient} flex items-center justify-center p-1`}>
+            <span className="text-white text-[10px] font-bold uppercase tracking-wider text-center leading-tight line-clamp-2">{dept}</span>
           </div>
         )}
-        {/* Department badge on image */}
-        <div className="absolute bottom-1.5 left-1.5">
-          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider text-white ${badgeColor}`}>
-            {dept}
-          </span>
-        </div>
       </div>
 
       {/* Text content */}

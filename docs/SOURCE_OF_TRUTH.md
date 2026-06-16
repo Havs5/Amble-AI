@@ -262,6 +262,12 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-16 — Company News upgrade, Phase 1: colorful tiles + image zoom
+- **No more wasted placeholder image block.** Most posts have no cover image, so the featured (medium) cards are now **full-bleed colorful tiles** — the department gradient (or the cover image when present) fills the card with the title/summary/badges overlaid, matching the hero look. The small list cards drop the building-icon placeholder for a **solid department-color swatch with the department label**; an uploaded cover shows as the thumbnail.
+- **Click-to-zoom images.** In the post popup (`PostDetailModal`), a cover image shows a "Zoom" affordance and opens a **fullscreen lightbox** (Esc / click-out / × to close).
+- **Owner decisions for the upgrade:** image-less cards = *colorful tiles*; Slack delivery = *reuse the existing app via Events API*; triggered posts = *auto-publish*.
+- **Phase 2 (next): Slack auto-news.** A Cloud Function ingests Slack message events from allow-listed channels, matches the trigger keywords, and auto-publishes a `news_posts` doc (AI-summarized). Needs owner-supplied `SLACK_SIGNING_SECRET` + bot token (Firebase secrets, never committed), the channel allowlist, and the keyword list. See §8 Open Items.
+
 ### 2026-06-16 — Settings: drop password, add Appearance + real Account info
 - **Removed "Change Password"** from Settings → the app authenticates with **Google**, so there's no app-managed password. Deleted the reset form, password state, and the `resetPassword` call from `ProfileModal`.
 - **Profile tab** — now shows the Google **avatar**, **role** + **department** badges; display name stays editable; **email is read-only** ("Managed by your Google account").
@@ -443,6 +449,15 @@ Move Gemini usage from the **Gemini Developer API** (API-key) to **Vertex AI** (
 
 ### 2. Near-term tech debt (from §6)
 System-prompt consolidation, route de-dup (Functions vs Next), auth on admin endpoints, prune `functions/package.json`.
+
+### 2b. 🔜 Company News upgrade — Phase 2: Slack auto-news (BUILD NEXT)
+Owner decisions locked: **reuse the existing Slack app via Events API**, **auto-publish** triggered posts, image-less cards already shipped as **colorful tiles** (Phase 1, 2026-06-16). The remaining build:
+- **New Cloud Function `slackEvents`** (HTTP). (a) Answer Slack's `url_verification` challenge; (b) verify the `x-slack-signature` (v0 HMAC over `v0:{timestamp}:{rawBody}` with `SLACK_SIGNING_SECRET`, reject >5 min skew); (c) ack 200 within 3 s, do work async; (d) for `event_callback` `message` events (ignore bot/subtype/edits), if `channel ∈ allowlist` **and** the text contains **≥ N trigger keywords** (owner said "2 or 3"; default N=2), create a **published** `news_posts` doc.
+- **AI summarization** (owner default = on): run the Slack text through Gemini-Flash to produce `{title, summary, body, departmentId, priority}`; fall back to raw text + first line as title if the model is unavailable.
+- **Config in Firestore** `config/slackNews` (editable without redeploy): `{ channels: string[], keywords: string[], minKeywords: number, autoPublish: true, summarize: true }`.
+- **Secrets (owner-provided, NEVER committed):** `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN` (bot token only needed to resolve channel/user names + dedupe). Set via `firebase functions:secrets:set`.
+- **Slack-side setup (owner):** in the existing app → Event Subscriptions → Request URL = the deployed `slackEvents` URL; subscribe to `message.channels`; add scopes `channels:history` (+ `groups:history` for private); reinstall; **invite the bot** to each target channel.
+- Dedupe on Slack `event_id` (store processed IDs) so retries don't double-post.
 
 ### 3. Time clock follow-ups
 - ✅ **DONE (2026-06-15): Timezone handling — Eastern is canonical company time.** All Clock In/Out times render anchored to **America/New_York (EST/EDT, DST-aware)** and are identical for every viewer. Pure display layer — `time_entries` already store absolute `Timestamp`s, no backfill.

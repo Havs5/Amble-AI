@@ -814,7 +814,7 @@ function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: 
             >
               <option value="all">All departments</option>
               {departments.map((d) => (
-                <option key={d} value={d}>{d}</option>
+                <option key={d} value={d}>{NEWS_DEPARTMENTS[d] || d}</option>
               ))}
             </select>
           )}
@@ -866,7 +866,7 @@ function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: 
               <span className="flex items-center gap-2">
                 <span className="font-semibold text-sm text-slate-700 dark:text-slate-200">{g.name}</span>
                 {g.department && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{g.department}</span>
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{NEWS_DEPARTMENTS[g.department] || g.department}</span>
                 )}
               </span>
               <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{TC.fmtDuration(g.total)}</span>
@@ -1139,7 +1139,7 @@ function AddEntryForm({
           Employee
           <select value={userId} onChange={(e) => setUserId(e.target.value)} className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
             {users.length === 0 && <option value="">No users found</option>}
-            {users.map((u) => <option key={u.uid} value={u.uid}>{u.name}{u.department ? ` · ${u.department}` : ''}</option>)}
+            {users.map((u) => <option key={u.uid} value={u.uid}>{u.name}{u.department ? ` · ${NEWS_DEPARTMENTS[u.department] || u.department}` : ''}</option>)}
           </select>
         </label>
         <label className="text-xs text-slate-500 dark:text-slate-400">

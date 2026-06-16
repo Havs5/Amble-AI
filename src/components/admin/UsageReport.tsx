@@ -128,7 +128,9 @@ export function UsageReport() {
       const usageRef = collection(db, 'usage_logs');
       // Fetch ALL logs ONCE (newest first, capped). The time range is applied
       // in-memory (see timeFilteredLogs) so switching ranges never re-queries.
-      let snapshot = await getDocs(query(usageRef, orderBy('timestamp', 'desc'), limit(20000)));
+      // 10000 is Firestore's hard maximum for a query `limit` — going higher
+      // throws "Limit value in the structured query is over the maximum value".
+      let snapshot = await getDocs(query(usageRef, orderBy('timestamp', 'desc'), limit(10000)));
       if (snapshot.empty) snapshot = await getDocs(usageRef);
 
       const fetchedLogs: UsageLog[] = [];

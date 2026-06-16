@@ -478,8 +478,7 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                 <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 sticky top-0 backdrop-blur-sm">
                   <tr>
                     <th className="px-4 py-3 font-medium">User</th>
-                    <th className="px-4 py-3 font-medium">Role</th>
-                    <th className="px-4 py-3 font-medium text-right">Actions</th>
+                    <th className="px-4 py-3 font-medium text-right">Role</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -511,15 +510,10 @@ export function UserManagementModal({ isOpen, onClose, onBack }: UserManagementM
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-right">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${normalizeRole(user.role) === 'superadmin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : normalizeRole(user.role) === 'manager' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
                           {roleLabel(user.role)}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button className="p-1 text-slate-400 hover:text-indigo-600 transition-colors">
-                          <Edit2 size={14} />
-                        </button>
                       </td>
                     </tr>
                   ))}

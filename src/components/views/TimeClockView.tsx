@@ -7,9 +7,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContextRefactored';
 import { auth as fbAuth } from '@/lib/firebase';
+import { Timestamp } from 'firebase/firestore';
 import * as TC from '@/services/timeclock/TimeClockService';
-import type { TimeEntry, DirectoryUser, OnlineUser, EditRequest } from '@/services/timeclock/TimeClockService';
-import { can } from '@/lib/roles';
+import type { TimeEntry, DirectoryUser, OnlineUser, EditRequest, AuditEntry } from '@/services/timeclock/TimeClockService';
+import { can, roleLabel } from '@/lib/roles';
 import { NEWS_DEPARTMENTS } from '@/types/news';
 
 type Tab = 'punch' | 'timecard' | 'online' | 'manage';
@@ -166,7 +167,7 @@ export function TimeClockView() {
 
         {tab === 'online' && isAdmin && <WhoIsInTab online={onlineUsers} now={now} currentUid={uid} />}
 
-        {tab === 'manage' && isAdmin && <ManageTab now={now} editorUid={uid} />}
+        {tab === 'manage' && isAdmin && <ManageTab now={now} editor={{ uid, name: userName, role: (user?.role as string) || '' }} />}
       </div>
     </div>
   );
@@ -574,7 +575,13 @@ function RequestEditModal({
 }
 
 // ─── Manager view ──────────────────────────────────────────────────────────
-function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
+function ManageTab({ now, editor }: { now: number; editor: { uid: string; name: string; role: string } }) {
+  const [manageView, setManageView] = useState<'records' | 'log'>('records');
+  const [auditRows, setAuditRows] = useState<AuditEntry[]>([]);
+  useEffect(() => {
+    if (manageView !== 'log') return;
+    return TC.subscribeAudit(setAuditRows);
+  }, [manageView]);
   const [weekStart, setWeekStart] = useState(() => TC.startOfWeek(new Date()));
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [users, setUsers] = useState<DirectoryUser[]>([]);
@@ -639,24 +646,74 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
 
   const saveEdit = async () => {
     if (!editing) return;
-    await TC.updateEntry(
-      editing.id,
-      { clockIn: new Date(editing.clockIn), clockOut: editing.clockOut ? new Date(editing.clockOut) : null },
-      editorUid
-    );
+    const orig = entries.find((e) => e.id === editing.id);
+    const newIn = new Date(editing.clockIn);
+    const newOut = editing.clockOut ? new Date(editing.clockOut) : null;
+    await TC.updateEntry(editing.id, { clockIn: newIn, clockOut: newOut }, editor.uid);
+    await TC.logAudit({
+      action: 'edit_entry', actor: editor,
+      targetUserId: orig?.userId || '', targetUserName: orig?.userName || '',
+      entryId: editing.id,
+      before: orig ? { clockIn: orig.clockIn, clockOut: orig.clockOut } : null,
+      after: { clockIn: Timestamp.fromDate(newIn), clockOut: newOut ? Timestamp.fromDate(newOut) : null },
+    });
     setEditing(null);
   };
 
+  const doDelete = async (e: TimeEntry) => {
+    if (!confirm('Delete this entry?')) return;
+    await TC.deleteEntry(e.id);
+    await TC.logAudit({
+      action: 'delete_entry', actor: editor,
+      targetUserId: e.userId, targetUserName: e.userName, entryId: e.id,
+      before: { clockIn: e.clockIn, clockOut: e.clockOut },
+    });
+  };
+
   const approve = async (req: EditRequest) => {
-    try { await TC.approveRequest(req, editorUid); } catch (e) { console.error('[TimeClock] approve failed', e); }
+    try {
+      await TC.approveRequest(req, editor.uid);
+      await TC.logAudit({
+        action: 'approve_request', actor: editor,
+        targetUserId: req.userId, targetUserName: req.userName,
+        entryId: req.entryId || null, requestId: req.id,
+        before: { clockIn: req.currentClockIn || null, clockOut: req.currentClockOut || null },
+        after: { clockIn: req.proposedClockIn, clockOut: req.proposedClockOut },
+        note: req.reason,
+      });
+    } catch (e) { console.error('[TimeClock] approve failed', e); }
   };
   const reject = async (req: EditRequest) => {
     const note = window.prompt('Reason for rejecting (optional):') ?? '';
-    try { await TC.rejectRequest(req.id, editorUid, note); } catch (e) { console.error('[TimeClock] reject failed', e); }
+    try {
+      await TC.rejectRequest(req.id, editor.uid, note);
+      await TC.logAudit({
+        action: 'reject_request', actor: editor,
+        targetUserId: req.userId, targetUserName: req.userName, requestId: req.id,
+        note: note || req.reason,
+      });
+    } catch (e) { console.error('[TimeClock] reject failed', e); }
   };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
+      {/* Records / Change Log toggle */}
+      <div className="flex items-center gap-1 mb-4 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
+        {([['records', 'Records'], ['log', 'Change Log']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setManageView(id)}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${manageView === id ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {manageView === 'log' ? (
+        <ChangeLogTable rows={auditRows} />
+      ) : (
+      <>
       {/* Pending correction requests */}
       {pendingReqs.length > 0 && (
         <div className="mb-5 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-900/30 p-4">
@@ -743,7 +800,7 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
       </div>
 
       {adding && (
-        <AddEntryForm users={users} editorUid={editorUid} defaultDate={weekStart} onClose={() => setAdding(false)} />
+        <AddEntryForm users={users} editor={editor} defaultDate={weekStart} onClose={() => setAdding(false)} />
       )}
 
       {groups.length === 0 ? (
@@ -826,7 +883,7 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
                                 <Pencil size={15} />
                               </button>
                               <button
-                                onClick={() => { if (confirm('Delete this entry?')) TC.deleteEntry(e.id); }}
+                                onClick={() => doDelete(e)}
                                 className="p-1.5 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20"
                                 title="Delete"
                               >
@@ -844,16 +901,78 @@ function ManageTab({ now, editorUid }: { now: number; editorUid: string }) {
           </div>
         ))
       )}
+      </>
+      )}
+    </div>
+  );
+}
+
+// ─── Change log (immutable audit trail) ────────────────────────────────────
+function ChangeLogTable({ rows }: { rows: AuditEntry[] }) {
+  const actionMeta: Record<AuditEntry['action'], { label: string; cls: string }> = {
+    add_entry: { label: 'Added', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+    edit_entry: { label: 'Edited', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+    delete_entry: { label: 'Deleted', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' },
+    approve_request: { label: 'Approved', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
+    reject_request: { label: 'Rejected', cls: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
+  };
+  const fmtRange = (ci?: Timestamp | null, co?: Timestamp | null) =>
+    ci ? `${TC.fmtDateTime(ci)} → ${co ? TC.fmtDateTime(co) : '—'}` : '';
+
+  if (rows.length === 0) {
+    return <div className="text-center py-16 text-slate-400 dark:text-slate-500 text-sm">No changes recorded yet.</div>;
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-slate-400 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
+              <th className="px-4 py-2.5 font-medium">When</th>
+              <th className="px-2 py-2.5 font-medium">Action</th>
+              <th className="px-2 py-2.5 font-medium">Employee</th>
+              <th className="px-2 py-2.5 font-medium">Change</th>
+              <th className="px-2 py-2.5 font-medium">By</th>
+              <th className="px-4 py-2.5 font-medium">Note</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {rows.map((r) => {
+              const m = actionMeta[r.action];
+              const before = fmtRange(r.beforeClockIn, r.beforeClockOut);
+              const after = fmtRange(r.afterClockIn, r.afterClockOut);
+              return (
+                <tr key={r.id} className="align-top hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <td className="px-4 py-2.5 whitespace-nowrap text-slate-500 dark:text-slate-400">{TC.fmtDateTime(r.createdAt)}</td>
+                  <td className="px-2 py-2.5"><span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${m?.cls || ''}`}>{m?.label || r.action}</span></td>
+                  <td className="px-2 py-2.5 text-slate-700 dark:text-slate-200 whitespace-nowrap">{r.targetUserName || '—'}</td>
+                  <td className="px-2 py-2.5 text-xs">
+                    {before && <div className="text-slate-400 line-through whitespace-nowrap">{before}</div>}
+                    {after && <div className="text-indigo-600 dark:text-indigo-400 font-medium whitespace-nowrap">{after}</div>}
+                    {!before && !after && <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className="px-2 py-2.5 whitespace-nowrap">
+                    <span className="text-slate-700 dark:text-slate-200">{r.actorName || '—'}</span>
+                    {r.actorRole && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">{roleLabel(r.actorRole)}</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 max-w-[220px]">{r.note ? <span className="line-clamp-2">{r.note}</span> : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 // ─── Manager: add manual entry ─────────────────────────────────────────────
 function AddEntryForm({
-  users, editorUid, defaultDate, onClose,
+  users, editor, defaultDate, onClose,
 }: {
   users: DirectoryUser[];
-  editorUid: string;
+  editor: { uid: string; name: string; role: string };
   defaultDate: Date;
   onClose: () => void;
 }) {
@@ -872,14 +991,22 @@ function AddEntryForm({
     if (!u || saving) return;
     setSaving(true);
     try {
+      const inDate = new Date(clockIn);
+      const outDate = clockOut ? new Date(clockOut) : null;
       await TC.addManualEntry({
         userId: u.uid,
         userName: u.name,
         userEmail: u.email,
-        clockIn: new Date(clockIn),
-        clockOut: clockOut ? new Date(clockOut) : null,
+        clockIn: inDate,
+        clockOut: outDate,
         note: note.trim(),
-        editorUid,
+        editorUid: editor.uid,
+      });
+      await TC.logAudit({
+        action: 'add_entry', actor: editor,
+        targetUserId: u.uid, targetUserName: u.name,
+        after: { clockIn: Timestamp.fromDate(inDate), clockOut: outDate ? Timestamp.fromDate(outDate) : null },
+        note: note.trim(),
       });
       onClose();
     } catch (e) {

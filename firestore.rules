@@ -155,6 +155,16 @@ service cloud.firestore {
       );
     }
 
+    // ─── Time-clock change log (immutable audit trail) ──────────────────────
+    // Managers+ read and append; the recorded actor must be the caller; NOBODY
+    // (not even IT/super admin) can edit or delete — accountability by design.
+    match /time_audit/{auditId} {
+      allow read: if request.auth != null && isManagerOrAbove();
+      allow create: if request.auth != null && isManagerOrAbove()
+        && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     // ─── Presence (team "who's online") ─────────────────────────────────────
     // World-readable mirror of clock-in status; a user writes only their own.
     match /presence/{uid} {

@@ -21,6 +21,7 @@ import {
   doc,
   setDoc,
   getDocs,
+  limit,
   Timestamp,
 } from 'firebase/firestore';
 
@@ -419,6 +420,76 @@ export async function rejectRequest(reqId: string, reviewerUid: string, note?: s
   return updateDoc(doc(db, REQ, reqId), {
     status: 'rejected', reviewedBy: reviewerUid, reviewedAt: Timestamp.now(), reviewNote: note || '',
   });
+}
+
+// ─── Change log / audit trail (immutable, accountability incl. IT) ──────────
+export type AuditAction = 'add_entry' | 'edit_entry' | 'delete_entry' | 'approve_request' | 'reject_request';
+
+export interface AuditEntry {
+  id: string;
+  action: AuditAction;
+  actorUid: string;     // who performed the change
+  actorName: string;
+  actorRole: string;    // their role at the time (e.g. superadmin/manager) — incl. IT
+  targetUserId: string; // whose timesheet was affected
+  targetUserName: string;
+  entryId?: string | null;
+  requestId?: string | null;
+  beforeClockIn?: Timestamp | null;
+  beforeClockOut?: Timestamp | null;
+  afterClockIn?: Timestamp | null;
+  afterClockOut?: Timestamp | null;
+  note?: string;        // reason / rejection note
+  createdAt: Timestamp;
+}
+
+const AUDIT = 'time_audit';
+
+function mapAudit(d: any): AuditEntry {
+  return { id: d.id, ...(d.data() as Omit<AuditEntry, 'id'>) };
+}
+
+/** Append an immutable audit record (best-effort; never throws to the caller). */
+export async function logAudit(p: {
+  action: AuditAction;
+  actor: { uid: string; name: string; role: string };
+  targetUserId: string; targetUserName: string;
+  entryId?: string | null; requestId?: string | null;
+  before?: { clockIn: Timestamp | null; clockOut: Timestamp | null } | null;
+  after?: { clockIn: Timestamp | null; clockOut: Timestamp | null } | null;
+  note?: string;
+}) {
+  try {
+    await addDoc(collection(db, AUDIT), {
+      action: p.action,
+      actorUid: p.actor.uid,
+      actorName: p.actor.name || '',
+      actorRole: p.actor.role || '',
+      targetUserId: p.targetUserId || '',
+      targetUserName: p.targetUserName || '',
+      entryId: p.entryId || null,
+      requestId: p.requestId || null,
+      beforeClockIn: p.before?.clockIn || null,
+      beforeClockOut: p.before?.clockOut || null,
+      afterClockIn: p.after?.clockIn || null,
+      afterClockOut: p.after?.clockOut || null,
+      note: p.note || '',
+      createdAt: Timestamp.now(),
+    });
+  } catch (e) {
+    console.warn('[TimeClock] audit log failed', e);
+  }
+}
+
+/** The change log (newest first), capped. Managers/IT only (enforced by rules). */
+export function subscribeAudit(cb: (rows: AuditEntry[]) => void, max = 150): () => void {
+  if (!db) return () => {};
+  const q = query(collection(db, AUDIT), orderBy('createdAt', 'desc'), limit(max));
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map(mapAudit)),
+    (err) => { console.warn('[TimeClock] audit subscription error', err); cb([]); }
+  );
 }
 
 /** Directory of users for the manager's "add entry for employee" picker. */

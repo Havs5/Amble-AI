@@ -262,6 +262,10 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
 
+### 2026-06-15 — Clock In/Out: immutable Change Log (audit trail)
+- **Manage tab now has a Records / Change Log toggle.** The **Change Log** records every manager action — **Added / Edited / Deleted** entries and **Approved / Rejected** correction requests — to a new **`time_audit`** collection. Columns: **When · Action · Employee · Change (before→after) · By (name + role badge incl. IT) · Note**.
+- **Tamper-proof by design** — rules allow managers+ to **read and append only**, the recorded `actorUid` must equal the caller, and `update`/`delete` are **denied to everyone (including IT/super admin)** — so the trail can't be altered. `logAudit`/`subscribeAudit` in the service; `ManageTab` now receives `editor {uid,name,role}` and logs on each action (best-effort).
+
 ### 2026-06-15 — Brand: Amble logo mark replaces the "A" + favicon
 - New **`AmbleMark`** component inlines `public/Amble-Logo.svg` as a `currentColor` path (recolorable). Swapped the plain "A" for it (white) in the **sidebar logo**, **login** (desktop + mobile), and **splash screen**. Offline sidebar square darkened to `slate-400` so the white mark reads.
 - **Favicon** rebuilt: `public/favicon.svg` is now the gradient rounded square + the white logo path (replacing the old "A" text). `.ico` fallback unchanged.

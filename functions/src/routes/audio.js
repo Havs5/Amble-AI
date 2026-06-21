@@ -7,14 +7,14 @@
  *
  * ── HIPAA / PHI note ─────────────────────────────────────────────────────────
  * Audio content can carry PHI. Vertex AI is inside Google Cloud's HIPAA BAA; the
- * OpenAI API is not (without an OpenAI BAA). `PHI_SAFE_MODE` (default on) routes
- * the text **rewrite** path to Vertex Gemini. **Transcription + TTS are NOT yet
- * migrated**: Gemini multimodal does not accept the browser's webm/opus audio,
- * so a clean migration needs **Cloud Speech-to-Text** + **Cloud Text-to-Speech**,
- * which must be enabled on amble-ai first:
- *   gcloud services enable speech.googleapis.com texttospeech.googleapis.com --project=amble-ai
- * Until then these two stay on OpenAI (transcription's default is the free
- * browser Web Speech API anyway; Whisper is opt-in, and TTS has no live caller).
+ * OpenAI API is not (without an OpenAI BAA).
+ *   • Rewrite — Vertex Gemini is PRIMARY; OpenAI is the backup on error (unless
+ *     PHI_SAFE_MODE='true', which keeps it Vertex-only).
+ *   • Transcription (Whisper) — stays on OpenAI **by owner choice** (kept as the
+ *     opt-in dictation engine; the default dictation is the free browser Web
+ *     Speech API). Covering this for PHI needs an OpenAI BAA, or a later move to
+ *     Cloud Speech-to-Text (Gemini can't take the browser's webm/opus).
+ *   • TTS — OpenAI tts-1; no live UI caller today.
  * See SOT §10.2 P0 / ARCHITECTURE §16.
  */
 
@@ -24,8 +24,9 @@ const fs = require('fs');
 const nodePath = require('path');
 const os = require('os');
 
-// Keep all PHI-bearing AI on Vertex (in-BAA) unless explicitly disabled.
-const PHI_SAFE_MODE = process.env.PHI_SAFE_MODE !== 'false';
+// Strict mode (off by default): when 'true', PHI-bearing text never touches
+// OpenAI. Default off keeps OpenAI as the rewrite backup (owner's choice).
+const PHI_SAFE_MODE = process.env.PHI_SAFE_MODE === 'true';
 const VERTEX_PROJECT = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'amble-ai';
 
 // Light text edit via Vertex Gemini (stable GA model, regional). Used by the
@@ -147,16 +148,19 @@ async function handleRewrite(req, res, { writeJson, readJsonBody }) {
       ? 'Make the following reply shorter and more concise.'
       : 'Make the following reply firmer and more authoritative, while remaining professional.';
 
-    // PHI-safe: reply text (potential PHI) is rewritten on Vertex Gemini, in-BAA.
-    if (PHI_SAFE_MODE) {
+    // Vertex Gemini is PRIMARY (reply text can be PHI → keep it in-BAA).
+    try {
       const newReply = await geminiRewrite(instruction, replyText);
       return writeJson(res, 200, { reply: newReply });
+    } catch (vErr) {
+      console.warn('[Rewrite] Vertex path failed:', vErr?.message);
+      // Strict mode never falls back to OpenAI.
+      if (PHI_SAFE_MODE || !process.env.OPENAI_API_KEY) {
+        return writeJson(res, 200, { reply: replyText }); // graceful: return original
+      }
     }
 
-    // Legacy path (only when PHI-safe mode is explicitly disabled).
-    if (!process.env.OPENAI_API_KEY) {
-      return writeJson(res, 500, { error: 'OPENAI_API_KEY is missing' });
-    }
+    // Backup: OpenAI (only when not in strict PHI-safe mode).
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',

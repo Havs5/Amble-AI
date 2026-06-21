@@ -23,12 +23,15 @@ const VERTEX_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'global';
 
 // ── HIPAA / PHI-safe mode ───────────────────────────────────────────────────
 // Chat content can carry PHI. Vertex AI is inside Google Cloud's HIPAA BAA;
-// the OpenAI API is NOT (unless an OpenAI BAA is executed). When PHI_SAFE_MODE
-// is on (default), ALL chat stays on Vertex — the resilience fallback retries a
-// STABLE Vertex model instead of OpenAI, and an explicitly-selected OpenAI model
-// is routed to Vertex too. Set PHI_SAFE_MODE='false' to restore OpenAI usage
-// (only after an OpenAI BAA is in place). See SOT §10.2 P0.
-const PHI_SAFE_MODE = process.env.PHI_SAFE_MODE !== 'false';
+// the OpenAI API is NOT (unless an OpenAI BAA is executed).
+//   • DEFAULT (PHI_SAFE_MODE off): Vertex is PRIMARY, OpenAI is the automatic
+//     BACKUP — if Gemini errors, chat falls back to OpenAI so it never hard-fails.
+//     (Owner's choice to keep OpenAI as a safety net; needs an OpenAI BAA for PHI.)
+//   • STRICT (PHI_SAFE_MODE='true'): ALL chat stays on Vertex — the fallback
+//     retries a stable Vertex model instead of OpenAI, and explicit OpenAI picks
+//     are routed to Vertex. Turn this on once an OpenAI BAA is not desired.
+// See SOT §10.2 P0.
+const PHI_SAFE_MODE = process.env.PHI_SAFE_MODE === 'true';
 // Stable, GA Vertex model used as the in-BAA fallback (preview IDs can rotate
 // out; this one won't). Confirmed available on the regional us-central1 endpoint.
 const VERTEX_FALLBACK_MODEL = 'gemini-2.5-flash';
@@ -462,7 +465,8 @@ async function handleChat(req, res, { adminDb, writeJson, readJsonBody }) {
   try {
     const body = await readJsonBody(req);
     const messages = body.messages;
-    const originalModel = body.model || 'gpt-4o';
+    // Default to Vertex Gemini (primary); OpenAI is only the fallback (see PHI_SAFE_MODE).
+    const originalModel = body.model || 'gemini-3-flash-preview';
     let model = normalizeModel(originalModel);
     
     const stream = !!body.stream;

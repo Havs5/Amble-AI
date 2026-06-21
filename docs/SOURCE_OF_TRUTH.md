@@ -127,7 +127,7 @@ The single React shell (`app/page.tsx` → `FeatureRouter`) switches between sur
 | `*_GOOGLE_DRIVE_ROOT_FOLDER_ID` | KB root folder | `.env.local` |
 | `KB_*` | KB sync/relevance/vision tuning | `.env.local` |
 | `WEB_SEARCH_PROVIDER` | `google` \| `tavily` | `.env.local` |
-| `PHI_SAFE_MODE` | HIPAA: keep all chat on Vertex (in-BAA); `'false'` re-enables OpenAI. **Default on** when unset. | `functions/.env` (optional) |
+| `PHI_SAFE_MODE` | HIPAA strict mode: `'true'` keeps all chat/rewrite on Vertex (no OpenAI). **Default off** (Vertex primary, OpenAI is the automatic backup + Whisper). | `functions/.env` (optional) |
 
 > 🔒 **Hygiene:** real API keys currently live in `.env.local` (gitignored — good) and the KB service-account key file `amble-kb-sync-key.json` (gitignored). Do not commit either. Consider rotating any key that ever touched a commit.
 
@@ -263,6 +263,15 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-21 — HIPAA step 3: OpenAI kept as backup + Whisper (PHI-safe mode now opt-in)
+- **Owner decision: keep OpenAI as the automatic backup + the Whisper engine.** Reverted the strict default. **`PHI_SAFE_MODE` is now OFF by default** (`=== 'true'` to enable). Behavior:
+  - **Chat** — Vertex Gemini PRIMARY; if Gemini errors, **falls back to OpenAI `gpt-5-mini`** (the safety net). `chat.js` default model also changed `gpt-4o`→`gemini-3-flash-preview` so Vertex is primary even for model-less requests; OpenAI is strictly the fallback.
+  - **Rewrite** — Vertex Gemini PRIMARY with **OpenAI `gpt-4o-mini` backup** on error (`audio.js`).
+  - **Transcription** — **stays on OpenAI Whisper by choice** (opt-in dictation; default dictation is still the free browser Web Speech API).
+  - Strict Vertex-only mode is still available anytime via `PHI_SAFE_MODE='true'`.
+- **HIPAA implication:** because OpenAI is intentionally in the loop (chat backup + Whisper), PHI compliance now hinges on an **OpenAI BAA** (or flipping `PHI_SAFE_MODE='true'` for the strict path). Updated §10.2 accordingly.
+- Model picker stays Gemini-only (OpenAI is an automatic backup, not a manual pick). Build + deploy + push.
 
 ### 2026-06-21 — HIPAA step 2: Rewrite→Vertex, OpenAI hidden from picker; transcription/TTS blocked on API enable
 - **Billing "Make Shorter/Firmer" (rewrite) moved to Vertex Gemini** (`functions/src/routes/audio.js` `handleRewrite` → `gemini-2.5-flash`, us-central1) under `PHI_SAFE_MODE`, so reply text (potential PHI) stays in-BAA. OpenAI path kept only for `PHI_SAFE_MODE='false'`.
@@ -648,7 +657,7 @@ Copy this block into §6 (and later §7) for each new feature/upgrade.
 **P0 — must close before handling real PHI**
 1. **Sign + scope BAAs (the #1 item).**
    - **Google Cloud / Firebase** — Google *will* sign a BAA covering Firestore, Cloud Functions, Cloud Storage, Hosting, **and Vertex AI**. Confirm it's executed for the `amble-ai` org and that we use **only HIPAA-covered services**. (Vertex Gemini — our default chat path — is covered; this is a big reason chat runs on Vertex.)
-   - **OpenAI** — the standard API is **not** HIPAA-eligible **without an OpenAI BAA** (available for API/Enterprise on request). ✅ **Chat + Billing rewrite are now PHI-safe by default** (2026-06-21): `PHI_SAFE_MODE` (on unless `='false'`) keeps `/api/chat` and `/api/rewrite` on Vertex (chat fallback retries `gemini-2.5-flash`, explicit OpenAI picks route to Vertex; rewrite uses `gemini-2.5-flash`). OpenAI models are also hidden from the picker. **⚠️ Still on OpenAI — transcription (Whisper) + TTS (tts-1):** Gemini can't take the browser's webm/opus, so these need **Cloud Speech-to-Text + Cloud Text-to-Speech**, which are **not yet enabled** (blocked: gcloud `serviceusage` denied on the ADC quota project `vdentalx`). **Owner unblock:** `gcloud services enable speech.googleapis.com texttospeech.googleapis.com --project=amble-ai`, then flip the audio handlers (or execute an OpenAI BAA). Lower urgency: dictation defaults to the free **browser** Web Speech API (Whisper opt-in); TTS has no live caller.
+   - **OpenAI** — the standard API is **not** HIPAA-eligible **without an OpenAI BAA** (available for API/Enterprise on request). **Owner decision (2026-06-21): keep OpenAI as the chat/rewrite backup and the Whisper engine** → **an OpenAI BAA is the required path** (rather than removing OpenAI). Current routing: Vertex is PRIMARY for chat + rewrite; **OpenAI is the automatic fallback** (and Whisper for opt-in dictation). The strict Vertex-only path still exists (`PHI_SAFE_MODE='true'`) for if/when you'd rather not rely on OpenAI. TTS (`tts-1`) is unused. *(Optional future: move Whisper→Cloud Speech-to-Text + TTS→Cloud Text-to-Speech — needs `gcloud services enable speech.googleapis.com texttospeech.googleapis.com --project=amble-ai`, currently blocked by a serviceusage permission on the ADC quota project.)*
    - **Slack + the Apps Script relay** (new Slack→News pipeline) — Slack offers a BAA only on **Enterprise Grid**. News posts shouldn't contain PHI, but staff *could* paste it. Keep PHI out of Slack/news, or get the BAA; document the relay (`SLACK_RELAY_URL` → Apps Script) as a subprocessor path.
    - **Tavily / Google Custom Search** (web search) and the **SMTP email** provider — unlikely to sign BAAs. **Never send PHI** to web search; ensure welcome/reset emails carry **no PHI** (they currently don't).
    - **Action:** maintain a **subprocessor inventory** (vendor · data · BAA status) in this section.

@@ -559,7 +559,7 @@ flowchart TD
         VTX["Vertex AI — Gemini 3<br/>(default chat + embeddings)"]
     end
     subgraph External["⚠️ Outside the GCP BAA — need own BAA or no PHI"]
-        OAI["OpenAI<br/>gpt-5-mini fallback · Whisper · TTS"]
+        OAI["OpenAI<br/>Whisper transcription · TTS<br/>(chat + rewrite now on Vertex)"]
         SLK["Slack + Apps Script relay<br/>(news pipeline)"]
         WEB["Tavily / Google CSE<br/>(web search)"]
         SMTP["SMTP email<br/>(welcome / reset)"]
@@ -573,6 +573,6 @@ flowchart TD
 
 **Safeguards already in code:** encryption at rest/in transit (GCP default) · unique-user auth + pre-registration gate · 3-tier RBAC enforced in UI **and** Firestore rules · automatic logoff (12 h) · immutable append-only audit trails (`time_audit`, `news_audit`) · de-identified `usage_logs` (no content) · optional Billing PII redaction.
 
-**PHI-safe mode (`PHI_SAFE_MODE`, default ON):** `chat.js` keeps `/api/chat` entirely on Vertex — the resilience fallback retries `gemini-2.5-flash` (regional, in-BAA) instead of OpenAI, and explicitly-selected OpenAI models are routed to Vertex. Fails closed rather than leaking PHI. Set `='false'` only after an OpenAI BAA exists. **Audio (`audio.js`: Whisper/TTS/rewrite) is still on OpenAI** — next to migrate.
+**PHI-safe mode (`PHI_SAFE_MODE`, default ON):** keeps PHI-bearing text on Vertex (in-BAA). `chat.js` `/api/chat` — fallback retries `gemini-2.5-flash` instead of OpenAI, explicit OpenAI picks route to Vertex, fails closed. `audio.js` `/api/rewrite` — Billing Shorter/Firmer runs on `gemini-2.5-flash`. OpenAI models are hidden from the model picker. Set `='false'` only after an OpenAI BAA exists. **Still on OpenAI: `/api/transcribe` (Whisper) + `/api/audio/speech` (tts-1)** — Gemini can't take the browser's webm/opus, so these need **Cloud Speech-to-Text + Cloud Text-to-Speech** enabled first (`gcloud services enable speech.googleapis.com texttospeech.googleapis.com --project=amble-ai`; currently blocked by a `serviceusage` permission on the ADC quota project). Lower urgency — dictation defaults to the browser Web Speech API; TTS has no live caller.
 
-**Top architectural gaps:** (1) **BAAs** — confirm the GCP BAA and use only covered services; chat is now Vertex-only by default, but **OpenAI audio (Whisper/TTS/rewrite)** still sits *outside* it (BAA or migrate to Google). (2) **Server-side ID-token auth** — most function routes trust a body `userId` and `/api/admin/*` has none (see §8 ⚠️); verify the Firebase ID token on any PHI route. (3) **PHI-access audit log** — extend the `time_audit` immutability pattern to a `phi_access_log` (6-yr retention). Full P0/P1/P2 plan in [SOT §10.2](./SOURCE_OF_TRUTH.md#102-gaps--how-to-improve-prioritized).
+**Top architectural gaps:** (1) **BAAs** — confirm the GCP BAA and use only covered services; chat + rewrite are now Vertex-only by default, but **OpenAI Whisper transcription + TTS** still sit *outside* it (enable the two Cloud audio APIs + flip the handlers, or sign an OpenAI BAA). (2) **Server-side ID-token auth** — most function routes trust a body `userId` and `/api/admin/*` has none (see §8 ⚠️); verify the Firebase ID token on any PHI route. (3) **PHI-access audit log** — extend the `time_audit` immutability pattern to a `phi_access_log` (6-yr retention). Full P0/P1/P2 plan in [SOT §10.2](./SOURCE_OF_TRUTH.md#102-gaps--how-to-improve-prioritized).

@@ -1,3 +1,5 @@
+// PHI-safe: only Vertex-served (Gemini) models are offered. OpenAI options are
+// intentionally hidden — PHI-safe mode routes all chat to Vertex anyway (SOT §10).
 export const MODEL_CATEGORIES = [
   {
     label: 'Smart Auto-Routing (Recommended)',
@@ -8,25 +10,18 @@ export const MODEL_CATEGORIES = [
   {
     label: 'Fast & Cost-Efficient',
     models: [
-      { id: 'gpt-5-nano', name: 'GPT-5 Nano ⚡' },
-      { id: 'gpt-5-mini', name: 'GPT-5 Mini' },
       { id: 'gemini-3-flash', name: 'Gemini 3 Flash ⚡ NEW' },
     ]
   },
   {
     label: 'High Intelligence (Frontier)',
     models: [
-      { id: 'gpt-5.2', name: 'GPT-5.2 🔥 NEW' },
-      { id: 'gpt-5', name: 'GPT-5' },
       { id: 'gemini-3-pro', name: 'Gemini 3.1 Pro 🧠 NEW' },
     ]
   },
   {
     label: 'Reasoning & Deep Thinking',
     models: [
-      { id: 'o4-mini', name: 'o4 Mini (Fast Reasoning)' },
-      { id: 'o3', name: 'o3 (Reasoning)' },
-      { id: 'o3-pro', name: 'o3 Pro 🧠' },
       { id: 'gemini-3-pro', name: 'Gemini 3.1 Pro (Deep Think)' },
     ]
   }

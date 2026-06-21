@@ -1,14 +1,44 @@
 /**
  * Audio Route Handler
- * 
- * Handles /api/transcribe endpoint for audio transcription.
- * Uses OpenAI Whisper with optional GPT correction.
+ *
+ * /api/transcribe  — speech-to-text (OpenAI Whisper; see PHI note below)
+ * /api/rewrite     — Shorter/Firmer reply edits (Vertex Gemini when PHI-safe)
+ * /api/audio/speech— text-to-speech (OpenAI tts-1; see PHI note below)
+ *
+ * ── HIPAA / PHI note ─────────────────────────────────────────────────────────
+ * Audio content can carry PHI. Vertex AI is inside Google Cloud's HIPAA BAA; the
+ * OpenAI API is not (without an OpenAI BAA). `PHI_SAFE_MODE` (default on) routes
+ * the text **rewrite** path to Vertex Gemini. **Transcription + TTS are NOT yet
+ * migrated**: Gemini multimodal does not accept the browser's webm/opus audio,
+ * so a clean migration needs **Cloud Speech-to-Text** + **Cloud Text-to-Speech**,
+ * which must be enabled on amble-ai first:
+ *   gcloud services enable speech.googleapis.com texttospeech.googleapis.com --project=amble-ai
+ * Until then these two stay on OpenAI (transcription's default is the free
+ * browser Web Speech API anyway; Whisper is opt-in, and TTS has no live caller).
+ * See SOT §10.2 P0 / ARCHITECTURE §16.
  */
 
 const OpenAI = require('openai');
+const { GoogleGenAI } = require('@google/genai');
 const fs = require('fs');
 const nodePath = require('path');
 const os = require('os');
+
+// Keep all PHI-bearing AI on Vertex (in-BAA) unless explicitly disabled.
+const PHI_SAFE_MODE = process.env.PHI_SAFE_MODE !== 'false';
+const VERTEX_PROJECT = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'amble-ai';
+
+// Light text edit via Vertex Gemini (stable GA model, regional). Used by the
+// PHI-safe rewrite path so reply text never leaves the GCP BAA boundary.
+async function geminiRewrite(instruction, replyText) {
+  const ai = new GoogleGenAI({ vertexai: true, project: VERTEX_PROJECT, location: 'us-central1' });
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: [{ role: 'user', parts: [{ text: `${instruction}\n\nOriginal Reply:\n${replyText}\n\nOutput ONLY the rewritten reply, nothing else.` }] }],
+    config: { temperature: 0.3, maxOutputTokens: 2048 },
+  });
+  return response.text || replyText;
+}
 
 // ============================================================================
 // Main Handler
@@ -101,10 +131,6 @@ async function handleTranscribe(req, res, { writeJson, readJsonBody }) {
 
 async function handleRewrite(req, res, { writeJson, readJsonBody }) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return writeJson(res, 500, { error: 'OPENAI_API_KEY is missing' });
-    }
-    
     const body = await readJsonBody(req);
     const replyText = body.replyText;
     const rewriteMode = body.rewriteMode;
@@ -112,7 +138,7 @@ async function handleRewrite(req, res, { writeJson, readJsonBody }) {
     if (typeof replyText !== 'string') {
       return writeJson(res, 400, { error: 'replyText is required' });
     }
-    
+
     if (rewriteMode !== 'Shorter' && rewriteMode !== 'Firmer') {
       return writeJson(res, 200, { reply: replyText });
     }
@@ -121,6 +147,16 @@ async function handleRewrite(req, res, { writeJson, readJsonBody }) {
       ? 'Make the following reply shorter and more concise.'
       : 'Make the following reply firmer and more authoritative, while remaining professional.';
 
+    // PHI-safe: reply text (potential PHI) is rewritten on Vertex Gemini, in-BAA.
+    if (PHI_SAFE_MODE) {
+      const newReply = await geminiRewrite(instruction, replyText);
+      return writeJson(res, 200, { reply: newReply });
+    }
+
+    // Legacy path (only when PHI-safe mode is explicitly disabled).
+    if (!process.env.OPENAI_API_KEY) {
+      return writeJson(res, 500, { error: 'OPENAI_API_KEY is missing' });
+    }
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -132,7 +168,7 @@ async function handleRewrite(req, res, { writeJson, readJsonBody }) {
 
     const newReply = completion.choices?.[0]?.message?.content || replyText;
     return writeJson(res, 200, { reply: newReply });
-    
+
   } catch (e) {
     console.error('Error in rewrite handler:', e);
     return writeJson(res, 500, { error: e.message || 'Failed to rewrite draft' });

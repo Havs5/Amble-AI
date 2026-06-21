@@ -29,6 +29,9 @@ export interface ModelCategory {
 }
 
 // Amble AI Chat Models
+// NOTE: Only Vertex-served (Gemini) models are offered. PHI-safe mode keeps all
+// chat on Vertex (inside the GCP BAA), so OpenAI options are intentionally hidden
+// from the picker — they'd be transparently routed to Vertex anyway. See SOT §10.
 export const AMBLE_AI_MODEL_CATEGORIES: ModelCategory[] = [
   {
     label: 'Instant',
@@ -37,7 +40,6 @@ export const AMBLE_AI_MODEL_CATEGORIES: ModelCategory[] = [
     iconColor: 'text-amber-500',
     bgGradient: 'from-amber-500/10 to-orange-500/10',
     models: [
-      { id: 'gpt-4o-mini', name: 'GPT-5 Mini', provider: 'openai', description: 'Fast & efficient', badge: 'fast', contextWindow: 128000, tier: 'standard' },
       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', provider: 'google', description: 'Blazing speed', badge: 'popular', contextWindow: 1000000, tier: 'standard' },
     ]
   },
@@ -48,14 +50,12 @@ export const AMBLE_AI_MODEL_CATEGORIES: ModelCategory[] = [
     iconColor: 'text-indigo-500',
     bgGradient: 'from-indigo-500/10 to-purple-500/10',
     models: [
-      { id: 'gpt-4o', name: 'GPT-5', provider: 'openai', description: 'Advanced reasoning', badge: 'popular', contextWindow: 128000, tier: 'premium' },
       { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', provider: 'google', description: 'Deep analysis', badge: 'new', contextWindow: 2000000, tier: 'premium' },
-      { id: 'o1', name: 'o3 Reasoning', provider: 'openai', description: 'Complex problem solving', badge: 'pro', contextWindow: 128000, tier: 'premium' },
     ]
   }
 ];
 
-// Billing View Models (Patient Experience)
+// Billing View Models (Patient Experience) — Vertex-only (PHI-safe; see above)
 export const BILLING_MODEL_CATEGORIES: ModelCategory[] = [
   {
     label: 'Quick Response',
@@ -65,7 +65,6 @@ export const BILLING_MODEL_CATEGORIES: ModelCategory[] = [
     bgGradient: 'from-emerald-500/10 to-teal-500/10',
     models: [
       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', provider: 'google', description: 'Instant insights', badge: 'fast', tier: 'standard' },
-      { id: 'gpt-4o-mini', name: 'GPT-5 Mini', provider: 'openai', description: 'Quick analysis', badge: 'popular', tier: 'standard' },
     ]
   },
   {
@@ -76,7 +75,6 @@ export const BILLING_MODEL_CATEGORIES: ModelCategory[] = [
     bgGradient: 'from-violet-500/10 to-purple-500/10',
     models: [
       { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', provider: 'google', description: 'Thorough review', badge: 'new', tier: 'premium' },
-      { id: 'gpt-4o', name: 'GPT-5', provider: 'openai', description: 'Expert analysis', badge: 'pro', tier: 'premium' },
     ]
   }
 ];

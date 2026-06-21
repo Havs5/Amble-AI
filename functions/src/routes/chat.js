@@ -21,6 +21,19 @@ const VERTEX_PROJECT = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PR
 // Latest Gemini (3.x) is served on the Vertex "global" endpoint, not regional.
 const VERTEX_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'global';
 
+// ── HIPAA / PHI-safe mode ───────────────────────────────────────────────────
+// Chat content can carry PHI. Vertex AI is inside Google Cloud's HIPAA BAA;
+// the OpenAI API is NOT (unless an OpenAI BAA is executed). When PHI_SAFE_MODE
+// is on (default), ALL chat stays on Vertex — the resilience fallback retries a
+// STABLE Vertex model instead of OpenAI, and an explicitly-selected OpenAI model
+// is routed to Vertex too. Set PHI_SAFE_MODE='false' to restore OpenAI usage
+// (only after an OpenAI BAA is in place). See SOT §10.2 P0.
+const PHI_SAFE_MODE = process.env.PHI_SAFE_MODE !== 'false';
+// Stable, GA Vertex model used as the in-BAA fallback (preview IDs can rotate
+// out; this one won't). Confirmed available on the regional us-central1 endpoint.
+const VERTEX_FALLBACK_MODEL = 'gemini-2.5-flash';
+const VERTEX_FALLBACK_LOCATION = 'us-central1';
+
 // ============================================================================
 // Model Mapping
 // ============================================================================
@@ -198,9 +211,11 @@ async function executeToolCall(toolName, args) {
 // Gemini Chat Handler
 // ============================================================================
 
-async function handleGeminiChat(req, res, { adminDb, messages, model, stream, userId, useDeepThinking, disableWebTools }) {
+async function handleGeminiChat(req, res, { adminDb, messages, model, stream, userId, useDeepThinking, disableWebTools, location }) {
   // Vertex AI client (ADC auth via the function's runtime service account).
-  const ai = new GoogleGenAI({ vertexai: true, project: VERTEX_PROJECT, location: VERTEX_LOCATION });
+  // `location` defaults to the global endpoint (Gemini 3.x); the in-BAA fallback
+  // passes a regional endpoint where the stable GA model is served.
+  const ai = new GoogleGenAI({ vertexai: true, project: VERTEX_PROJECT, location: location || VERTEX_LOCATION });
 
   // Combine ALL system messages so KB context injected as a later system msg isn't lost
   const allSystemMsgs = messages.filter(m => m?.role === 'system');
@@ -620,10 +635,25 @@ async function handleChat(req, res, { adminDb, writeJson, readJsonBody }) {
     if (isProbablyGeminiModel(model)) {
       result = await handleGeminiChat(req, res, { adminDb, messages, model, stream, userId, useDeepThinking, disableWebTools });
       // Resilience: if Vertex/Gemini errors (e.g. a preview model rotated out or
-      // a transient Vertex issue), fall back to OpenAI so chat never hard-fails.
+      // a transient Vertex issue), retry so chat never hard-fails. In PHI-safe
+      // mode the retry stays on Vertex (a stable GA model) so chat content never
+      // leaves the GCP BAA boundary; otherwise it falls back to OpenAI.
       if (result.status && result.error) {
-        console.warn(`[Chat] Gemini path failed (${result.error}) — falling back to OpenAI`);
-        result = await handleOpenAIChat(req, res, { adminDb, messages, model: 'gpt-5-mini', stream, userId, disableWebTools });
+        if (PHI_SAFE_MODE) {
+          console.warn(`[Chat] Gemini ${model} failed (${result.error}) — PHI-safe Vertex fallback → ${VERTEX_FALLBACK_MODEL}`);
+          result = await handleGeminiChat(req, res, { adminDb, messages, model: VERTEX_FALLBACK_MODEL, stream, userId, useDeepThinking, disableWebTools, location: VERTEX_FALLBACK_LOCATION });
+        } else {
+          console.warn(`[Chat] Gemini path failed (${result.error}) — falling back to OpenAI`);
+          result = await handleOpenAIChat(req, res, { adminDb, messages, model: 'gpt-5-mini', stream, userId, disableWebTools });
+        }
+      }
+    } else if (PHI_SAFE_MODE) {
+      // A non-Gemini (OpenAI) model was explicitly selected. PHI-safe mode keeps
+      // chat inside the GCP BAA: serve it from Vertex Gemini instead of OpenAI.
+      console.warn(`[Chat] PHI-safe mode: routing '${model}' to Vertex (gemini-3-flash-preview) instead of OpenAI`);
+      result = await handleGeminiChat(req, res, { adminDb, messages, model: 'gemini-3-flash-preview', stream, userId, useDeepThinking, disableWebTools });
+      if (result.status && result.error) {
+        result = await handleGeminiChat(req, res, { adminDb, messages, model: VERTEX_FALLBACK_MODEL, stream, userId, useDeepThinking, disableWebTools, location: VERTEX_FALLBACK_LOCATION });
       }
     } else {
       result = await handleOpenAIChat(req, res, { adminDb, messages, model, stream, userId, disableWebTools });

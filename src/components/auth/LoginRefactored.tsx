@@ -145,7 +145,7 @@ export function LoginRefactored() {
               { icon: '🔍', label: 'Knowledge RAG' },
               { icon: '🎤', label: 'Voice Dictation' },
               { icon: '📊', label: 'Billing CX' },
-              { icon: '🔒', label: 'HIPAA Ready' },
+              { icon: '🔒', label: 'Secure by Design' },
             ].map((feature) => (
               <div key={feature.label} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded-full border border-white/15 text-white text-xs font-medium">
                 <span className="text-sm">{feature.icon}</span>

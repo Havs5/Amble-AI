@@ -127,6 +127,7 @@ The single React shell (`app/page.tsx` → `FeatureRouter`) switches between sur
 | `*_GOOGLE_DRIVE_ROOT_FOLDER_ID` | KB root folder | `.env.local` |
 | `KB_*` | KB sync/relevance/vision tuning | `.env.local` |
 | `WEB_SEARCH_PROVIDER` | `google` \| `tavily` | `.env.local` |
+| `PHI_SAFE_MODE` | HIPAA: keep all chat on Vertex (in-BAA); `'false'` re-enables OpenAI. **Default on** when unset. | `functions/.env` (optional) |
 
 > 🔒 **Hygiene:** real API keys currently live in `.env.local` (gitignored — good) and the KB service-account key file `amble-kb-sync-key.json` (gitignored). Do not commit either. Consider rotating any key that ever touched a commit.
 
@@ -262,6 +263,15 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-21 — HIPAA step 1: PHI-safe chat (Vertex-only) + remove "HIPAA Ready" login claim
+- **Removed the unverified "HIPAA Ready" badge from the login page** (`LoginRefactored.tsx`) — replaced with the truthful **"Secure by Design"**. We are not making a HIPAA claim until BAAs + the §10.2 P0 items are done. (The "End-to-End Encrypted" footer line is also technically loose — it's TLS + encryption-at-rest, not true E2E; flagged for a later wording pass.)
+- **PHI-safe mode (default ON) keeps all chat inside Google Cloud's BAA boundary** (§10.2 P0 #1, chat path). Chat content can be PHI; **Vertex AI is HIPAA-eligible, the OpenAI API is not** (without an OpenAI BAA). `functions/src/routes/chat.js`:
+  - New env `PHI_SAFE_MODE` (`!== 'false'` → **on by default**, no secret needed).
+  - **Resilience fallback no longer goes to OpenAI** — when a Gemini preview model errors/rotates, it now retries a **stable GA Vertex model `gemini-2.5-flash`** (regional `us-central1`, where it's served). `handleGeminiChat` gained an optional `location` param for this.
+  - **Explicitly-selected OpenAI models are routed to Vertex** (`gemini-3-flash-preview`, then the 2.5 fallback) while PHI-safe mode is on, so no chat content reaches OpenAI at all. Fails **closed** (surfaces an error) rather than leaking PHI if both Vertex models fail.
+  - Set `PHI_SAFE_MODE='false'` to restore OpenAI usage **only after** an OpenAI BAA is executed.
+  - **Behavioral note:** with this on, picking a GPT model in the chat UI is now answered by Gemini. **Next step:** hide OpenAI options from the model picker, and migrate the **audio paths still on OpenAI** — Whisper transcription, the dictation GPT-correction, Billing rewrite, and TTS (`functions/src/routes/audio.js`) — to Google equivalents (Vertex Gemini / Cloud Speech-to-Text / Cloud TTS).
 
 ### 2026-06-21 — Usage Report: faster, aligned filters, accurate pricing + HIPAA posture doc
 - **Speed (no data lost).** The report fetched up to 10k rows on every open and filtered the range in-memory, which was slow. `UsageReport.tsx` now **queries only the selected window server-side** (`where('timestamp','>=',cutoff)` for 24h/7d/30d; All-Time still caps at Firestore's max `limit(10000)`) and keeps a **per-range in-memory cache (2-min TTL, `logsCacheRef`)** so switching ranges is instant after first load. **Refresh** and the data-clearing actions (`executeReset`, `handleClearTestData`) bust the cache + force a re-fetch. The in-memory `timeFilteredLogs` memo is retained so all derived stats/charts stay correct.
@@ -633,7 +643,7 @@ Copy this block into §6 (and later §7) for each new feature/upgrade.
 **P0 — must close before handling real PHI**
 1. **Sign + scope BAAs (the #1 item).**
    - **Google Cloud / Firebase** — Google *will* sign a BAA covering Firestore, Cloud Functions, Cloud Storage, Hosting, **and Vertex AI**. Confirm it's executed for the `amble-ai` org and that we use **only HIPAA-covered services**. (Vertex Gemini — our default chat path — is covered; this is a big reason chat runs on Vertex.)
-   - **OpenAI** — the chat handler's **`gpt-5-mini` fallback**, Whisper transcription, and TTS hit the OpenAI API. The standard API is **not** HIPAA-eligible **without an OpenAI BAA** (available for API/Enterprise on request). Either **execute an OpenAI BAA** or **route all PHI-bearing paths to Vertex only** (and gate the OpenAI fallback off for PHI).
+   - **OpenAI** — the standard API is **not** HIPAA-eligible **without an OpenAI BAA** (available for API/Enterprise on request). ✅ **Chat is now PHI-safe by default** (2026-06-21): `PHI_SAFE_MODE` (on unless `='false'`) keeps `/api/chat` entirely on Vertex — the fallback retries `gemini-2.5-flash` (not OpenAI) and explicit OpenAI model picks are routed to Vertex. **Still on OpenAI:** Whisper transcription + dictation correction + Billing rewrite + TTS (`functions/src/routes/audio.js`) — migrate these to Google (Vertex Gemini / Cloud Speech-to-Text / Cloud TTS) **or** execute an OpenAI BAA before sending PHI through them.
    - **Slack + the Apps Script relay** (new Slack→News pipeline) — Slack offers a BAA only on **Enterprise Grid**. News posts shouldn't contain PHI, but staff *could* paste it. Keep PHI out of Slack/news, or get the BAA; document the relay (`SLACK_RELAY_URL` → Apps Script) as a subprocessor path.
    - **Tavily / Google Custom Search** (web search) and the **SMTP email** provider — unlikely to sign BAAs. **Never send PHI** to web search; ensure welcome/reset emails carry **no PHI** (they currently don't).
    - **Action:** maintain a **subprocessor inventory** (vendor · data · BAA status) in this section.

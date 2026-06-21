@@ -1,6 +1,6 @@
 # Amble AI — Source of Truth (SOT)
 
-> **Last updated:** 2026-06-16
+> **Last updated:** 2026-06-21
 > **Companion doc:** [ARCHITECTURE.md](./ARCHITECTURE.md) — how the system is built (with flowcharts).
 > **Status:** This is the **living** record for Amble AI. Every feature, upgrade, decision, and deployment is tracked here from idea → plan → build → ship. If it isn't in this file, it isn't "done."
 
@@ -251,6 +251,7 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 - [ ] **Image / Video generation (rebuild)** — removed 2026-06-14. If reintroduced, build as a dedicated surface on Vertex: Imagen `imagen-4.0-generate-001` + Veo `veo-3.0-generate-001` (regional `us-central1`), and Gemini image `gemini-3.1-flash-image` (global). Model IDs already probed (§8). Would re-add a route + a sidebar entry + the `accessStudio`-style gating.
 
 ### Ideas / parking lot
+- [ ] **Recompute historical usage costs** — a one-click admin pass to re-stamp `cost` on existing `usage_logs` with the corrected pricing (Gemini 3 was 5–7× under-priced before 2026-06-21; old rows keep their old `cost`). Offered to owner; not yet requested.
 - [ ] Wire `web_extract` agent tool (available, unused).
 - [ ] Real-time voice (capability flag `realtimeVoice` exists, unimplemented).
 - [ ] Per-instance rate limiting → shared (Firestore/Redis) so limits survive cold starts.
@@ -261,6 +262,12 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-21 — Usage Report: faster, aligned filters, accurate pricing + HIPAA posture doc
+- **Speed (no data lost).** The report fetched up to 10k rows on every open and filtered the range in-memory, which was slow. `UsageReport.tsx` now **queries only the selected window server-side** (`where('timestamp','>=',cutoff)` for 24h/7d/30d; All-Time still caps at Firestore's max `limit(10000)`) and keeps a **per-range in-memory cache (2-min TTL, `logsCacheRef`)** so switching ranges is instant after first load. **Refresh** and the data-clearing actions (`executeReset`, `handleClearTestData`) bust the cache + force a re-fetch. The in-memory `timeFilteredLogs` memo is retained so all derived stats/charts stay correct.
+- **Filter bar alignment.** Restructured to a single `flex flex-wrap items-center justify-between` row — a left **Filters** group (time range · user · category · search) and a right **Actions** group (Refresh · Export · Reset All); every select/input/button is `h-8` so they line up on one baseline.
+- **Pricing accuracy (verified online).** Gemini 3 was **5–7× under-priced** (logged at $0.10/$0.40 vs real **$0.50/$3.00** Flash, **$2.00/$12.00** Pro) and the server/client tables disagreed on gpt-4o/gpt-5. Reconciled **both** maps — `src/lib/usageManager.ts` (client/report) and `functions/src/config/pricing.js` (server, the one that stamps `cost` at log time) — to verified per-1M-token rates: gpt-4o/gpt-5 $2.50/$10, gemini-1.5-flash $0.10/$0.40, gemini-3-flash(+`-preview`) $0.50/$3.00, gemini-3-pro / gemini-3.1-pro-preview $2.00/$12; audio confirmed correct (whisper-1 $0.006/min, tts-1 $15/1M-char, tts-1-hd $30). **Caveat:** existing `usage_logs` keep their already-stamped `cost`; only new usage uses the corrected rates (a one-click "recompute historical costs" pass is offered in §6).
+- **Docs:** added **[§10 HIPAA & Compliance Posture](#10-hipaa--compliance-posture)** (what already supports compliance + the prioritized gap list) and an ARCHITECTURE companion **§16**. Deployed (`710a639`).
 
 ### 2026-06-16 — News: full-panel post reader + card polish
 - **Post reader is now a full right-panel takeover** (`PostDetailModal`): fixed panel `inset-y-0 right-0 left-0 lg:left-[68px]` (clears the 68px icon sidebar), covering the page greeting. Top bar with Back + admin actions (Pin/Archive/Edit), a tall banner with overlaid badges + Zoom, and the article in a centered `max-w-3xl` reader. Replaces the small centered modal.
@@ -600,3 +607,49 @@ Copy this block into §6 (and later §7) for each new feature/upgrade.
 ```
 
 **Definition of done:** code merged · tests pass · deployed to amble-ai.web.app · Feature Inventory (§5) updated · Changelog (§7) entry written · any architecture/data-flow change reflected in ARCHITECTURE.md.
+
+---
+
+## 10. HIPAA & Compliance Posture
+
+> **Scope & honesty.** Amble AI is a healthcare/pharmacy-ops assistant: chats, the Billing CX drafts, and the `get_patient_details` / `search_billing_codes` tools can carry **PHI** (protected health information). HIPAA compliance is **organizational, not just technical** — it needs signed BAAs, written policies, a risk analysis, and workforce training that live *outside* this repo. This section records the **technical safeguards already in the codebase** that *support* compliance, and the **prioritized gaps** to close. It is **not** an assertion that the product is "HIPAA compliant" today. Treat Amble as a **Business Associate** acting on behalf of a covered entity until counsel says otherwise.
+> Companion: [ARCHITECTURE §16](./ARCHITECTURE.md#16-security--hipaa-posture).
+
+### 10.1 What already supports compliance (technical safeguards in place)
+
+| HIPAA Security Rule area | In the app today | Where |
+|---|---|---|
+| **Encryption at rest / in transit** | Firebase/GCP encrypt all Firestore, Storage, and Functions data with AES-256 at rest and TLS in transit **by default**; Hosting is HTTPS-only. | GCP platform |
+| **Access control (unique user ID)** | Firebase Auth; every user is a distinct account; **pre-registration gate** (Google sign-in requires an existing `users/{email}`) blocks unknown identities. | `AuthService`, §8 |
+| **Role-based least privilege** | 3-tier RBAC (`lib/roles.ts`) + per-user feature permissions (`accessAmble/Billing/Knowledge/Pharmacy/Clock`) + capability matrix; enforced in UI **and** Firestore rules. | §3, §5 (RBAC), `firestore.rules` |
+| **Automatic logoff** | Session mgmt: 12 h inactivity + 12 h max, token refresh /50 min, validate /5 min, force logout on tab close. | `AuthService.createSession` |
+| **Audit controls (partial)** | Immutable, append-only audit trails for **time-clock** (`time_audit`) and **news** (`news_audit`) — `update`/`delete` denied to everyone incl. IT, `actorUid` must equal caller. | §5, rules |
+| **De-identified analytics** | `usage_logs` store only `{userId, modelId, tokens, cost, timestamp}` — **no message content / no PHI**; the Usage Report (§7 2026-06-21) operates entirely on these non-PHI aggregates. | `usage_logs`, `UsageReport.tsx` |
+| **Optional PII redaction** | Billing CX can strip SSN/phone/email/cards before drafting. | §5 Billing, `BillingView` |
+| **Integrity / boundary** | Firestore Security Rules are the real enforcement boundary; Zod validation on API inputs. | `firestore.rules`, §15 |
+
+### 10.2 Gaps & how to improve (prioritized)
+
+**P0 — must close before handling real PHI**
+1. **Sign + scope BAAs (the #1 item).**
+   - **Google Cloud / Firebase** — Google *will* sign a BAA covering Firestore, Cloud Functions, Cloud Storage, Hosting, **and Vertex AI**. Confirm it's executed for the `amble-ai` org and that we use **only HIPAA-covered services**. (Vertex Gemini — our default chat path — is covered; this is a big reason chat runs on Vertex.)
+   - **OpenAI** — the chat handler's **`gpt-5-mini` fallback**, Whisper transcription, and TTS hit the OpenAI API. The standard API is **not** HIPAA-eligible **without an OpenAI BAA** (available for API/Enterprise on request). Either **execute an OpenAI BAA** or **route all PHI-bearing paths to Vertex only** (and gate the OpenAI fallback off for PHI).
+   - **Slack + the Apps Script relay** (new Slack→News pipeline) — Slack offers a BAA only on **Enterprise Grid**. News posts shouldn't contain PHI, but staff *could* paste it. Keep PHI out of Slack/news, or get the BAA; document the relay (`SLACK_RELAY_URL` → Apps Script) as a subprocessor path.
+   - **Tavily / Google Custom Search** (web search) and the **SMTP email** provider — unlikely to sign BAAs. **Never send PHI** to web search; ensure welcome/reset emails carry **no PHI** (they currently don't).
+   - **Action:** maintain a **subprocessor inventory** (vendor · data · BAA status) in this section.
+2. **Server-side ID-token auth on PHI routes.** Known weakness (ARCHITECTURE §8 note): most API routes trust a `userId` in the request body without verifying the Firebase **ID token**, and `/api/admin/*` inline handlers have **no auth**. Any route that can read/return PHI (`/api/chat` with `get_patient_details`, knowledge search, admin user ops) must **verify the Firebase ID token server-side** and re-check the caller's role/permission. (Firestore rules protect direct DB access but not these function endpoints.)
+3. **PHI-access audit log (§164.312(b)).** Today only news/time-clock are audited. Add a tamper-evident **`phi_access_log`** (who · what record · when · action) for the `get_patient_details` tool, Billing drafts, and KB/chat reads that surface PHI; **retain 6 years**. Consider Cloud Audit Logs / a write-only Firestore collection mirroring the `time_audit` immutability pattern.
+
+**P1 — strengthen**
+4. **Minimum necessary.** Gate `get_patient_details` behind an explicit capability (not just `accessAmble`), log each call, and scope results to the fields actually needed.
+5. **No PHI in logs/caches.** Audit `console.*`, error messages, and the semantic cache to ensure chat content (potential PHI) isn't persisted or logged outside encrypted Firestore; make Billing **PII redaction default-on** for PHI fields rather than opt-in.
+6. **Shorter idle timeout for PHI surfaces.** 12 h is long for clinical workstations; offer a configurable **10–15 min idle** auto-logoff on PHI-bearing views.
+7. **MFA + secure deprovisioning.** Require MFA (enforceable via Google Workspace); on user removal, **revoke sessions + Drive OAuth tokens** (`google_drive_tokens/{uid}`) and disable the account immediately.
+8. **Data retention & patient rights.** Define retention/disposal for `chats` (may contain PHI) and a workflow for access/amendment/deletion requests; secure deletion on offboarding.
+
+**P2 — program**
+9. **Written Security Risk Analysis (SRA)** + risk-management plan, reviewed at least annually (HIPAA §164.308(a)(1)).
+10. **Breach-notification readiness** — Cloud Logging alerts / anomaly detection + an incident-response runbook.
+11. **Workforce safeguards** — training, sanction policy, documented access-grant/termination procedures.
+
+> **Bottom line:** the platform choice (GCP/Firebase + Vertex) and the existing RBAC + session + immutable-audit patterns give Amble a **solid technical foundation**. The two things that most move the needle from "supports compliance" to "defensibly compliant" are **(1) executed, correctly-scoped BAAs for every subprocessor that can touch PHI** and **(2) server-side identity verification + a PHI-access audit log** on the function endpoints. Everything else in 10.2 is hardening on top of that.

@@ -537,9 +537,40 @@ flowchart TD
 | Rate limiting | `lib/rateLimiter.ts` | in-memory sliding window, per instance |
 | Response caching | `lib/semanticCache.ts` | Jaccard ≥0.85 dedupe, 24h |
 | System prompt | `lib/systemPrompt.ts` **and** inline in `route.ts` | ⚠️ duplicated — drift risk |
-| Usage/cost | `usage_logs` + `functions/src/config/pricing.js` (server) / `lib/usageManager.ts` (client) | per-model token pricing. `logUsageToFirestore` normalizes **both** usage shapes (OpenAI `prompt_tokens`/`completion_tokens` + Vertex `input_tokens`/`output_tokens`) — keep model IDs in sync across both pricing maps or cost falls back to gpt-4o. Report `range` (selected window) ≠ `month` (calendar) — Total + cards both use `range`. |
+| Usage/cost | `usage_logs` + `functions/src/config/pricing.js` (server) / `lib/usageManager.ts` (client) | per-model token pricing. `logUsageToFirestore` normalizes **both** usage shapes (OpenAI `prompt_tokens`/`completion_tokens` + Vertex `input_tokens`/`output_tokens`) — keep model IDs in sync across both pricing maps or cost falls back to gpt-4o. Pricing **verified 2026-06-21** (Gemini 3 was 5–7× low): gemini-3-flash(+`-preview`) $0.50/$3, gemini-3-pro / 3.1-pro-preview $2/$12, gpt-4o/gpt-5 $2.50/$10. **Report query is range-scoped** — `UsageReport.tsx` fetches only the selected window server-side (`where('timestamp','>=',cutoff)`; All-Time caps at `limit(10000)`) with a per-range 2-min in-memory cache; the `timeFilteredLogs` memo + `range`-based Total/cards are unchanged (`range` ≠ calendar `month`). `usage_logs` hold **no PHI** (ids/tokens/cost only) — see [HIPAA §16](#16-security--hipaa-posture). |
 | Validation | Zod schemas on API boundaries | strict mode TS throughout |
 | Observability | `@opentelemetry/api` present | minimal wiring |
 | Tests | `src/__tests__` | services + hooks + integration; 50% coverage threshold |
 
 For the running list of issues, redundancies, and the prioritized cleanup plan, see **[SOURCE_OF_TRUTH.md](./SOURCE_OF_TRUTH.md)**.
+
+---
+
+## 16. Security & HIPAA Posture
+
+> Amble handles potential **PHI** (chats, Billing CX drafts, `get_patient_details`). Full analysis + the prioritized gap list lives in **[SOT §10](./SOURCE_OF_TRUTH.md#10-hipaa--compliance-posture)** — this is the architectural map of where data flows relative to a **BAA boundary**.
+
+```mermaid
+flowchart TD
+    subgraph Covered["✅ Inside Google Cloud BAA boundary (PHI-eligible)"]
+        FS[("Firestore<br/>chats · users · usage_logs")]
+        ST[("Cloud Storage")]
+        FN["Cloud Functions (ssrambleai)"]
+        VTX["Vertex AI — Gemini 3<br/>(default chat + embeddings)"]
+    end
+    subgraph External["⚠️ Outside the GCP BAA — need own BAA or no PHI"]
+        OAI["OpenAI<br/>gpt-5-mini fallback · Whisper · TTS"]
+        SLK["Slack + Apps Script relay<br/>(news pipeline)"]
+        WEB["Tavily / Google CSE<br/>(web search)"]
+        SMTP["SMTP email<br/>(welcome / reset)"]
+    end
+    FN --> FS & ST & VTX
+    FN -.->|BAA needed OR gate off PHI| OAI
+    FN -.->|keep PHI out| SLK
+    FN -.->|never send PHI| WEB
+    FN -.->|no PHI in emails| SMTP
+```
+
+**Safeguards already in code:** encryption at rest/in transit (GCP default) · unique-user auth + pre-registration gate · 3-tier RBAC enforced in UI **and** Firestore rules · automatic logoff (12 h) · immutable append-only audit trails (`time_audit`, `news_audit`) · de-identified `usage_logs` (no content) · optional Billing PII redaction.
+
+**Top architectural gaps:** (1) **BAAs** — confirm the GCP BAA and use only covered services; the **OpenAI fallback/Whisper/TTS** sit *outside* it (BAA or route PHI to Vertex only). (2) **Server-side ID-token auth** — most function routes trust a body `userId` and `/api/admin/*` has none (see §8 ⚠️); verify the Firebase ID token on any PHI route. (3) **PHI-access audit log** — extend the `time_audit` immutability pattern to a `phi_access_log` (6-yr retention). Full P0/P1/P2 plan in [SOT §10.2](./SOURCE_OF_TRUTH.md#102-gaps--how-to-improve-prioritized).

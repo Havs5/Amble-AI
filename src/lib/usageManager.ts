@@ -87,10 +87,10 @@ const MODEL_PRICING: Record<string, { input: number, output: number, unit?: 'tok
   'o3': { input: 15.00, output: 60.00 },
   'o3-mini': { input: 3.00, output: 12.00 },
   
-  // Gemini 3 Display Models (prices per 1M tokens)
-  'gemini-3-flash': { input: 0.10, output: 0.40 },
-  'gemini-3-pro': { input: 2.50, output: 10.00 },
-  'gemini-3-thinking': { input: 0.10, output: 0.40 },
+  // Gemini 3 Display Models (prices per 1M tokens) — verified Jun 2026
+  'gemini-3-flash': { input: 0.50, output: 3.00 },
+  'gemini-3-pro': { input: 2.00, output: 12.00 },
+  'gemini-3-thinking': { input: 0.50, output: 3.00 },
   
   // Actual API models (same pricing, for tracking)
   'gpt-4o': { input: 2.50, output: 10.00 },
@@ -101,10 +101,10 @@ const MODEL_PRICING: Record<string, { input: number, output: number, unit?: 'tok
   'gemini-2.0-pro-exp': { input: 2.50, output: 10.00 },
   'gemini-2.0-flash-thinking-exp': { input: 0.10, output: 0.40 },
   
-  // Gemini 3 Preview API models (January 2026)
-  'gemini-3-flash-preview': { input: 0.10, output: 0.40 },
-  'gemini-3-pro-preview': { input: 2.50, output: 10.00 },
-  'gemini-3.1-pro-preview': { input: 2.50, output: 10.00 },
+  // Gemini 3 Preview API models — verified Jun 2026 (Flash $0.50/$3, Pro $2/$12)
+  'gemini-3-flash-preview': { input: 0.50, output: 3.00 },
+  'gemini-3-pro-preview': { input: 2.00, output: 12.00 },
+  'gemini-3.1-pro-preview': { input: 2.00, output: 12.00 },
   'gemini-2.5-flash': { input: 0.10, output: 0.40 },
   'gemini-1.5-flash': { input: 0.10, output: 0.40 },
   'gemini-1.5-pro': { input: 2.50, output: 10.00 },

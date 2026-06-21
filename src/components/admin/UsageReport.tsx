@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Area, AreaChart
@@ -119,19 +119,40 @@ export function UsageReport() {
     return userNamesCache;
   };
 
-  const fetchUsage = async (showRefresh = false) => {
-    if (showRefresh) setIsRefreshing(true);
-    else setIsLoading(true);
+  // Per-range cache so switching ranges is instant after the first load.
+  const logsCacheRef = useRef<Record<string, { logs: UsageLog[]; at: number }>>({});
+  const CACHE_TTL = 2 * 60 * 1000; // 2 min
+
+  const cutoffFor = (range: typeof timeRange) => {
+    const now = Date.now();
+    if (range === 'day') return now - 24 * 60 * 60 * 1000;
+    if (range === 'week') return now - 7 * 24 * 60 * 60 * 1000;
+    if (range === 'month') return now - 30 * 24 * 60 * 60 * 1000;
+    return 0; // all time
+  };
+
+  const fetchUsage = async (force = false, range: typeof timeRange = timeRange) => {
+    // Serve from cache for instant range switches (unless forced via Refresh).
+    const cached = logsCacheRef.current[range];
+    if (!force && cached && Date.now() - cached.at < CACHE_TTL) {
+      setLogs(cached.logs);
+      setIsLoading(false);
+      return;
+    }
+    if (force) setIsRefreshing(true); else setIsLoading(true);
     setFetchError(null);
 
     try {
       const usageRef = collection(db, 'usage_logs');
-      // Fetch ALL logs ONCE (newest first, capped). The time range is applied
-      // in-memory (see timeFilteredLogs) so switching ranges never re-queries.
-      // 10000 is Firestore's hard maximum for a query `limit` — going higher
-      // throws "Limit value in the structured query is over the maximum value".
-      let snapshot = await getDocs(query(usageRef, orderBy('timestamp', 'desc'), limit(10000)));
-      if (snapshot.empty) snapshot = await getDocs(usageRef);
+      // Query ONLY the selected window server-side — the default (Last 30 Days)
+      // fetches just that range instead of pulling up to 10k rows every time,
+      // which is what made the report slow. `all` still caps at 10000 (Firestore max).
+      const cutoff = cutoffFor(range);
+      const snapshot = await getDocs(
+        cutoff > 0
+          ? query(usageRef, where('timestamp', '>=', cutoff), orderBy('timestamp', 'desc'), limit(10000))
+          : query(usageRef, orderBy('timestamp', 'desc'), limit(10000))
+      );
 
       const fetchedLogs: UsageLog[] = [];
       const userIdSet = new Set<string>();
@@ -153,6 +174,7 @@ export function UsageReport() {
         userIdSet.add(data.userId);
       });
 
+      logsCacheRef.current[range] = { logs: fetchedLogs, at: Date.now() };
       setLogs(fetchedLogs);
       // Resolve names in the background (parallel + cached) — don't block the
       // numbers from painting; userStats re-derives when names arrive.
@@ -169,11 +191,11 @@ export function UsageReport() {
     }
   };
 
-  // Fetch once on mount (and on manual Refresh). Time-range changes are in-memory.
+  // Fetch on mount and whenever the time range changes (each range is cached).
   useEffect(() => {
-    fetchUsage();
+    fetchUsage(false, timeRange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [timeRange]);
 
   // ── In-memory time-range filter + per-user aggregation (instant on change) ──
   const timeFilteredLogs = useMemo(() => {
@@ -220,8 +242,9 @@ export function UsageReport() {
       
       const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
       await Promise.all(deletePromises);
-      
-      await fetchUsage();
+
+      logsCacheRef.current = {};
+      await fetchUsage(true);
       setToast({ message: 'Test data cleared successfully.', type: 'success' });
     } catch (e) {
       console.error("Failed to clear data:", e);
@@ -247,7 +270,8 @@ export function UsageReport() {
         await Promise.all(batch.map(doc => deleteDoc(doc.ref)));
       }
       
-      // Clear local state (userStats/modelStats derive from logs via memo).
+      // Clear local state + the per-range cache (userStats derive from logs via memo).
+      logsCacheRef.current = {};
       setLogs([]);
       setUserNamesCache({});
       
@@ -420,80 +444,83 @@ export function UsageReport() {
       
       {/* Filters Bar */}
       <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Time Range */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* ── Filters (left) ── */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Time Range */}
+            <div className="flex items-center gap-1.5">
+              <Calendar size={14} className="text-slate-400 shrink-0" />
+              <select
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value as typeof timeRange)}
+                className="h-8 text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              >
+                <option value="day">Last 24 Hours</option>
+                <option value="week">Last 7 Days</option>
+                <option value="month">Last 30 Days</option>
+                <option value="all">All Time</option>
+              </select>
+            </div>
+
+            {/* User Filter */}
+            <div className="flex items-center gap-1.5">
+              <Users size={14} className="text-slate-400 shrink-0" />
+              <select
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
+                className="h-8 text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 max-w-[160px]"
+              >
+                <option value="all">All Users ({userStats.length})</option>
+                {userStats.map(user => (
+                  <option key={user.userId} value={user.userId}>
+                    {user.displayName} {user.email ? `(${user.email})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Category Filter */}
+            <div className="flex items-center gap-1.5">
+              <Cpu size={14} className="text-slate-400 shrink-0" />
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="h-8 text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              >
+                <option value="all">All Categories</option>
+                <option value="text">Text Models</option>
+                <option value="image">Image Models</option>
+                <option value="video">Video Models</option>
+                <option value="audio">Audio (Whisper/TTS)</option>
+              </select>
+            </div>
+
+            {/* Search */}
+            <div className="relative w-[160px]">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-8 w-full pl-8 pr-2 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              />
+            </div>
+          </div>
+
+          {/* ── Actions (right) ── */}
           <div className="flex items-center gap-1.5">
-            <Calendar size={14} className="text-slate-400" />
-            <select 
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value as typeof timeRange)}
-              className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
-            >
-              <option value="day">Last 24 Hours</option>
-              <option value="week">Last 7 Days</option>
-              <option value="month">Last 30 Days</option>
-              <option value="all">All Time</option>
-            </select>
-          </div>
-
-          {/* User Filter */}
-          <div className="flex items-center gap-1.5">
-            <Users size={14} className="text-slate-400" />
-            <select 
-              value={selectedUser}
-              onChange={(e) => setSelectedUser(e.target.value)}
-              className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 max-w-[160px]"
-            >
-              <option value="all">All Users ({userStats.length})</option>
-              {userStats.map(user => (
-                <option key={user.userId} value={user.userId}>
-                  {user.displayName} {user.email ? `(${user.email})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Category Filter */}
-          <div className="flex items-center gap-1.5">
-            <Cpu size={14} className="text-slate-400" />
-            <select 
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
-            >
-              <option value="all">All Categories</option>
-              <option value="text">Text Models</option>
-              <option value="image">Image Models</option>
-              <option value="video">Video Models</option>
-              <option value="audio">Audio (Whisper/TTS)</option>
-            </select>
-          </div>
-
-          {/* Search */}
-          <div className="relative flex-shrink min-w-[120px] max-w-[180px]">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
-            />
-          </div>
-
-          {/* Actions - push to the right */}
-          <div className="flex items-center gap-1.5 ml-auto">
             <button
               onClick={() => fetchUsage(true)}
               disabled={isRefreshing}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+              className="h-8 flex items-center gap-1.5 px-3 text-xs font-medium bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
             >
               <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
               Refresh
             </button>
             <button
               onClick={exportData}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
+              className="h-8 flex items-center gap-1.5 px-3 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
             >
               <Download size={14} />
               Export
@@ -501,7 +528,7 @@ export function UsageReport() {
             <button
               onClick={() => setShowResetModal(true)}
               disabled={isCleaningAll}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+              className="h-8 flex items-center gap-1.5 px-3 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
               title="Delete all usage data and start fresh"
             >
               <AlertTriangle size={14} />

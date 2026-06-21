@@ -1,19 +1,21 @@
+// Per-1M-token text pricing. Keep in sync with src/lib/usageManager.ts MODEL_PRICING.
+// Gemini 3 verified Jun 2026 (Flash $0.50/$3, Pro $2/$12); gpt-4o/gpt-5 are $2.50/$10.
 const MODEL_PRICING = {
-  'gpt-4o': { input: 5.00, output: 15.00 },
+  'gpt-4o': { input: 2.50, output: 10.00 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
-  'gpt-5': { input: 5.00, output: 15.00 },
+  'gpt-5': { input: 2.50, output: 10.00 },
   'gpt-5.2': { input: 6.00, output: 18.00 },
   'gpt-5-mini': { input: 0.15, output: 0.60 },
   'gpt-5-nano': { input: 0.05, output: 0.20 },
-  'gemini-1.5-pro': { input: 3.50, output: 10.50 },
-  'gemini-1.5-flash': { input: 0.35, output: 1.05 },
-  'gemini-3-flash': { input: 0.10, output: 0.40 },
-  'gemini-3-pro': { input: 2.50, output: 10.00 },
+  'gemini-1.5-pro': { input: 2.50, output: 10.00 },
+  'gemini-1.5-flash': { input: 0.10, output: 0.40 },
+  'gemini-3-flash': { input: 0.50, output: 3.00 },
+  'gemini-3-pro': { input: 2.00, output: 12.00 },
   // Actual normalized model IDs logged by chat.js (Vertex Gemini 3). Without
   // these exact keys, calculateCost fell back to gpt-4o pricing.
-  'gemini-3-flash-preview': { input: 0.10, output: 0.40 },
-  'gemini-3-pro-preview': { input: 2.50, output: 10.00 },
-  'gemini-3.1-pro-preview': { input: 2.50, output: 10.00 },
+  'gemini-3-flash-preview': { input: 0.50, output: 3.00 },
+  'gemini-3-pro-preview': { input: 2.00, output: 12.00 },
+  'gemini-3.1-pro-preview': { input: 2.00, output: 12.00 },
   'gemini-2.5-flash': { input: 0.10, output: 0.40 },
 };
 

@@ -1,31 +1,42 @@
-// PHI-safe: only Vertex-served (Gemini) models are offered. OpenAI options are
-// intentionally hidden — PHI-safe mode routes all chat to Vertex anyway (SOT §10).
-export const MODEL_CATEGORIES = [
+// Gemini (Vertex, primary) + GPT (OpenAI). In PHI strict mode
+// (NEXT_PUBLIC_PHI_SAFE_MODE='true') the OpenAI rows are dropped so the picker
+// matches the server routing (which never uses OpenAI in strict mode). See SOT §10.
+const PHI_STRICT = process.env.NEXT_PUBLIC_PHI_SAFE_MODE === 'true';
+const MODEL_CATEGORIES_RAW = [
   {
     label: 'Smart Auto-Routing (Recommended)',
     models: [
-      { id: 'auto', name: '✨ Amble Auto (Smart)' },
+      { id: 'auto', name: '✨ Amble Auto (Smart)', provider: 'google' as const },
     ]
   },
   {
     label: 'Fast & Cost-Efficient',
     models: [
-      { id: 'gemini-3-flash', name: 'Gemini 3 Flash ⚡ NEW' },
+      { id: 'gpt-5-nano', name: 'GPT-5 Nano ⚡', provider: 'openai' as const },
+      { id: 'gpt-5-mini', name: 'GPT-5 Mini', provider: 'openai' as const },
+      { id: 'gemini-3-flash', name: 'Gemini 3 Flash ⚡ NEW', provider: 'google' as const },
     ]
   },
   {
     label: 'High Intelligence (Frontier)',
     models: [
-      { id: 'gemini-3-pro', name: 'Gemini 3.1 Pro 🧠 NEW' },
+      { id: 'gpt-5.2', name: 'GPT-5.2 🔥 NEW', provider: 'openai' as const },
+      { id: 'gpt-5', name: 'GPT-5', provider: 'openai' as const },
+      { id: 'gemini-3-pro', name: 'Gemini 3.1 Pro 🧠 NEW', provider: 'google' as const },
     ]
   },
   {
     label: 'Reasoning & Deep Thinking',
     models: [
-      { id: 'gemini-3-pro', name: 'Gemini 3.1 Pro (Deep Think)' },
+      { id: 'o4-mini', name: 'o4 Mini (Fast Reasoning)', provider: 'openai' as const },
+      { id: 'o3', name: 'o3 (Reasoning)', provider: 'openai' as const },
+      { id: 'gemini-3-pro', name: 'Gemini 3.1 Pro (Deep Think)', provider: 'google' as const },
     ]
   }
 ];
+export const MODEL_CATEGORIES = PHI_STRICT
+  ? MODEL_CATEGORIES_RAW.map(c => ({ ...c, models: c.models.filter(m => m.provider !== 'openai') })).filter(c => c.models.length > 0)
+  : MODEL_CATEGORIES_RAW;
 
 // Flattened list for backward compatibility if needed
 export const ALL_MODELS = MODEL_CATEGORIES.flatMap(c => c.models);

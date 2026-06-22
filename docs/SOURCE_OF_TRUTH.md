@@ -128,6 +128,7 @@ The single React shell (`app/page.tsx` → `FeatureRouter`) switches between sur
 | `KB_*` | KB sync/relevance/vision tuning | `.env.local` |
 | `WEB_SEARCH_PROVIDER` | `google` \| `tavily` | `.env.local` |
 | `PHI_SAFE_MODE` | HIPAA strict mode: `'true'` keeps all chat/rewrite on Vertex (no OpenAI). **Default off** (Vertex primary, OpenAI is the automatic backup + Whisper). | `functions/.env` (optional) |
+| `NEXT_PUBLIC_PHI_SAFE_MODE` | Client mirror of `PHI_SAFE_MODE` — `'true'` hides GPT models from the chat/billing dropdowns so the UI matches strict routing. Set together with `PHI_SAFE_MODE`. | `.env.local` (optional) |
 
 > 🔒 **Hygiene:** real API keys currently live in `.env.local` (gitignored — good) and the KB service-account key file `amble-kb-sync-key.json` (gitignored). Do not commit either. Consider rotating any key that ever touched a commit.
 
@@ -263,6 +264,10 @@ Legend: ✅ live · 🧪 beta/partial · 🧟 legacy/redundant (works, slated fo
 ## 7. Changelog
 
 > Newest first. Record **every** shipped change here, with date + what/why. Deploys to amble-ai.web.app should be noted.
+
+### 2026-06-21 — Model dropdowns: GPT options restored (mode-aware)
+- **The Amble AI + Billing CX model dropdowns show GPT again** (they'd been trimmed to Gemini-only in step 2). Since OpenAI is allowed (PHI-safe mode off), users can pick a GPT model and it runs on OpenAI; Gemini picks run on Vertex (auto-fallback to OpenAI on error). **Routing by pick:** Gemini → Vertex; GPT → OpenAI; default/Auto → Vertex.
+- **Mode-aware so UI never lies:** the lists are filtered by a client flag **`NEXT_PUBLIC_PHI_SAFE_MODE`** (mirror of the server `PHI_SAFE_MODE`). Default/unset → GPT shown. Set it `='true'` **together with** the server `PHI_SAFE_MODE='true'` and the dropdowns auto-hide GPT (so a GPT pick can't be silently answered by Vertex). Implemented in `ModelSelector.tsx` (`AMBLE_AI_*`/`BILLING_*` via `visible()`) + `utils/modelConstants.ts` (`MODEL_CATEGORIES`).
 
 ### 2026-06-21 — HIPAA step 3: OpenAI kept as backup + Whisper (PHI-safe mode now opt-in)
 - **Owner decision: keep OpenAI as the automatic backup + the Whisper engine.** Reverted the strict default. **`PHI_SAFE_MODE` is now OFF by default** (`=== 'true'` to enable). Behavior:

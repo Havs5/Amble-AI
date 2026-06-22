@@ -28,11 +28,20 @@ export interface ModelCategory {
   models: ModelOption[];
 }
 
-// Amble AI Chat Models
-// NOTE: Only Vertex-served (Gemini) models are offered. PHI-safe mode keeps all
-// chat on Vertex (inside the GCP BAA), so OpenAI options are intentionally hidden
-// from the picker — they'd be transparently routed to Vertex anyway. See SOT §10.
-export const AMBLE_AI_MODEL_CATEGORIES: ModelCategory[] = [
+// PHI strict mode (client mirror of the server's PHI_SAFE_MODE). When 'true',
+// OpenAI is never used, so OpenAI models are dropped from the picker (a GPT pick
+// would otherwise be silently answered by Vertex — a confusing mismatch). Default
+// (unset) = off → Vertex is primary and OpenAI is selectable + the auto-backup.
+const PHI_STRICT = process.env.NEXT_PUBLIC_PHI_SAFE_MODE === 'true';
+const visible = (cats: ModelCategory[]): ModelCategory[] =>
+  PHI_STRICT
+    ? cats.map(c => ({ ...c, models: c.models.filter(m => m.provider !== 'openai') })).filter(c => c.models.length > 0)
+    : cats;
+
+// Amble AI Chat Models — Gemini (Vertex, primary) + GPT (OpenAI). Picking Gemini
+// runs on Vertex (auto-falls back to OpenAI on error); picking a GPT model runs on
+// OpenAI directly. In PHI strict mode the GPT rows are hidden (see `visible`).
+const AMBLE_AI_RAW: ModelCategory[] = [
   {
     label: 'Instant',
     description: 'Lightning-fast responses',
@@ -41,6 +50,7 @@ export const AMBLE_AI_MODEL_CATEGORIES: ModelCategory[] = [
     bgGradient: 'from-amber-500/10 to-orange-500/10',
     models: [
       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', provider: 'google', description: 'Blazing speed', badge: 'popular', contextWindow: 1000000, tier: 'standard' },
+      { id: 'gpt-4o-mini', name: 'GPT-5 Mini', provider: 'openai', description: 'Fast & efficient', badge: 'fast', contextWindow: 128000, tier: 'standard' },
     ]
   },
   {
@@ -51,12 +61,15 @@ export const AMBLE_AI_MODEL_CATEGORIES: ModelCategory[] = [
     bgGradient: 'from-indigo-500/10 to-purple-500/10',
     models: [
       { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', provider: 'google', description: 'Deep analysis', badge: 'new', contextWindow: 2000000, tier: 'premium' },
+      { id: 'gpt-4o', name: 'GPT-5', provider: 'openai', description: 'Advanced reasoning', badge: 'popular', contextWindow: 128000, tier: 'premium' },
+      { id: 'o1', name: 'o3 Reasoning', provider: 'openai', description: 'Complex problem solving', badge: 'pro', contextWindow: 128000, tier: 'premium' },
     ]
   }
 ];
+export const AMBLE_AI_MODEL_CATEGORIES: ModelCategory[] = visible(AMBLE_AI_RAW);
 
-// Billing View Models (Patient Experience) — Vertex-only (PHI-safe; see above)
-export const BILLING_MODEL_CATEGORIES: ModelCategory[] = [
+// Billing View Models (Patient Experience) — same Gemini-primary / GPT-optional rules.
+const BILLING_RAW: ModelCategory[] = [
   {
     label: 'Quick Response',
     description: 'Fast billing analysis',
@@ -65,6 +78,7 @@ export const BILLING_MODEL_CATEGORIES: ModelCategory[] = [
     bgGradient: 'from-emerald-500/10 to-teal-500/10',
     models: [
       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', provider: 'google', description: 'Instant insights', badge: 'fast', tier: 'standard' },
+      { id: 'gpt-4o-mini', name: 'GPT-5 Mini', provider: 'openai', description: 'Quick analysis', badge: 'popular', tier: 'standard' },
     ]
   },
   {
@@ -75,9 +89,11 @@ export const BILLING_MODEL_CATEGORIES: ModelCategory[] = [
     bgGradient: 'from-violet-500/10 to-purple-500/10',
     models: [
       { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', provider: 'google', description: 'Thorough review', badge: 'new', tier: 'premium' },
+      { id: 'gpt-4o', name: 'GPT-5', provider: 'openai', description: 'Expert analysis', badge: 'pro', tier: 'premium' },
     ]
   }
 ];
+export const BILLING_MODEL_CATEGORIES: ModelCategory[] = visible(BILLING_RAW);
 
 const BADGE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   new: { bg: 'bg-gradient-to-r from-emerald-500 to-teal-500', text: 'text-white', label: 'NEW' },
